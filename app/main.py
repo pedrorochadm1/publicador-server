@@ -35,6 +35,22 @@ class Agendamento(BaseModel):
     imagens_b64: list[str] = Field(..., min_length=1, max_length=10, description="Imagens em base64, na ordem dos slides.")
 
 
+class Upload(BaseModel):
+    imagem_b64: str = Field(..., description="Imagem em base64.")
+
+
+def _salvar_imagem_b64(b64: str) -> str:
+    """Decodifica base64, salva em /data/img e retorna o nome do arquivo."""
+    try:
+        raw = base64.b64decode(b64.split(",")[-1], validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status_code=400, detail="Imagem base64 inválida.")
+    nome = f"{uuid.uuid4().hex}.png"
+    with open(os.path.join(config.IMG_DIR, nome), "wb") as f:
+        f.write(raw)
+    return nome
+
+
 @app.get("/health")
 def health():
     return {
@@ -53,19 +69,18 @@ def agendar(a: Agendamento):
     if quando_utc < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="publicar_em está no passado.")
 
-    nomes = []
-    for b64 in a.imagens_b64:
-        try:
-            raw = base64.b64decode(b64.split(",")[-1], validate=True)
-        except (binascii.Error, ValueError):
-            raise HTTPException(status_code=400, detail="Imagem base64 inválida.")
-        nome = f"{uuid.uuid4().hex}.png"
-        with open(os.path.join(config.IMG_DIR, nome), "wb") as f:
-            f.write(raw)
-        nomes.append(nome)
-
+    nomes = [_salvar_imagem_b64(b64) for b64 in a.imagens_b64]
     post = db.criar_post(quando_utc.isoformat(), a.caption, nomes)
     return {"id": post["id"], "publicar_em_utc": post["publicar_em"], "status": post["status"], "slides": len(nomes)}
+
+
+@app.post("/upload", dependencies=[Depends(auth)])
+def upload(u: Upload):
+    """Hospeda uma imagem e devolve a URL pública HTTPS (substitui o litterbox)."""
+    nome = _salvar_imagem_b64(u.imagem_b64)
+    if not config.PUBLIC_BASE_URL:
+        raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL não configurado.")
+    return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
 
 
 @app.get("/agenda", dependencies=[Depends(auth)])

@@ -49,6 +49,8 @@ Todas as rotas (menos `/health`) exigem o header `X-API-Key: <PUBLICADOR_API_KEY
   1 imagem = foto única, 2-10 = carrossel. Sem timezone, assume America/Sao_Paulo.
 - `GET /agenda?status=agendado` — lista a fila.
 - `DELETE /agenda/{id}` — cancela um agendamento.
+- `POST /upload` — hospeda uma imagem (`{"imagem_b64": "..."}`) e devolve `{"url": "..."}`.
+  Usado pelo fluxo de publicação imediata (substitui o litterbox).
 - `GET /health` — status do serviço.
 
 ## Rodar local (teste)
