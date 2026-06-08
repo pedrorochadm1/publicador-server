@@ -1,12 +1,22 @@
 """Worker 24/7. A cada 30s checa a agenda e publica o que venceu — imediato."""
+import os
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from . import db, publisher, token_store
+from . import config, db, publisher, token_store
 
 _sched = BackgroundScheduler(timezone="UTC")
 _MAX_TENTATIVAS = 3
+
+
+def _limpar_arquivos(arquivos):
+    """Apaga a mídia do servidor após publicar — hospedagem é só temporária."""
+    for nome in arquivos:
+        try:
+            os.remove(os.path.join(config.IMG_DIR, nome))
+        except OSError:
+            pass
 
 
 def _processar():
@@ -19,6 +29,7 @@ def _processar():
         try:
             ig_id = publisher.publicar(post["imagens"], post["caption"])
             db.marcar(post["id"], "publicado", ig_post_id=ig_id)
+            _limpar_arquivos(post["imagens"])
             print(f"[scheduler] Post {post['id']} publicado: {ig_id}")
         except Exception as e:  # noqa: BLE001
             # volta para 'agendado' para tentar de novo no próximo ciclo
