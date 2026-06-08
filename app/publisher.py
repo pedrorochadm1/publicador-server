@@ -12,10 +12,14 @@ from . import config
 from .token_store import get_token
 
 
-def _img_url(filename: str) -> str:
+def _media_url(filename: str) -> str:
     if not config.PUBLIC_BASE_URL:
-        raise RuntimeError("PUBLIC_BASE_URL não configurado — o Instagram não consegue baixar a imagem.")
+        raise RuntimeError("PUBLIC_BASE_URL não configurado — o Instagram não consegue baixar a mídia.")
     return f"{config.PUBLIC_BASE_URL}/img/{filename}"
+
+
+def _eh_video(filename: str) -> bool:
+    return filename.lower().endswith((".mp4", ".mov"))
 
 
 def _criar_container(params: dict) -> str:
@@ -51,19 +55,35 @@ def _publicar(container_id: str) -> str:
     return r.json()["id"]
 
 
-def publicar(imagens: list[str], caption: str) -> str:
-    """Publica foto única (1 imagem) ou carrossel (2-10). Retorna o ID do post."""
-    if not imagens:
-        raise ValueError("Nenhuma imagem.")
+def publicar(arquivos: list[str], caption: str) -> str:
+    """Publica reel (1 vídeo), foto única (1 imagem) ou carrossel (2-10 imagens)."""
+    if not arquivos:
+        raise ValueError("Nenhum arquivo.")
 
-    if len(imagens) == 1:
-        container = _criar_container({"image_url": _img_url(imagens[0]), "caption": caption})
+    # Reel: 1 vídeo
+    if len(arquivos) == 1 and _eh_video(arquivos[0]):
+        container = _criar_container(
+            {"media_type": "REELS", "video_url": _media_url(arquivos[0]), "caption": caption}
+        )
+        # vídeo demora mais para processar
+        if not _aguardar(container, tentativas=90, intervalo=5):
+            raise RuntimeError("Instagram falhou ao processar o vídeo.")
+        return _publicar(container)
+
+    if any(_eh_video(a) for a in arquivos):
+        raise ValueError("Vídeo só pode ser publicado sozinho (reel), não em carrossel.")
+
+    # Foto única
+    if len(arquivos) == 1:
+        container = _criar_container({"image_url": _media_url(arquivos[0]), "caption": caption})
+    # Carrossel
     else:
-        if len(imagens) > 10:
+        if len(arquivos) > 10:
             raise ValueError("Carrossel suporta no máximo 10 imagens.")
-        filhos = []
-        for nome in imagens:
-            filhos.append(_criar_container({"image_url": _img_url(nome), "is_carousel_item": "true"}))
+        filhos = [
+            _criar_container({"image_url": _media_url(n), "is_carousel_item": "true"})
+            for n in arquivos
+        ]
         container = _criar_container(
             {"media_type": "CAROUSEL", "children": ",".join(filhos), "caption": caption}
         )

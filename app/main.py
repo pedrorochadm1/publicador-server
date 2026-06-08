@@ -32,7 +32,8 @@ def auth(x_api_key: str = Header(default="")):
 class Agendamento(BaseModel):
     publicar_em: datetime = Field(..., description="Horário do post. ISO 8601; sem timezone assume America/Sao_Paulo.")
     caption: str = ""
-    imagens_b64: list[str] = Field(..., min_length=1, max_length=10, description="Imagens em base64, na ordem dos slides.")
+    arquivos: list[str] = Field(default=[], description="Nomes de arquivos já enviados via /upload (imagem ou vídeo).")
+    imagens_b64: list[str] = Field(default=[], max_length=10, description="Imagens em base64 (alternativa ao /upload).")
 
 
 class Upload(BaseModel):
@@ -76,9 +77,17 @@ def agendar(a: Agendamento):
     if quando_utc < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="publicar_em está no passado.")
 
-    nomes = [_salvar_arquivo_b64(b64, "png") for b64 in a.imagens_b64]
+    # arquivos já enviados via /upload: confere que existem no disco
+    for nome in a.arquivos:
+        if "/" in nome or not os.path.exists(os.path.join(config.IMG_DIR, nome)):
+            raise HTTPException(status_code=400, detail=f"Arquivo não encontrado no servidor: {nome}")
+
+    nomes = list(a.arquivos) + [_salvar_arquivo_b64(b64, "png") for b64 in a.imagens_b64]
+    if not nomes:
+        raise HTTPException(status_code=400, detail="Envie 'arquivos' ou 'imagens_b64'.")
+
     post = db.criar_post(quando_utc.isoformat(), a.caption, nomes)
-    return {"id": post["id"], "publicar_em_utc": post["publicar_em"], "status": post["status"], "slides": len(nomes)}
+    return {"id": post["id"], "publicar_em_utc": post["publicar_em"], "status": post["status"], "arquivos": len(nomes)}
 
 
 @app.post("/upload", dependencies=[Depends(auth)])
