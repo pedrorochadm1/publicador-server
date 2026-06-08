@@ -109,3 +109,31 @@ def cancelar(post_id: int):
     if not db.cancelar(post_id):
         raise HTTPException(status_code=404, detail="Post não encontrado ou já não está agendado.")
     return {"id": post_id, "status": "cancelado"}
+
+
+class TokenUpdate(BaseModel):
+    token: str
+
+
+@app.post("/token", dependencies=[Depends(auth)])
+def set_token(t: TokenUpdate):
+    """Atualiza o token do Instagram (salvo em /data, usado imediatamente)."""
+    from . import token_store
+    token_store.salvar_token(t.token)
+    return {"ok": True, "dias_para_expirar": token_store.status()}
+
+
+@app.get("/token/status", dependencies=[Depends(auth)])
+def token_status():
+    from . import token_store
+    return {"dias_para_expirar": token_store.status()}
+
+
+@app.post("/reenfileirar/{post_id}", dependencies=[Depends(auth)])
+def reenfileirar(post_id: int):
+    """Volta um post 'erro' para 'agendado' para publicar imediato no próximo ciclo."""
+    p = db.get_post(post_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Post não encontrado.")
+    db.reabrir(post_id)
+    return {"id": post_id, "status": "agendado"}

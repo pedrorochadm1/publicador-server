@@ -85,6 +85,16 @@ def marcar(post_id: int, status: str, ig_post_id: str | None = None, erro: str |
     c.commit()
 
 
+def reabrir(post_id: int):
+    """Reseta um post para 'agendado' agora, zerando tentativas e erro."""
+    c = conn()
+    c.execute(
+        "UPDATE posts SET status = 'agendado', tentativas = 0, erro = NULL, publicar_em = ? WHERE id = ?",
+        (datetime.now(timezone.utc).isoformat(), post_id),
+    )
+    c.commit()
+
+
 def cancelar(post_id: int) -> bool:
     c = conn()
     cur = c.execute(

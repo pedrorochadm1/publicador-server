@@ -31,6 +31,17 @@ def get_token() -> str:
     return _carregar().get("token") or config.INSTAGRAM_ACCESS_TOKEN
 
 
+def salvar_token(token: str):
+    _salvar(token)
+
+
+def status() -> int | None:
+    try:
+        return _dias_para_expirar(get_token())
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _dias_para_expirar(token: str) -> int | None:
     r = requests.get(
         f"{config.GRAPH.replace('/v19.0', '')}/debug_token",

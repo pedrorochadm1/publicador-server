@@ -23,7 +23,7 @@ def _processar():
     agora = datetime.now(timezone.utc).isoformat()
     for post in db.pegar_vencidos(agora):
         if post["tentativas"] >= _MAX_TENTATIVAS:
-            db.marcar(post["id"], "erro", erro="Máximo de tentativas atingido.")
+            db.marcar(post["id"], "erro", erro=post.get("erro") or "Máximo de tentativas atingido.")
             continue
         db.marcar(post["id"], "publicando")
         try:
