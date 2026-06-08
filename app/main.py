@@ -36,16 +36,23 @@ class Agendamento(BaseModel):
 
 
 class Upload(BaseModel):
-    imagem_b64: str = Field(..., description="Imagem em base64.")
+    arquivo_b64: str = Field(..., description="Arquivo (imagem ou vídeo) em base64.")
+    ext: str = Field("png", description="Extensão do arquivo (png, jpg, mp4, mov...).")
 
 
-def _salvar_imagem_b64(b64: str) -> str:
+_EXT_OK = {"png", "jpg", "jpeg", "webp", "mp4", "mov"}
+
+
+def _salvar_arquivo_b64(b64: str, ext: str = "png") -> str:
     """Decodifica base64, salva em /data/img e retorna o nome do arquivo."""
+    ext = ext.lower().lstrip(".")
+    if ext not in _EXT_OK:
+        raise HTTPException(status_code=400, detail=f"Extensão não suportada: {ext}")
     try:
         raw = base64.b64decode(b64.split(",")[-1], validate=True)
     except (binascii.Error, ValueError):
-        raise HTTPException(status_code=400, detail="Imagem base64 inválida.")
-    nome = f"{uuid.uuid4().hex}.png"
+        raise HTTPException(status_code=400, detail="Base64 inválido.")
+    nome = f"{uuid.uuid4().hex}.{ext}"
     with open(os.path.join(config.IMG_DIR, nome), "wb") as f:
         f.write(raw)
     return nome
@@ -69,17 +76,17 @@ def agendar(a: Agendamento):
     if quando_utc < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="publicar_em está no passado.")
 
-    nomes = [_salvar_imagem_b64(b64) for b64 in a.imagens_b64]
+    nomes = [_salvar_arquivo_b64(b64, "png") for b64 in a.imagens_b64]
     post = db.criar_post(quando_utc.isoformat(), a.caption, nomes)
     return {"id": post["id"], "publicar_em_utc": post["publicar_em"], "status": post["status"], "slides": len(nomes)}
 
 
 @app.post("/upload", dependencies=[Depends(auth)])
 def upload(u: Upload):
-    """Hospeda uma imagem e devolve a URL pública HTTPS (substitui o litterbox)."""
-    nome = _salvar_imagem_b64(u.imagem_b64)
+    """Hospeda imagem ou vídeo e devolve a URL pública HTTPS (substitui o litterbox)."""
     if not config.PUBLIC_BASE_URL:
         raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL não configurado.")
+    nome = _salvar_arquivo_b64(u.arquivo_b64, u.ext)
     return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
 
 
