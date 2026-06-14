@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import os
 
+import re
+
 import requests
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -43,6 +45,10 @@ class Upload(BaseModel):
 
 
 _EXT_OK = {"png", "jpg", "jpeg", "webp", "mp4", "mov"}
+
+_HEX32 = re.compile(r"^[0-9a-f]{32}$")
+_UPLOAD_TMP = os.path.join(config.DATA_DIR, "uploads_tmp")
+os.makedirs(_UPLOAD_TMP, exist_ok=True)
 
 
 def _salvar_arquivo_b64(b64: str, ext: str = "png") -> str:
@@ -119,6 +125,52 @@ async def upload_arquivo(arquivo: UploadFile = File(...), ext: str = Form("")):
 class UploadURL(BaseModel):
     url: str = Field(..., description="URL pública do arquivo a baixar (imagem ou vídeo).")
     ext: str = Field("", description="Extensão; se vazia, inferida da URL.")
+
+
+class UploadFinalizar(BaseModel):
+    upload_id: str = Field(..., description="ID devolvido por /upload-iniciar.")
+    ext: str = Field(..., description="Extensão do arquivo (mp4, png...).")
+
+
+@app.post("/upload-iniciar", dependencies=[Depends(auth)])
+def upload_iniciar():
+    """Inicia um upload em pedaços. Devolve um upload_id para enviar as partes."""
+    upload_id = uuid.uuid4().hex
+    open(os.path.join(_UPLOAD_TMP, upload_id), "wb").close()
+    return {"upload_id": upload_id}
+
+
+@app.put("/upload-parte/{upload_id}", dependencies=[Depends(auth)])
+async def upload_parte(upload_id: str, request: Request):
+    """Anexa um pedaço (corpo bruto) ao upload. Chame em sequência por arquivo."""
+    if not _HEX32.match(upload_id):
+        raise HTTPException(status_code=400, detail="upload_id inválido.")
+    caminho = os.path.join(_UPLOAD_TMP, upload_id)
+    if not os.path.exists(caminho):
+        raise HTTPException(status_code=404, detail="upload_id não encontrado. Use /upload-iniciar.")
+    with open(caminho, "ab") as f:
+        async for chunk in request.stream():
+            f.write(chunk)
+    return {"ok": True, "bytes": os.path.getsize(caminho)}
+
+
+@app.post("/upload-finalizar", dependencies=[Depends(auth)])
+def upload_finalizar(u: UploadFinalizar):
+    """Fecha o upload em pedaços: move o arquivo montado para a storage pública."""
+    if not config.PUBLIC_BASE_URL:
+        raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL não configurado.")
+    if not _HEX32.match(u.upload_id):
+        raise HTTPException(status_code=400, detail="upload_id inválido.")
+    origem = os.path.join(_UPLOAD_TMP, u.upload_id)
+    if not os.path.exists(origem):
+        raise HTTPException(status_code=404, detail="upload_id não encontrado.")
+    extensao = u.ext.lower().lstrip(".")
+    if extensao not in _EXT_OK:
+        os.remove(origem)
+        raise HTTPException(status_code=400, detail=f"Extensão não suportada: {extensao}")
+    nome = f"{uuid.uuid4().hex}.{extensao}"
+    os.replace(origem, os.path.join(config.IMG_DIR, nome))
+    return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
 
 
 @app.post("/upload-de-url", dependencies=[Depends(auth)])
