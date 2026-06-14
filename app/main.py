@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import os
 
+import requests
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -112,6 +113,35 @@ async def upload_arquivo(arquivo: UploadFile = File(...), ext: str = Form("")):
     with open(destino, "wb") as f:
         while chunk := await arquivo.read(1024 * 1024):
             f.write(chunk)
+    return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
+
+
+class UploadURL(BaseModel):
+    url: str = Field(..., description="URL pública do arquivo a baixar (imagem ou vídeo).")
+    ext: str = Field("", description="Extensão; se vazia, inferida da URL.")
+
+
+@app.post("/upload-de-url", dependencies=[Depends(auth)])
+def upload_de_url(u: UploadURL):
+    """Baixa o arquivo de uma URL para a storage do servidor. Evita o timeout de
+    upload do proxy com arquivos grandes — o servidor puxa com banda de datacenter."""
+    if not config.PUBLIC_BASE_URL:
+        raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL não configurado.")
+    extensao = (u.ext or os.path.splitext(u.url.split("?")[0])[1]).lower().lstrip(".")
+    if extensao not in _EXT_OK:
+        raise HTTPException(status_code=400, detail=f"Extensão não suportada: {extensao}")
+    nome = f"{uuid.uuid4().hex}.{extensao}"
+    destino = os.path.join(config.IMG_DIR, nome)
+    try:
+        with requests.get(u.url, stream=True, timeout=300) as r:
+            r.raise_for_status()
+            with open(destino, "wb") as f:
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+    except requests.RequestException as e:
+        if os.path.exists(destino):
+            os.remove(destino)
+        raise HTTPException(status_code=400, detail=f"Falha ao baixar a URL: {e}")
     return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
 
 
