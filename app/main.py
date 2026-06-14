@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 import os
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -96,6 +96,22 @@ def upload(u: Upload):
     if not config.PUBLIC_BASE_URL:
         raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL não configurado.")
     nome = _salvar_arquivo_b64(u.arquivo_b64, u.ext)
+    return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
+
+
+@app.post("/upload-arquivo", dependencies=[Depends(auth)])
+async def upload_arquivo(arquivo: UploadFile = File(...), ext: str = Form("")):
+    """Hospeda imagem ou vídeo via multipart (streaming, sem base64). Para arquivos grandes."""
+    if not config.PUBLIC_BASE_URL:
+        raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL não configurado.")
+    extensao = (ext or os.path.splitext(arquivo.filename or "")[1]).lower().lstrip(".")
+    if extensao not in _EXT_OK:
+        raise HTTPException(status_code=400, detail=f"Extensão não suportada: {extensao}")
+    nome = f"{uuid.uuid4().hex}.{extensao}"
+    destino = os.path.join(config.IMG_DIR, nome)
+    with open(destino, "wb") as f:
+        while chunk := await arquivo.read(1024 * 1024):
+            f.write(chunk)
     return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
 
 
