@@ -103,3 +103,21 @@ def cancelar(post_id: int) -> bool:
     )
     c.commit()
     return cur.rowcount > 0
+
+
+def reagendar(post_id: int, novo_publicar_em_utc: str, caption: str | None = None) -> bool:
+    """Troca o horário (e opcionalmente a legenda) de um post sem reenviar a mídia.
+    Reabre posts 'agendado', 'cancelado' ou 'erro' para 'agendado'."""
+    sets = "status = 'agendado', tentativas = 0, erro = NULL, publicar_em = ?"
+    params: list = [novo_publicar_em_utc]
+    if caption is not None:
+        sets += ", caption = ?"
+        params.append(caption)
+    params.append(post_id)
+    c = conn()
+    cur = c.execute(
+        f"UPDATE posts SET {sets} WHERE id = ? AND status IN ('agendado', 'cancelado', 'erro')",
+        params,
+    )
+    c.commit()
+    return cur.rowcount > 0

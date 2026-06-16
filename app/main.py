@@ -209,6 +209,30 @@ def cancelar(post_id: int):
     return {"id": post_id, "status": "cancelado"}
 
 
+class Reagendamento(BaseModel):
+    publicar_em: datetime = Field(..., description="Novo horário. ISO 8601; sem timezone assume America/Sao_Paulo.")
+    caption: str | None = Field(None, description="Opcional: nova legenda. Se omitido, mantém a atual.")
+
+
+@app.patch("/agenda/{post_id}", dependencies=[Depends(auth)])
+def reagendar(post_id: int, r: Reagendamento):
+    """Troca o horário (e opcionalmente a legenda) de um post sem reenviar a mídia."""
+    if not db.get_post(post_id):
+        raise HTTPException(status_code=404, detail="Post não encontrado.")
+
+    quando = r.publicar_em
+    if quando.tzinfo is None:
+        quando = quando.replace(tzinfo=ZoneInfo(config.TZ))
+    quando_utc = quando.astimezone(timezone.utc)
+    if quando_utc < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="publicar_em está no passado.")
+
+    if not db.reagendar(post_id, quando_utc.isoformat(), r.caption):
+        raise HTTPException(status_code=409, detail="Post já publicado — não pode ser reagendado.")
+    p = db.get_post(post_id)
+    return {"id": p["id"], "publicar_em_utc": p["publicar_em"], "status": p["status"]}
+
+
 class TokenUpdate(BaseModel):
     token: str
 
