@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publicar no TikTok — @pedrorochadm1</title>
+<style>
+  :root { --fg:#161823; --muted:#6b6f76; --line:#e3e5e8; --accent:#fe2c55; --ok:#0a0; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+         color: var(--fg); max-width: 560px; margin: 0 auto; padding: 24px; line-height: 1.5; }
+  h1 { font-size: 22px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-top: 16px; }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; }
+  select, textarea, input[type=file] { width: 100%; padding: 10px; border: 1px solid var(--line);
+         border-radius: 8px; font: inherit; }
+  .check { display: flex; align-items: center; gap: 8px; font-weight: 400; margin: 8px 0; }
+  .check.disabled { opacity: .45; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 12px 18px;
+         font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 16px; }
+  .btn:disabled { background: #f1a9b8; cursor: not-allowed; }
+  .btn.ghost { background: #161823; }
+  video { width: 100%; border-radius: 8px; margin-top: 8px; background: #000; }
+  .hidden { display: none; }
+  .legal { font-size: 12px; color: var(--muted); margin-top: 14px; }
+  a { color: var(--accent); }
+  #status { margin-top: 14px; font-weight: 600; }
+</style>
+</head>
+<body>
+  <h1>Publicar no TikTok</h1>
+  <p class="muted">Conecte sua conta do TikTok, escolha as opções e confirme. O vídeo só é
+  enviado depois que você toca em “Publicar no TikTok”.</p>
+
+  <!-- Não conectado -->
+  <div id="login-box" class="card hidden">
+    <p>Você precisa conectar sua conta do TikTok para publicar.</p>
+    <a href="/tiktok/login"><button class="btn">Conectar conta do TikTok</button></a>
+  </div>
+
+  <!-- Conectado -->
+  <div id="form-box" class="card hidden">
+    <p>Publicando na conta: <strong id="nickname"></strong>
+       <button class="btn ghost" id="logout" style="width:auto;padding:6px 12px;font-size:13px;float:right;margin:0;">Sair</button></p>
+
+    <label for="video">Vídeo</label>
+    <input type="file" id="video" accept="video/mp4,video/quicktime">
+    <video id="preview" class="hidden" controls></video>
+
+    <label for="caption">Legenda</label>
+    <textarea id="caption" rows="3" maxlength="2200" placeholder="Escreva a legenda (hashtags e @ são reconhecidos)"></textarea>
+
+    <!-- Privacidade: SEM valor padrão, opções vindas do creator_info -->
+    <label for="privacy">Quem pode ver este vídeo</label>
+    <select id="privacy">
+      <option value="" disabled selected>Selecione…</option>
+    </select>
+
+    <!-- Interações: nenhuma marcada por padrão; greyed se desabilitada na conta -->
+    <label>Permitir</label>
+    <div class="check" id="row-comment"><input type="checkbox" id="allow_comment"><span>Comentários</span></div>
+    <div class="check" id="row-duet"><input type="checkbox" id="allow_duet"><span>Duet</span></div>
+    <div class="check" id="row-stitch"><input type="checkbox" id="allow_stitch"><span>Stitch</span></div>
+
+    <!-- Disclosure de conteúdo comercial: desligado por padrão -->
+    <label>Divulgar conteúdo comercial</label>
+    <div class="check"><input type="checkbox" id="commercial"><span>Este vídeo promove uma marca, produto ou serviço</span></div>
+    <div id="commercial-opts" class="hidden" style="padding-left:8px;">
+      <div class="check"><input type="checkbox" id="your_brand"><span>Sua marca (rotulado como “Conteúdo promocional”)</span></div>
+      <div class="check"><input type="checkbox" id="branded_content"><span>Conteúdo de marca / parceria paga (rotulado como “Parceria paga”)</span></div>
+      <p class="muted" id="branded-note"></p>
+    </div>
+
+    <p class="legal" id="compliance">Ao publicar, você concorda com a
+      <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank">Confirmação de Uso de Música do TikTok</a>.</p>
+
+    <button class="btn" id="publish" disabled>Publicar no TikTok</button>
+    <div id="status"></div>
+
+    <p class="legal"><a href="/privacy" target="_blank">Política de Privacidade</a> ·
+       <a href="/terms" target="_blank">Termos de Uso</a></p>
+  </div>
+
+<script>
+let CI = null;
+
+async function load() {
+  const r = await fetch('/tiktok/creator-info');
+  const d = await r.json();
+  if (!d.logged_in) { show('login-box'); return; }
+  CI = d;
+  show('form-box');
+  document.getElementById('nickname').textContent = d.creator_nickname || '(sua conta)';
+
+  // privacidade (sem default)
+  const sel = document.getElementById('privacy');
+  const labels = { PUBLIC_TO_EVERYONE:'Todos', MUTUAL_FOLLOW_FRIENDS:'Amigos', FOLLOWER_OF_CREATOR:'Seguidores', SELF_ONLY:'Só eu (privado)' };
+  (d.privacy_level_options || []).forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = o; opt.textContent = labels[o] || o;
+    sel.appendChild(opt);
+  });
+
+  // interações desabilitadas na conta → greyed + travadas
+  greyIfDisabled('comment', d.comment_disabled);
+  greyIfDisabled('duet', d.duet_disabled);
+  greyIfDisabled('stitch', d.stitch_disabled);
+}
+
+function greyIfDisabled(name, disabled) {
+  if (!disabled) return;
+  const row = document.getElementById('row-' + name);
+  const cb = document.getElementById('allow_' + name);
+  cb.checked = false; cb.disabled = true;
+  row.classList.add('disabled');
+}
+
+function show(id) {
+  ['login-box','form-box'].forEach(x => document.getElementById(x).classList.toggle('hidden', x !== id));
+}
+
+const $ = id => document.getElementById(id);
+
+$('video').addEventListener('change', e => {
+  const f = e.target.files[0];
+  const v = $('preview');
+  if (f) { v.src = URL.createObjectURL(f); v.classList.remove('hidden'); }
+  validate();
+});
+
+$('commercial').addEventListener('change', e => {
+  $('commercial-opts').classList.toggle('hidden', !e.target.checked);
+  if (!e.target.checked) { $('your_brand').checked = false; $('branded_content').checked = false; }
+  applyBrandedRules(); validate();
+});
+['privacy','branded_content','your_brand'].forEach(id => $(id).addEventListener('change', () => { applyBrandedRules(); validate(); }));
+
+function applyBrandedRules() {
+  const branded = $('commercial').checked && $('branded_content').checked;
+  const sel = $('privacy');
+  // Conteúdo de marca não pode ser privado: trava SELF_ONLY
+  [...sel.options].forEach(o => { if (o.value === 'SELF_ONLY') o.disabled = branded; });
+  if (branded && sel.value === 'SELF_ONLY') sel.value = '';
+  $('branded-note').textContent = branded ? 'Conteúdo de marca não pode ser privado.' : '';
+  // texto de compliance
+  $('compliance').innerHTML = branded
+    ? 'Ao publicar, você concorda com a <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank">Confirmação de Uso de Música</a> e a <a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank">Política de Conteúdo de Marca</a> do TikTok.'
+    : 'Ao publicar, você concorda com a <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank">Confirmação de Uso de Música do TikTok</a>.';
+}
+
+function validate() {
+  const hasVideo = $('video').files.length > 0;
+  const hasPrivacy = !!$('privacy').value;
+  const commercialOk = !$('commercial').checked || $('your_brand').checked || $('branded_content').checked;
+  $('publish').disabled = !(hasVideo && hasPrivacy && commercialOk);
+}
+
+$('logout').addEventListener('click', async () => { await fetch('/tiktok/logout', {method:'POST'}); location.reload(); });
+
+$('publish').addEventListener('click', async () => {
+  $('publish').disabled = true;
+  $('status').textContent = '⏳ Enviando…';
+  const fd = new FormData();
+  fd.append('video', $('video').files[0]);
+  fd.append('caption', $('caption').value);
+  fd.append('privacy_level', $('privacy').value);
+  fd.append('allow_comment', $('allow_comment').checked);
+  fd.append('allow_duet', $('allow_duet').checked);
+  fd.append('allow_stitch', $('allow_stitch').checked);
+  fd.append('commercial', $('commercial').checked);
+  fd.append('your_brand', $('your_brand').checked);
+  fd.append('branded_content', $('branded_content').checked);
+
+  const r = await fetch('/tiktok/publish', { method:'POST', body: fd });
+  if (!r.ok) { $('status').textContent = '❌ ' + (await r.json()).detail; $('publish').disabled = false; return; }
+  const { publish_id } = await r.json();
+  $('status').textContent = '⏳ Processando no TikTok… pode levar alguns minutos.';
+  poll(publish_id, 40);
+});
+
+async function poll(id, left) {
+  if (left <= 0) { $('status').textContent = 'ℹ️ Ainda processando. Confira no app do TikTok.'; return; }
+  const r = await fetch('/tiktok/status/' + id);
+  const d = await r.json();
+  if (d.status === 'PUBLISH_COMPLETE') { $('status').textContent = '✅ Publicado no TikTok!'; return; }
+  if (d.status === 'FAILED') { $('status').textContent = '❌ Falhou: ' + (d.fail_reason || ''); $('publish').disabled = false; return; }
+  setTimeout(() => poll(id, left - 1), 4000);
+}
+
+load();
+</script>
+</body>
+</html>

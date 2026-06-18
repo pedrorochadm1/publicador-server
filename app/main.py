@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import config, db, scheduler
+from . import config, db, scheduler, tiktok_web
 
 
 @asynccontextmanager
@@ -25,6 +25,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Publicador @pedrorochadm1", lifespan=lifespan)
 app.mount("/img", StaticFiles(directory=config.IMG_DIR), name="img")
+# Interface web do TikTok (Login Kit + página de publicação conforme + política/termos)
+app.include_router(tiktok_web.router)
 
 
 def auth(x_api_key: str = Header(default="")):
@@ -33,10 +35,14 @@ def auth(x_api_key: str = Header(default="")):
 
 
 class Agendamento(BaseModel):
-    publicar_em: datetime = Field(..., description="Horário do post. ISO 8601; sem timezone assume America/Sao_Paulo.")
+    publicar_em: datetime | None = Field(None, description="Horário do post. ISO 8601; sem timezone assume America/Sao_Paulo. Omitido = publicar agora.")
     caption: str = ""
     arquivos: list[str] = Field(default=[], description="Nomes de arquivos já enviados via /upload (imagem ou vídeo).")
     imagens_b64: list[str] = Field(default=[], max_length=10, description="Imagens em base64 (alternativa ao /upload).")
+    # SEO multi-plataforma (só usados quando o arquivo é um vídeo/reel)
+    youtube_title: str = ""
+    youtube_description: str = ""
+    tiktok_caption: str = ""
 
 
 class Upload(BaseModel):
@@ -77,12 +83,17 @@ def health():
 
 @app.post("/agendar", dependencies=[Depends(auth)])
 def agendar(a: Agendamento):
-    quando = a.publicar_em
-    if quando.tzinfo is None:
-        quando = quando.replace(tzinfo=ZoneInfo(config.TZ))
-    quando_utc = quando.astimezone(timezone.utc)
-    if quando_utc < datetime.now(timezone.utc):
-        raise HTTPException(status_code=400, detail="publicar_em está no passado.")
+    # publicar_em omitido = publicar agora (mesmo caminho do agendado, processado no próximo ciclo)
+    if a.publicar_em is None:
+        quando_utc = datetime.now(timezone.utc)
+    else:
+        quando = a.publicar_em
+        if quando.tzinfo is None:
+            quando = quando.replace(tzinfo=ZoneInfo(config.TZ))
+        quando_utc = quando.astimezone(timezone.utc)
+        # tolera pequeno atraso de relógio para o caso "agora"
+        if quando_utc < datetime.now(timezone.utc).replace(microsecond=0):
+            raise HTTPException(status_code=400, detail="publicar_em está no passado.")
 
     # arquivos já enviados via /upload: confere que existem no disco
     for nome in a.arquivos:
@@ -93,7 +104,10 @@ def agendar(a: Agendamento):
     if not nomes:
         raise HTTPException(status_code=400, detail="Envie 'arquivos' ou 'imagens_b64'.")
 
-    post = db.criar_post(quando_utc.isoformat(), a.caption, nomes)
+    post = db.criar_post(
+        quando_utc.isoformat(), a.caption, nomes,
+        a.youtube_title, a.youtube_description, a.tiktok_caption,
+    )
     return {"id": post["id"], "publicar_em_utc": post["publicar_em"], "status": post["status"], "arquivos": len(nomes)}
 
 
@@ -200,6 +214,15 @@ def upload_de_url(u: UploadURL):
 @app.get("/agenda", dependencies=[Depends(auth)])
 def agenda(status: str | None = None):
     return db.listar(status)
+
+
+@app.get("/agenda/{post_id}", dependencies=[Depends(auth)])
+def agenda_item(post_id: int):
+    """Status de um post específico — usado para acompanhar a publicação imediata."""
+    p = db.get_post(post_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Post não encontrado.")
+    return p
 
 
 @app.delete("/agenda/{post_id}", dependencies=[Depends(auth)])

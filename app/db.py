@@ -23,10 +23,21 @@ def conn():
                 status      TEXT NOT NULL DEFAULT 'agendado',
                 ig_post_id  TEXT,
                 erro        TEXT,
-                tentativas  INTEGER NOT NULL DEFAULT 0
+                tentativas  INTEGER NOT NULL DEFAULT 0,
+                youtube_title       TEXT NOT NULL DEFAULT '',
+                youtube_description TEXT NOT NULL DEFAULT '',
+                tiktok_caption      TEXT NOT NULL DEFAULT '',
+                resultados          TEXT      -- JSON: status por plataforma
             )
             """
         )
+        # Migração para bancos criados antes das colunas multi-plataforma
+        cols = {r[1] for r in _conn.execute("PRAGMA table_info(posts)").fetchall()}
+        for nova in ("youtube_title", "youtube_description", "tiktok_caption"):
+            if nova not in cols:
+                _conn.execute(f"ALTER TABLE posts ADD COLUMN {nova} TEXT NOT NULL DEFAULT ''")
+        if "resultados" not in cols:
+            _conn.execute("ALTER TABLE posts ADD COLUMN resultados TEXT")
         _conn.commit()
     return _conn
 
@@ -34,18 +45,32 @@ def conn():
 def _row(r):
     d = dict(r)
     d["imagens"] = json.loads(d["imagens"])
+    if d.get("resultados"):
+        d["resultados"] = json.loads(d["resultados"])
     return d
 
 
-def criar_post(publicar_em_utc: str, caption: str, imagens: list[str]) -> dict:
+def criar_post(
+    publicar_em_utc: str,
+    caption: str,
+    imagens: list[str],
+    youtube_title: str = "",
+    youtube_description: str = "",
+    tiktok_caption: str = "",
+) -> dict:
     c = conn()
     cur = c.execute(
-        "INSERT INTO posts (criado_em, publicar_em, caption, imagens) VALUES (?, ?, ?, ?)",
+        "INSERT INTO posts (criado_em, publicar_em, caption, imagens, "
+        "youtube_title, youtube_description, tiktok_caption) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             datetime.now(timezone.utc).isoformat(),
             publicar_em_utc,
             caption,
             json.dumps(imagens),
+            youtube_title,
+            youtube_description,
+            tiktok_caption,
         ),
     )
     c.commit()
@@ -75,12 +100,13 @@ def pegar_vencidos(agora_utc: str) -> list[dict]:
     return [_row(r) for r in rows]
 
 
-def marcar(post_id: int, status: str, ig_post_id: str | None = None, erro: str | None = None):
+def marcar(post_id: int, status: str, ig_post_id: str | None = None, erro: str | None = None,
+           resultados: dict | None = None):
     c = conn()
     c.execute(
         "UPDATE posts SET status = ?, ig_post_id = COALESCE(?, ig_post_id), erro = ?, "
-        "tentativas = tentativas + 1 WHERE id = ?",
-        (status, ig_post_id, erro, post_id),
+        "resultados = COALESCE(?, resultados), tentativas = tentativas + 1 WHERE id = ?",
+        (status, ig_post_id, erro, json.dumps(resultados) if resultados is not None else None, post_id),
     )
     c.commit()
 
