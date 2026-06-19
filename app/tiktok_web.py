@@ -50,6 +50,12 @@ def _sessao(request: Request) -> dict | None:
 # ─────────────────────────── Páginas estáticas ───────────────────────────
 
 @router.get("/", response_class=HTMLResponse)
+def home_page():
+    # Homepage real (site externo completo) — exigência da auditoria do TikTok.
+    return _html("home.html")
+
+
+@router.get("/app", response_class=HTMLResponse)
 @router.get("/tiktok", response_class=HTMLResponse)
 def export_page():
     return _html("export.html")
