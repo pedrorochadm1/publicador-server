@@ -138,15 +138,48 @@ def _poll(token: str, publish_id: str, tentativas: int = 30) -> dict:
     return {"status": "PROCESSING_TIMEOUT"}
 
 
+def _inbox_video(token: str, video_path: str, file_size: int) -> dict:
+    """Modo rascunho: envia o vídeo pra caixa de entrada/rascunhos do TikTok.
+    Não exige auditoria nem creator_info; o criador finaliza a postagem no app."""
+    init = requests.post(
+        f"{API}/v2/post/publish/inbox/video/init/",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
+        json={
+            "source_info": {
+                "source": "FILE_UPLOAD",
+                "video_size": file_size,
+                "chunk_size": file_size if file_size <= CHUNK_LIMITE else CHUNK_SIZE,
+                "total_chunk_count": 1 if file_size <= CHUNK_LIMITE else math.floor(file_size / CHUNK_SIZE),
+            },
+        },
+        timeout=60,
+    )
+    if init.status_code != 200:
+        return {"status": "erro", "motivo": f"init inbox {init.status_code}: {init.text[:200]}"}
+    d = init.json().get("data", {})
+    upload_url, publish_id = d.get("upload_url"), d.get("publish_id")
+    if not upload_url:
+        return {"status": "erro", "motivo": f"sem upload_url: {init.text[:200]}"}
+    _enviar(upload_url, video_path, file_size)
+    st = _poll(token, publish_id)
+    status = st.get("status")
+    if status == "FAILED":
+        return {"status": "erro", "publish_id": publish_id, "motivo": st.get("fail_reason", "?")}
+    return {"status": "ok", "publish_id": publish_id, "modo": "rascunho", "tiktok_status": status}
+
+
 def publicar(video_path: str, caption: str) -> dict:
-    """Publica um vídeo no TikTok. Devolve dict com status/publish_id/privacy."""
+    """Vídeo no TikTok. Sem auditoria → rascunho (inbox). Com auditoria → Direct Post público."""
     token = _renovar()
     if not token:
         return {"status": "indisponivel", "motivo": "sem token TikTok"}
 
+    file_size = os.path.getsize(video_path)
+    if not config.TIKTOK_AUDITADO:
+        return _inbox_video(token, video_path, file_size)
+
     info = _creator_info(token)
     privacy = _privacidade(info["privacy_level_options"])
-    file_size = os.path.getsize(video_path)
 
     init = requests.post(
         f"{API}/v2/post/publish/video/init/",
@@ -196,26 +229,26 @@ def publicar_foto(image_urls: list[str], caption: str) -> dict:
     if not image_urls:
         return {"status": "erro", "motivo": "sem imagens"}
 
-    info = _creator_info(token)
-    privacy = _privacidade(info["privacy_level_options"])
+    direct = config.TIKTOK_AUDITADO
+    post_info = {"title": caption[:90], "description": caption[:4000], "auto_add_music": True}
+    privacy = None
+    if direct:
+        info = _creator_info(token)
+        privacy = _privacidade(info["privacy_level_options"])
+        post_info["privacy_level"] = privacy
+        post_info["disable_comment"] = bool(info.get("comment_disabled", False))
 
     init = requests.post(
         f"{API}/v2/post/publish/content/init/",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
         json={
-            "post_info": {
-                "title": caption[:90],
-                "description": caption[:4000],
-                "privacy_level": privacy,
-                "disable_comment": bool(info.get("comment_disabled", False)),
-                "auto_add_music": True,
-            },
+            "post_info": post_info,
             "source_info": {
                 "source": "PULL_FROM_URL",
                 "photo_cover_index": 0,
                 "photo_images": image_urls,
             },
-            "post_mode": "DIRECT_POST",
+            "post_mode": "DIRECT_POST" if direct else "MEDIA_UPLOAD",
             "media_type": "PHOTO",
         },
         timeout=60,
@@ -231,4 +264,5 @@ def publicar_foto(image_urls: list[str], caption: str) -> dict:
     status = st.get("status")
     if status == "FAILED":
         return {"status": "erro", "publish_id": publish_id, "motivo": st.get("fail_reason", "?")}
-    return {"status": "ok", "publish_id": publish_id, "privacy": privacy, "tiktok_status": status}
+    return {"status": "ok", "publish_id": publish_id, "privacy": privacy,
+            "modo": None if direct else "rascunho", "tiktok_status": status}
