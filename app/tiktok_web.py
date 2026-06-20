@@ -25,7 +25,8 @@ _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _TMP_DIR = os.path.join(config.DATA_DIR, "tiktok_web_tmp")
 os.makedirs(_TMP_DIR, exist_ok=True)
 
-SCOPES = "user.info.basic,video.publish,video.upload"
+# Modo rascunho: só o necessário (sem video.publish, que é do Direct Post público).
+SCOPES = "user.info.basic,video.upload"
 
 # Sessões em memória: session_id -> {access_token, refresh_token, open_id}
 _SESSOES: dict[str, dict] = {}
