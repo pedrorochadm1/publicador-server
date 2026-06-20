@@ -14,7 +14,7 @@ import secrets
 import urllib.parse
 
 import requests
-from fastapi import APIRouter, Form, Request, UploadFile, File, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Form, Request, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 
 from . import config, tiktok
@@ -159,9 +159,32 @@ def creator_info(request: Request):
 
 # ─────────────────────────── Publicação ───────────────────────────
 
+def _upload_bg(upload_url: str, caminho: str, file_size: int):
+    """Envia o arquivo ao TikTok em segundo plano e limpa o temporário.
+    Roda fora da requisição pra o navegador não esperar (evita 502 do proxy)."""
+    try:
+        with open(caminho, "rb") as vf:
+            requests.put(
+                upload_url,
+                headers={
+                    "Content-Type": "video/mp4",
+                    "Content-Length": str(file_size),
+                    "Content-Range": f"bytes 0-{file_size - 1}/{file_size}",
+                },
+                data=vf,
+                timeout=600,
+            )
+    except Exception as e:  # noqa: BLE001
+        print(f"[tiktok_web] upload bg falhou: {e}")
+    finally:
+        if os.path.exists(caminho):
+            os.remove(caminho)
+
+
 @router.post("/tiktok/publish")
 async def publish(
     request: Request,
+    background: BackgroundTasks,
     video: UploadFile = File(...),
     caption: str = Form(""),
     privacy_level: str = Form(...),
@@ -199,63 +222,49 @@ async def publish(
     with open(caminho, "wb") as f:
         while chunk := await video.read(1024 * 1024):
             f.write(chunk)
+    file_size = os.path.getsize(caminho)
 
+    # 3. init Direct Post (rápido) — pega publish_id + upload_url
     try:
-        file_size = os.path.getsize(caminho)
-        # 3. init Direct Post (timeout curto pra não pendurar)
-        try:
-            init = requests.post(
-                f"{tiktok.API}/v2/post/publish/video/init/",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
-                json={
-                    "post_info": {
-                        "title": caption[:2200],
-                        "privacy_level": privacy_level,
-                        "disable_comment": not _b(allow_comment),
-                        "disable_duet": not _b(allow_duet),
-                        "disable_stitch": not _b(allow_stitch),
-                        "brand_content_toggle": branded,
-                        "brand_organic_toggle": _b(your_brand) and _b(commercial),
-                    },
-                    "source_info": {
-                        "source": "FILE_UPLOAD",
-                        "video_size": file_size,
-                        "chunk_size": file_size,
-                        "total_chunk_count": 1,
-                    },
+        init = requests.post(
+            f"{tiktok.API}/v2/post/publish/video/init/",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
+            json={
+                "post_info": {
+                    "title": caption[:2200],
+                    "privacy_level": privacy_level,
+                    "disable_comment": not _b(allow_comment),
+                    "disable_duet": not _b(allow_duet),
+                    "disable_stitch": not _b(allow_stitch),
+                    "brand_content_toggle": branded,
+                    "brand_organic_toggle": _b(your_brand) and _b(commercial),
                 },
-                timeout=30,
-            )
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(status_code=504, detail=f"init sem resposta (timeout?): {e}")
-        if init.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"init {init.status_code}: {init.text[:300]}")
-        d = init.json().get("data", {})
-        upload_url, publish_id = d.get("upload_url"), d.get("publish_id")
-        if not upload_url:
-            raise HTTPException(status_code=502, detail=f"sem upload_url: {init.text[:300]}")
-
-        # 4. envia o arquivo (timeout curto: o demo usa clipe pequeno)
-        try:
-            with open(caminho, "rb") as vf:
-                put = requests.put(
-                    upload_url,
-                    headers={
-                        "Content-Type": "video/mp4",
-                        "Content-Length": str(file_size),
-                        "Content-Range": f"bytes 0-{file_size - 1}/{file_size}",
-                    },
-                    data=vf,
-                    timeout=120,
-                )
-        except Exception as e:  # noqa: BLE001
-            raise HTTPException(status_code=504, detail=f"upload sem resposta (timeout?): {e}")
-        if put.status_code not in (200, 201):
-            raise HTTPException(status_code=502, detail=f"upload {put.status_code}: {put.text[:200]}")
-    finally:
+                "source_info": {
+                    "source": "FILE_UPLOAD",
+                    "video_size": file_size,
+                    "chunk_size": file_size,
+                    "total_chunk_count": 1,
+                },
+            },
+            timeout=30,
+        )
+    except Exception as e:  # noqa: BLE001
         if os.path.exists(caminho):
             os.remove(caminho)
+        raise HTTPException(status_code=504, detail=f"init sem resposta (timeout?): {e}")
+    if init.status_code != 200:
+        if os.path.exists(caminho):
+            os.remove(caminho)
+        raise HTTPException(status_code=502, detail=f"init {init.status_code}: {init.text[:300]}")
+    d = init.json().get("data", {})
+    upload_url, publish_id = d.get("upload_url"), d.get("publish_id")
+    if not upload_url:
+        if os.path.exists(caminho):
+            os.remove(caminho)
+        raise HTTPException(status_code=502, detail=f"sem upload_url: {init.text[:300]}")
 
+    # 4. envia o arquivo em segundo plano — a requisição volta já, sem 502 do proxy
+    background.add_task(_upload_bg, upload_url, caminho, file_size)
     return {"publish_id": publish_id}
 
 
