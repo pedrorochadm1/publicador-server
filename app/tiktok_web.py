@@ -14,7 +14,7 @@ import secrets
 import urllib.parse
 
 import requests
-from fastapi import APIRouter, Request, UploadFile, File, HTTPException
+from fastapi import APIRouter, Form, Request, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 
 from . import config, tiktok
@@ -25,8 +25,8 @@ _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _TMP_DIR = os.path.join(config.DATA_DIR, "tiktok_web_tmp")
 os.makedirs(_TMP_DIR, exist_ok=True)
 
-# Modo rascunho: só o necessário (sem video.publish, que é do Direct Post público).
-SCOPES = "user.info.basic,video.upload"
+# Direct Post público precisa de video.publish (user.info.basic pra mostrar a conta).
+SCOPES = "user.info.basic,video.publish"
 
 # Sessões em memória: session_id -> {access_token, refresh_token, open_id}
 _SESSOES: dict[str, dict] = {}
@@ -139,34 +139,58 @@ def logout(request: Request):
 
 @router.get("/tiktok/creator-info")
 def creator_info(request: Request):
-    """Nome da conta conectada (scope user.info.basic) — pra mostrar na página."""
     s = _sessao(request)
     if not s:
         return JSONResponse({"logged_in": False})
     try:
-        r = requests.get(
-            f"{tiktok.API}/v2/user/info/",
-            params={"fields": "display_name"},
-            headers={"Authorization": f"Bearer {s['access_token']}"},
-            timeout=30,
-        )
-        user = r.json().get("data", {}).get("user", {})
+        info = tiktok._creator_info(s["access_token"])
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"logged_in": True, "error": str(e)}, status_code=502)
-    return {"logged_in": True, "display_name": user.get("display_name")}
+    return {
+        "logged_in": True,
+        "creator_nickname": info.get("creator_nickname"),
+        "privacy_level_options": info.get("privacy_level_options", []),
+        "comment_disabled": info.get("comment_disabled", False),
+        "duet_disabled": info.get("duet_disabled", False),
+        "stitch_disabled": info.get("stitch_disabled", False),
+        "max_video_post_duration_sec": info.get("max_video_post_duration_sec"),
+    }
 
 
 # ─────────────────────────── Publicação ───────────────────────────
 
 @router.post("/tiktok/publish")
-async def publish(request: Request, video: UploadFile = File(...)):
-    """Envia o vídeo para os rascunhos do TikTok (Upload-to-Inbox, scope video.upload).
-    Sem privacidade/interações aqui — o criador finaliza no app do TikTok."""
+async def publish(
+    request: Request,
+    video: UploadFile = File(...),
+    caption: str = Form(""),
+    privacy_level: str = Form(...),
+    allow_comment: str = Form("false"),
+    allow_duet: str = Form("false"),
+    allow_stitch: str = Form("false"),
+    commercial: str = Form("false"),
+    your_brand: str = Form("false"),
+    branded_content: str = Form("false"),
+):
     s = _sessao(request)
     if not s:
         raise HTTPException(status_code=401, detail="Conecte sua conta do TikTok primeiro.")
-    token = s["access_token"]
 
+    def _b(v):
+        return str(v).lower() in ("1", "true", "on", "yes")
+
+    branded = _b(branded_content) and _b(commercial)
+    # Regra do TikTok: conteúdo de marca (branded) não pode ser privado.
+    if branded and privacy_level == "SELF_ONLY":
+        raise HTTPException(status_code=400, detail="Conteúdo de marca não pode ser privado.")
+
+    token = s["access_token"]
+    # valida que a privacidade escolhida está nas opções da conta
+    info = tiktok._creator_info(token)
+    if privacy_level not in info.get("privacy_level_options", []):
+        raise HTTPException(status_code=400, detail="privacy_level inválido para esta conta.")
+
+    # salva o upload num arquivo temporário
     caminho = os.path.join(_TMP_DIR, f"{secrets.token_hex(8)}.mp4")
     with open(caminho, "wb") as f:
         while chunk := await video.read(1024 * 1024):
@@ -175,9 +199,18 @@ async def publish(request: Request, video: UploadFile = File(...)):
     try:
         file_size = os.path.getsize(caminho)
         init = requests.post(
-            f"{tiktok.API}/v2/post/publish/inbox/video/init/",
+            f"{tiktok.API}/v2/post/publish/video/init/",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
             json={
+                "post_info": {
+                    "title": caption[:2200],
+                    "privacy_level": privacy_level,
+                    "disable_comment": not _b(allow_comment),
+                    "disable_duet": not _b(allow_duet),
+                    "disable_stitch": not _b(allow_stitch),
+                    "brand_content_toggle": branded,
+                    "brand_organic_toggle": _b(your_brand) and _b(commercial),
+                },
                 "source_info": {
                     "source": "FILE_UPLOAD",
                     "video_size": file_size,
