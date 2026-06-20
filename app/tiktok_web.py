@@ -219,7 +219,7 @@ async def publish(
     try:
         info = tiktok._creator_info(token)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"creator_info falhou: {e}")
+        raise HTTPException(status_code=400, detail=f"creator_info falhou: {e}")
     if privacy_level not in info.get("privacy_level_options", []):
         raise HTTPException(status_code=400, detail="privacy_level inválido para esta conta.")
 
@@ -257,17 +257,17 @@ async def publish(
     except Exception as e:  # noqa: BLE001
         if os.path.exists(caminho):
             os.remove(caminho)
-        raise HTTPException(status_code=504, detail=f"init sem resposta (timeout?): {e}")
+        raise HTTPException(status_code=400, detail=f"init sem resposta: {e}")
     if init.status_code != 200:
         if os.path.exists(caminho):
             os.remove(caminho)
-        raise HTTPException(status_code=502, detail=f"init {init.status_code}: {init.text[:300]}")
+        raise HTTPException(status_code=400, detail=f"TikTok recusou (init {init.status_code}): {init.text[:300]}")
     d = init.json().get("data", {})
     upload_url, publish_id = d.get("upload_url"), d.get("publish_id")
     if not upload_url:
         if os.path.exists(caminho):
             os.remove(caminho)
-        raise HTTPException(status_code=502, detail=f"sem upload_url: {init.text[:300]}")
+        raise HTTPException(status_code=400, detail=f"sem upload_url: {init.text[:300]}")
 
     # 4. envia o arquivo em segundo plano — a requisição volta já, sem 502 do proxy
     background.add_task(_upload_bg, upload_url, caminho, file_size)
