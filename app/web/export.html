@@ -172,8 +172,18 @@ $('publish').addEventListener('click', async () => {
   fd.append('your_brand', $('your_brand').checked);
   fd.append('branded_content', $('branded_content').checked);
 
-  const r = await fetch('/tiktok/publish', { method:'POST', body: fd });
-  if (!r.ok) { $('status').textContent = '❌ ' + (await r.json()).detail; $('publish').disabled = false; return; }
+  let r;
+  try {
+    r = await fetch('/tiktok/publish', { method:'POST', body: fd });
+  } catch (e) {
+    $('status').textContent = '❌ Erro de conexão/timeout no envio. Tenta de novo.';
+    $('publish').disabled = false; return;
+  }
+  if (!r.ok) {
+    let detail = r.status;
+    try { detail = (await r.json()).detail; } catch (e) {}
+    $('status').textContent = '❌ ' + detail; $('publish').disabled = false; return;
+  }
   const { publish_id } = await r.json();
   // TikTok aceitou o upload (publish_id) = integração funcionou. A publicação finaliza depois.
   $('status').textContent = '✅ Vídeo enviado ao TikTok! Finalizando a publicação…';

@@ -185,12 +185,16 @@ async def publish(
         raise HTTPException(status_code=400, detail="Conteúdo de marca não pode ser privado.")
 
     token = s["access_token"]
-    # valida que a privacidade escolhida está nas opções da conta
-    info = tiktok._creator_info(token)
+
+    # 1. valida privacidade contra a conta
+    try:
+        info = tiktok._creator_info(token)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"creator_info falhou: {e}")
     if privacy_level not in info.get("privacy_level_options", []):
         raise HTTPException(status_code=400, detail="privacy_level inválido para esta conta.")
 
-    # salva o upload num arquivo temporário
+    # 2. salva o upload num arquivo temporário
     caminho = os.path.join(_TMP_DIR, f"{secrets.token_hex(8)}.mp4")
     with open(caminho, "wb") as f:
         while chunk := await video.read(1024 * 1024):
@@ -198,35 +202,56 @@ async def publish(
 
     try:
         file_size = os.path.getsize(caminho)
-        init = requests.post(
-            f"{tiktok.API}/v2/post/publish/video/init/",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
-            json={
-                "post_info": {
-                    "title": caption[:2200],
-                    "privacy_level": privacy_level,
-                    "disable_comment": not _b(allow_comment),
-                    "disable_duet": not _b(allow_duet),
-                    "disable_stitch": not _b(allow_stitch),
-                    "brand_content_toggle": branded,
-                    "brand_organic_toggle": _b(your_brand) and _b(commercial),
+        # 3. init Direct Post (timeout curto pra não pendurar)
+        try:
+            init = requests.post(
+                f"{tiktok.API}/v2/post/publish/video/init/",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
+                json={
+                    "post_info": {
+                        "title": caption[:2200],
+                        "privacy_level": privacy_level,
+                        "disable_comment": not _b(allow_comment),
+                        "disable_duet": not _b(allow_duet),
+                        "disable_stitch": not _b(allow_stitch),
+                        "brand_content_toggle": branded,
+                        "brand_organic_toggle": _b(your_brand) and _b(commercial),
+                    },
+                    "source_info": {
+                        "source": "FILE_UPLOAD",
+                        "video_size": file_size,
+                        "chunk_size": file_size,
+                        "total_chunk_count": 1,
+                    },
                 },
-                "source_info": {
-                    "source": "FILE_UPLOAD",
-                    "video_size": file_size,
-                    "chunk_size": file_size,
-                    "total_chunk_count": 1,
-                },
-            },
-            timeout=60,
-        )
+                timeout=30,
+            )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=504, detail=f"init sem resposta (timeout?): {e}")
         if init.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"init: {init.text[:200]}")
+            raise HTTPException(status_code=502, detail=f"init {init.status_code}: {init.text[:300]}")
         d = init.json().get("data", {})
         upload_url, publish_id = d.get("upload_url"), d.get("publish_id")
         if not upload_url:
-            raise HTTPException(status_code=502, detail=f"sem upload_url: {init.text[:200]}")
-        tiktok._enviar(upload_url, caminho, file_size)
+            raise HTTPException(status_code=502, detail=f"sem upload_url: {init.text[:300]}")
+
+        # 4. envia o arquivo (timeout curto: o demo usa clipe pequeno)
+        try:
+            with open(caminho, "rb") as vf:
+                put = requests.put(
+                    upload_url,
+                    headers={
+                        "Content-Type": "video/mp4",
+                        "Content-Length": str(file_size),
+                        "Content-Range": f"bytes 0-{file_size - 1}/{file_size}",
+                    },
+                    data=vf,
+                    timeout=120,
+                )
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=504, detail=f"upload sem resposta (timeout?): {e}")
+        if put.status_code not in (200, 201):
+            raise HTTPException(status_code=502, detail=f"upload {put.status_code}: {put.text[:200]}")
     finally:
         if os.path.exists(caminho):
             os.remove(caminho)
