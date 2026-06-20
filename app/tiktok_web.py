@@ -11,6 +11,7 @@ Isso NÃO mexe no token global do servidor (/data/tiktok_token.json) usado pela 
 """
 import os
 import secrets
+import time
 import urllib.parse
 
 import requests
@@ -120,6 +121,11 @@ def callback(code: str = "", state: str = ""):
         "refresh_token": data.get("refresh_token", ""),
         "open_id": data.get("open_id", ""),
     }
+    # Salva também como token global (pra automação e diagnóstico)
+    try:
+        tiktok._save_tokens(data["access_token"], data.get("refresh_token", ""))
+    except Exception:  # noqa: BLE001
+        pass
     resp = RedirectResponse("/tiktok")
     resp.set_cookie("tt_session", sid, httponly=True, secure=True, samesite="lax", max_age=86400)
     return resp
@@ -266,6 +272,45 @@ async def publish(
     # 4. envia o arquivo em segundo plano — a requisição volta já, sem 502 do proxy
     background.add_task(_upload_bg, upload_url, caminho, file_size)
     return {"publish_id": publish_id}
+
+
+@router.get("/tiktok/debug")
+def debug(key: str = ""):
+    """Diagnóstico (protegido por key): roda creator_info + init e devolve tempos/erros crus."""
+    if key != config.PUBLICADOR_API_KEY:
+        raise HTTPException(status_code=401, detail="key inválida")
+    out = {}
+    token = tiktok._renovar()
+    out["tem_token"] = bool(token)
+
+    t0 = time.time()
+    try:
+        info = tiktok._creator_info(token)
+        out["creator_info"] = {"ok": True, "seg": round(time.time() - t0, 1),
+                               "privacy": info.get("privacy_level_options"),
+                               "nickname": info.get("creator_nickname")}
+        priv = (info.get("privacy_level_options") or ["SELF_ONLY"])[0]
+    except Exception as e:  # noqa: BLE001
+        out["creator_info"] = {"ok": False, "seg": round(time.time() - t0, 1), "erro": str(e)}
+        return out
+
+    t1 = time.time()
+    try:
+        r = requests.post(
+            f"{tiktok.API}/v2/post/publish/video/init/",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
+            json={
+                "post_info": {"title": "teste", "privacy_level": priv,
+                              "disable_comment": False, "disable_duet": False, "disable_stitch": False},
+                "source_info": {"source": "FILE_UPLOAD", "video_size": 1000000,
+                                "chunk_size": 1000000, "total_chunk_count": 1},
+            },
+            timeout=30,
+        )
+        out["init"] = {"status": r.status_code, "seg": round(time.time() - t1, 1), "resp": r.text[:400]}
+    except Exception as e:  # noqa: BLE001
+        out["init"] = {"erro": str(e), "seg": round(time.time() - t1, 1)}
+    return out
 
 
 @router.get("/tiktok/status/{publish_id}")
