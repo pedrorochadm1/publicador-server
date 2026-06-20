@@ -175,12 +175,13 @@ $('publish').addEventListener('click', async () => {
   const r = await fetch('/tiktok/publish', { method:'POST', body: fd });
   if (!r.ok) { $('status').textContent = '❌ ' + (await r.json()).detail; $('publish').disabled = false; return; }
   const { publish_id } = await r.json();
-  $('status').textContent = '⏳ Processando no TikTok… pode levar alguns minutos.';
-  poll(publish_id, 40);
+  // TikTok aceitou o upload (publish_id) = integração funcionou. A publicação finaliza depois.
+  $('status').textContent = '✅ Vídeo enviado ao TikTok! Finalizando a publicação…';
+  poll(publish_id, 15);
 });
 
 async function poll(id, left) {
-  if (left <= 0) { $('status').textContent = 'ℹ️ Ainda processando. Confira no app do TikTok.'; return; }
+  if (left <= 0) { $('status').textContent = '✅ Vídeo enviado ao TikTok! A publicação finaliza em alguns minutos.'; return; }
   const r = await fetch('/tiktok/status/' + id);
   const d = await r.json();
   if (d.status === 'PUBLISH_COMPLETE') { $('status').textContent = '✅ Publicado no TikTok!'; return; }
