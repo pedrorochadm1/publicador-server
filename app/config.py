@@ -21,6 +21,9 @@ TIKTOK_ACCESS_TOKEN = os.environ.get("TIKTOK_ACCESS_TOKEN", "")
 TIKTOK_REFRESH_TOKEN = os.environ.get("TIKTOK_REFRESH_TOKEN", "")
 # Só vira True depois da auditoria do TikTok. Antes disso, todo post sai privado.
 TIKTOK_AUDITADO = os.environ.get("TIKTOK_AUDITADO", "").lower() in ("1", "true", "sim", "yes")
+# open_id da conta DONA (Pedro). Só ela atualiza o token global da automação;
+# visitantes que conectam pelo site ficam só na própria sessão.
+TIKTOK_OWNER_OPEN_ID = os.environ.get("TIKTOK_OWNER_OPEN_ID", "")
 
 GRAPH = "https://graph.facebook.com/v19.0"
 

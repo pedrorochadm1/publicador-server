@@ -121,11 +121,13 @@ def callback(code: str = "", state: str = ""):
         "refresh_token": data.get("refresh_token", ""),
         "open_id": data.get("open_id", ""),
     }
-    # Salva também como token global (pra automação e diagnóstico)
-    try:
-        tiktok._save_tokens(data["access_token"], data.get("refresh_token", ""))
-    except Exception:  # noqa: BLE001
-        pass
+    # Só a conta DONA (Pedro) atualiza o token GLOBAL da automação.
+    # Qualquer outra pessoa que conectar fica só na própria sessão (posta na própria conta).
+    if config.TIKTOK_OWNER_OPEN_ID and data.get("open_id") == config.TIKTOK_OWNER_OPEN_ID:
+        try:
+            tiktok._save_tokens(data["access_token"], data.get("refresh_token", ""))
+        except Exception:  # noqa: BLE001
+            pass
     resp = RedirectResponse("/tiktok")
     resp.set_cookie("tt_session", sid, httponly=True, secure=True, samesite="lax", max_age=86400)
     return resp
@@ -282,6 +284,12 @@ def debug(key: str = ""):
     out = {}
     token = tiktok._renovar()
     out["tem_token"] = bool(token)
+    try:
+        ui = requests.get(f"{tiktok.API}/v2/user/info/", params={"fields": "open_id"},
+                          headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        out["open_id"] = ui.json().get("data", {}).get("user", {}).get("open_id")
+    except Exception as e:  # noqa: BLE001
+        out["open_id"] = f"erro: {e}"
 
     t0 = time.time()
     try:
