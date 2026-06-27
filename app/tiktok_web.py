@@ -235,6 +235,41 @@ async def publish(
             f.write(chunk)
     file_size = os.path.getsize(caminho)
 
+    # 2.5. App NÃO auditado: o TikTok não deixa Direct Post em conta pública
+    # (unaudited_client_can_only_post_to_private_accounts). Sobe pro RASCUNHO (inbox);
+    # Pedro finaliza no app com 1 toque. Direct Post só quando TIKTOK_AUDITADO=true.
+    if not config.TIKTOK_AUDITADO:
+        try:
+            init = requests.post(
+                f"{tiktok.API}/v2/post/publish/inbox/video/init/",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json; charset=UTF-8"},
+                json={
+                    "source_info": {
+                        "source": "FILE_UPLOAD",
+                        "video_size": file_size,
+                        "chunk_size": file_size,
+                        "total_chunk_count": 1,
+                    },
+                },
+                timeout=30,
+            )
+        except Exception as e:  # noqa: BLE001
+            if os.path.exists(caminho):
+                os.remove(caminho)
+            raise HTTPException(status_code=400, detail=f"init rascunho sem resposta: {e}")
+        if init.status_code != 200:
+            if os.path.exists(caminho):
+                os.remove(caminho)
+            raise HTTPException(status_code=400, detail=f"TikTok recusou (init rascunho {init.status_code}): {init.text[:300]}")
+        d = init.json().get("data", {})
+        upload_url, publish_id = d.get("upload_url"), d.get("publish_id")
+        if not upload_url:
+            if os.path.exists(caminho):
+                os.remove(caminho)
+            raise HTTPException(status_code=400, detail=f"sem upload_url (rascunho): {init.text[:300]}")
+        background.add_task(_upload_bg, upload_url, caminho, file_size)
+        return {"publish_id": publish_id, "modo": "rascunho"}
+
     # 3. init Direct Post (rápido) — pega publish_id + upload_url
     try:
         init = requests.post(
