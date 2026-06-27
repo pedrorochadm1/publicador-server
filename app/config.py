@@ -19,6 +19,9 @@ TIKTOK_CLIENT_KEY = os.environ.get("TIKTOK_CLIENT_KEY", "")
 TIKTOK_CLIENT_SECRET = os.environ.get("TIKTOK_CLIENT_SECRET", "")
 TIKTOK_ACCESS_TOKEN = os.environ.get("TIKTOK_ACCESS_TOKEN", "")
 TIKTOK_REFRESH_TOKEN = os.environ.get("TIKTOK_REFRESH_TOKEN", "")
+# Redirect OAuth registrado no app. O TikTok não aceita a marca "tiktok" na URL,
+# então usamos um domínio/path limpo. Se vazio, cai em PUBLIC_BASE_URL/connect/callback.
+TIKTOK_REDIRECT_URI = os.environ.get("TIKTOK_REDIRECT_URI", "")
 # Só vira True depois da auditoria do TikTok. Antes disso, todo post sai privado.
 TIKTOK_AUDITADO = os.environ.get("TIKTOK_AUDITADO", "").lower() in ("1", "true", "sim", "yes")
 # open_id da conta DONA (Pedro). Só ela atualiza o token global da automação;

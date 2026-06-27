@@ -36,7 +36,8 @@ _STATES: set[str] = set()
 
 
 def _redirect_uri() -> str:
-    return f"{config.PUBLIC_BASE_URL}/tiktok/callback"
+    # URL limpa (sem a marca "tiktok") exigida pela política do TikTok.
+    return config.TIKTOK_REDIRECT_URI or f"{config.PUBLIC_BASE_URL}/connect/callback"
 
 
 def _html(nome: str) -> str:
@@ -75,7 +76,8 @@ def terms_page():
 
 # ─────────────────────────── OAuth (Login Kit) ───────────────────────────
 
-@router.get("/tiktok/login")
+@router.get("/connect/login")
+@router.get("/tiktok/login")  # alias legado
 def login():
     if not config.TIKTOK_CLIENT_KEY:
         raise HTTPException(status_code=500, detail="TIKTOK_CLIENT_KEY não configurado.")
@@ -91,7 +93,8 @@ def login():
     return RedirectResponse(f"https://www.tiktok.com/v2/auth/authorize/?{params}")
 
 
-@router.get("/tiktok/callback")
+@router.get("/connect/callback")
+@router.get("/tiktok/callback")  # alias legado
 def callback(code: str = "", state: str = ""):
     if state not in _STATES:
         raise HTTPException(status_code=400, detail="state inválido.")
