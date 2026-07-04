@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from . import config, db, publisher, token_store, youtube, tiktok
+from . import config, db, publisher, token_store, youtube, tiktok, stories
 
 _sched = BackgroundScheduler(timezone="UTC")
 _MAX_TENTATIVAS = 3
@@ -67,7 +67,7 @@ def _processar():
         db.marcar(post["id"], "publicando")
         try:
             # 1. Instagram (obrigatório — define sucesso/retry do post)
-            ig_id = publisher.publicar(post["imagens"], post["caption"])
+            ig_id = publisher.publicar(post["imagens"], post["caption"], trial=post.get("trial", False))
             resultados = {"instagram": {"status": "ok", "post_id": ig_id}}
 
             # 2. Fan-out pras outras plataformas
@@ -92,6 +92,12 @@ def _processar():
 def iniciar():
     _sched.add_job(_processar, "interval", seconds=30, id="publicar", max_instances=1, coalesce=True)
     _sched.add_job(token_store.renovar_se_necessario, "interval", hours=24, id="token")
+    if config.STORIES_AUTO_REPOST:
+        _sched.add_job(
+            stories.rodar, "interval", minutes=config.STORIES_POLL_MINUTES,
+            id="stories", max_instances=1, coalesce=True,
+        )
+        print(f"[scheduler] Auto-repost de stories ligado (a cada {config.STORIES_POLL_MINUTES} min).")
     _sched.start()
     token_store.renovar_se_necessario()
     print("[scheduler] Iniciado.")

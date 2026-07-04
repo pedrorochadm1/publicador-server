@@ -27,7 +27,8 @@ def conn():
                 youtube_title       TEXT NOT NULL DEFAULT '',
                 youtube_description TEXT NOT NULL DEFAULT '',
                 tiktok_caption      TEXT NOT NULL DEFAULT '',
-                resultados          TEXT      -- JSON: status por plataforma
+                resultados          TEXT,     -- JSON: status por plataforma
+                trial               INTEGER NOT NULL DEFAULT 0  -- 1 = Trial Reel (só não-seguidores)
             )
             """
         )
@@ -38,6 +39,23 @@ def conn():
                 _conn.execute(f"ALTER TABLE posts ADD COLUMN {nova} TEXT NOT NULL DEFAULT ''")
         if "resultados" not in cols:
             _conn.execute("ALTER TABLE posts ADD COLUMN resultados TEXT")
+        if "trial" not in cols:
+            _conn.execute("ALTER TABLE posts ADD COLUMN trial INTEGER NOT NULL DEFAULT 0")
+        # Controle do auto-repost: quais stories já viraram post (não republicar o mesmo)
+        _conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stories_vistos (
+                story_id  TEXT PRIMARY KEY,
+                visto_em  TEXT NOT NULL,
+                post_id   INTEGER,
+                motivo    TEXT          -- 'republicado' ou por que foi pulado
+            )
+            """
+        )
+        # Chave-valor genérico (ex.: marco inicial do auto-repost)
+        _conn.execute(
+            "CREATE TABLE IF NOT EXISTS meta (chave TEXT PRIMARY KEY, valor TEXT NOT NULL)"
+        )
         _conn.commit()
     return _conn
 
@@ -47,6 +65,7 @@ def _row(r):
     d["imagens"] = json.loads(d["imagens"])
     if d.get("resultados"):
         d["resultados"] = json.loads(d["resultados"])
+    d["trial"] = bool(d.get("trial"))
     return d
 
 
@@ -57,12 +76,13 @@ def criar_post(
     youtube_title: str = "",
     youtube_description: str = "",
     tiktok_caption: str = "",
+    trial: bool = False,
 ) -> dict:
     c = conn()
     cur = c.execute(
         "INSERT INTO posts (criado_em, publicar_em, caption, imagens, "
-        "youtube_title, youtube_description, tiktok_caption) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "youtube_title, youtube_description, tiktok_caption, trial) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             datetime.now(timezone.utc).isoformat(),
             publicar_em_utc,
@@ -71,10 +91,43 @@ def criar_post(
             youtube_title,
             youtube_description,
             tiktok_caption,
+            1 if trial else 0,
         ),
     )
     c.commit()
     return get_post(cur.lastrowid)
+
+
+# ─── Auto-repost de stories ───
+
+def story_ja_visto(story_id: str) -> bool:
+    return conn().execute(
+        "SELECT 1 FROM stories_vistos WHERE story_id = ?", (story_id,)
+    ).fetchone() is not None
+
+
+def marcar_story_visto(story_id: str, post_id: int | None = None, motivo: str = "republicado"):
+    c = conn()
+    c.execute(
+        "INSERT OR IGNORE INTO stories_vistos (story_id, visto_em, post_id, motivo) VALUES (?, ?, ?, ?)",
+        (story_id, datetime.now(timezone.utc).isoformat(), post_id, motivo),
+    )
+    c.commit()
+
+
+def get_meta(chave: str) -> str | None:
+    r = conn().execute("SELECT valor FROM meta WHERE chave = ?", (chave,)).fetchone()
+    return r["valor"] if r else None
+
+
+def set_meta(chave: str, valor: str):
+    c = conn()
+    c.execute(
+        "INSERT INTO meta (chave, valor) VALUES (?, ?) "
+        "ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor",
+        (chave, valor),
+    )
+    c.commit()
 
 
 def get_post(post_id: int) -> dict | None:
