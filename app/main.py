@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import config, db, scheduler, tiktok_web
+from . import config, db, repost, scheduler, tiktok_web
 
 
 @asynccontextmanager
@@ -209,6 +209,28 @@ def upload_de_url(u: UploadURL):
             os.remove(destino)
         raise HTTPException(status_code=400, detail=f"Falha ao baixar a URL: {e}")
     return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
+
+
+@app.post("/repost/rodar", dependencies=[Depends(auth)])
+def repost_rodar():
+    """Dispara o auto-repost de trial reels na hora (o mesmo que o job roda sozinho)."""
+    repost.rodar()
+    return {"ok": True}
+
+
+@app.get("/repost/status", dependencies=[Depends(auth)])
+def repost_status():
+    """Estado do auto-repost: se está ligado, o marco inicial e quantos reels já vistos."""
+    c = db.conn()
+    total = c.execute("SELECT COUNT(*) FROM reels_vistos").fetchone()[0]
+    repostados = c.execute("SELECT COUNT(*) FROM reels_vistos WHERE motivo = 'repostado'").fetchone()[0]
+    return {
+        "ligado": config.REPOST_TRIALS,
+        "poll_minutes": config.REPOST_POLL_MINUTES,
+        "marco_inicial": db.get_meta("repost_marco_inicial"),
+        "reels_vistos": total,
+        "repostados": repostados,
+    }
 
 
 @app.get("/agenda", dependencies=[Depends(auth)])
