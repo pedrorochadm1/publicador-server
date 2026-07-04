@@ -22,9 +22,6 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 # YouTube Shorts (não republica no IG — já está lá). Desligado por padrão.
 REPOST_TRIALS = os.environ.get("REPOST_TRIALS", "").lower() in ("1", "true", "sim", "yes")
 REPOST_POLL_MINUTES = int(os.environ.get("REPOST_POLL_MINUTES", "12"))
-# Estratégia usada quando o SISTEMA publica um reel como trial (publisher, trial=True):
-# SS_PERFORMANCE (IG promove sozinho se performar) ou MANUAL (Pedro gradua no app).
-TRIAL_GRADUATION = os.environ.get("TRIAL_GRADUATION", "SS_PERFORMANCE")
 
 # ─── TikTok Content Posting API ───
 TIKTOK_CLIENT_KEY = os.environ.get("TIKTOK_CLIENT_KEY", "")

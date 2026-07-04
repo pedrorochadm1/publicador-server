@@ -28,7 +28,6 @@ def conn():
                 youtube_description TEXT NOT NULL DEFAULT '',
                 tiktok_caption      TEXT NOT NULL DEFAULT '',
                 resultados          TEXT,     -- JSON: status por plataforma
-                trial               INTEGER NOT NULL DEFAULT 0, -- 1 = publicar no IG como Trial Reel
                 pular_instagram     INTEGER NOT NULL DEFAULT 0  -- 1 = só fan-out (reel já está no IG)
             )
             """
@@ -40,8 +39,6 @@ def conn():
                 _conn.execute(f"ALTER TABLE posts ADD COLUMN {nova} TEXT NOT NULL DEFAULT ''")
         if "resultados" not in cols:
             _conn.execute("ALTER TABLE posts ADD COLUMN resultados TEXT")
-        if "trial" not in cols:
-            _conn.execute("ALTER TABLE posts ADD COLUMN trial INTEGER NOT NULL DEFAULT 0")
         if "pular_instagram" not in cols:
             _conn.execute("ALTER TABLE posts ADD COLUMN pular_instagram INTEGER NOT NULL DEFAULT 0")
         # Controle do auto-repost: quais reels já foram processados (não repostar o mesmo)
@@ -68,7 +65,8 @@ def _row(r):
     d["imagens"] = json.loads(d["imagens"])
     if d.get("resultados"):
         d["resultados"] = json.loads(d["resultados"])
-    d["trial"] = bool(d.get("trial"))
+    # bancos antigos ainda têm a coluna 'trial' (desenho descontinuado); não expor.
+    d.pop("trial", None)
     d["pular_instagram"] = bool(d.get("pular_instagram"))
     return d
 
@@ -80,14 +78,13 @@ def criar_post(
     youtube_title: str = "",
     youtube_description: str = "",
     tiktok_caption: str = "",
-    trial: bool = False,
     pular_instagram: bool = False,
 ) -> dict:
     c = conn()
     cur = c.execute(
         "INSERT INTO posts (criado_em, publicar_em, caption, imagens, "
-        "youtube_title, youtube_description, tiktok_caption, trial, pular_instagram) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "youtube_title, youtube_description, tiktok_caption, pular_instagram) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             datetime.now(timezone.utc).isoformat(),
             publicar_em_utc,
@@ -96,7 +93,6 @@ def criar_post(
             youtube_title,
             youtube_description,
             tiktok_caption,
-            1 if trial else 0,
             1 if pular_instagram else 0,
         ),
     )

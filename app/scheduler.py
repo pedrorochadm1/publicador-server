@@ -73,7 +73,7 @@ def _processar():
                 ig_id = None
                 resultados = {"instagram": {"status": "pulado", "motivo": "reel já publicado (trial)"}}
             else:
-                ig_id = publisher.publicar(arquivos, post["caption"], trial=post.get("trial", False))
+                ig_id = publisher.publicar(arquivos, post["caption"])
                 resultados = {"instagram": {"status": "ok", "post_id": ig_id}}
 
             # 2. Fan-out pras outras plataformas
