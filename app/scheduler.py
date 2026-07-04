@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from . import config, db, publisher, token_store, youtube, tiktok, stories
+from . import config, db, publisher, token_store, youtube, tiktok, repost
 
 _sched = BackgroundScheduler(timezone="UTC")
 _MAX_TENTATIVAS = 3
@@ -66,12 +66,17 @@ def _processar():
             continue
         db.marcar(post["id"], "publicando")
         try:
-            # 1. Instagram (obrigatório — define sucesso/retry do post)
-            ig_id = publisher.publicar(post["imagens"], post["caption"], trial=post.get("trial", False))
-            resultados = {"instagram": {"status": "ok", "post_id": ig_id}}
+            arquivos = post["imagens"]
+
+            # 1. Instagram — obrigatório, MENOS quando o reel já está no IG (repost de trial).
+            if post.get("pular_instagram"):
+                ig_id = None
+                resultados = {"instagram": {"status": "pulado", "motivo": "reel já publicado (trial)"}}
+            else:
+                ig_id = publisher.publicar(arquivos, post["caption"], trial=post.get("trial", False))
+                resultados = {"instagram": {"status": "ok", "post_id": ig_id}}
 
             # 2. Fan-out pras outras plataformas
-            arquivos = post["imagens"]
             if len(arquivos) == 1 and _eh_video(arquivos[0]):
                 # vídeo → YouTube Shorts + TikTok
                 caminho = os.path.join(config.IMG_DIR, arquivos[0])
@@ -84,7 +89,7 @@ def _processar():
             _limpar_arquivos(post["imagens"])
             print(f"[scheduler] Post {post['id']} publicado: {ig_id} | {resultados}")
         except Exception as e:  # noqa: BLE001
-            # falha no Instagram → volta para 'agendado' e tenta de novo no próximo ciclo
+            # falha → volta para 'agendado' e tenta de novo no próximo ciclo
             db.marcar(post["id"], "agendado", erro=str(e))
             print(f"[scheduler] Post {post['id']} falhou (tentativa registrada): {e}")
 
@@ -92,12 +97,12 @@ def _processar():
 def iniciar():
     _sched.add_job(_processar, "interval", seconds=30, id="publicar", max_instances=1, coalesce=True)
     _sched.add_job(token_store.renovar_se_necessario, "interval", hours=24, id="token")
-    if config.STORIES_AUTO_REPOST:
+    if config.REPOST_TRIALS:
         _sched.add_job(
-            stories.rodar, "interval", minutes=config.STORIES_POLL_MINUTES,
-            id="stories", max_instances=1, coalesce=True,
+            repost.rodar, "interval", minutes=config.REPOST_POLL_MINUTES,
+            id="repost", max_instances=1, coalesce=True,
         )
-        print(f"[scheduler] Auto-repost de stories ligado (a cada {config.STORIES_POLL_MINUTES} min).")
+        print(f"[scheduler] Auto-repost de trial reels ligado (a cada {config.REPOST_POLL_MINUTES} min).")
     _sched.start()
     token_store.renovar_se_necessario()
     print("[scheduler] Iniciado.")

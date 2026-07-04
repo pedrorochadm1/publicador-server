@@ -17,13 +17,14 @@ YOUTUBE_REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN", "")
 # ─── OpenAI (transcrição Whisper + geração de copy) ───
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
-# ─── Auto-repost de stories (story de vídeo → Trial Reel + Shorts + TikTok) ───
-# Desligado por padrão: liga só depois de calibrar a copy nas primeiras gerações.
-STORIES_AUTO_REPOST = os.environ.get("STORIES_AUTO_REPOST", "").lower() in ("1", "true", "sim", "yes")
-STORIES_POLL_MINUTES = int(os.environ.get("STORIES_POLL_MINUTES", "12"))
-# Estratégia do Trial Reel: SS_PERFORMANCE (IG promove sozinho pros seguidores se
-# performar) ou MANUAL (Pedro gradua no app).
-STORIES_GRADUATION = os.environ.get("STORIES_GRADUATION", "SS_PERFORMANCE")
+# ─── Auto-repost de Trial Reels (Pedro publica o trial no app → repost em Shorts + TikTok) ───
+# O reel de teste que o Pedro publica no app é detectado e repostado no TikTok e no
+# YouTube Shorts (não republica no IG — já está lá). Desligado por padrão.
+REPOST_TRIALS = os.environ.get("REPOST_TRIALS", "").lower() in ("1", "true", "sim", "yes")
+REPOST_POLL_MINUTES = int(os.environ.get("REPOST_POLL_MINUTES", "12"))
+# Estratégia usada quando o SISTEMA publica um reel como trial (publisher, trial=True):
+# SS_PERFORMANCE (IG promove sozinho se performar) ou MANUAL (Pedro gradua no app).
+TRIAL_GRADUATION = os.environ.get("TRIAL_GRADUATION", "SS_PERFORMANCE")
 
 # ─── TikTok Content Posting API ───
 TIKTOK_CLIENT_KEY = os.environ.get("TIKTOK_CLIENT_KEY", "")

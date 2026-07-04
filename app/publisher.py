@@ -69,7 +69,7 @@ def publicar(arquivos: list[str], caption: str, trial: bool = False) -> str:
     if len(arquivos) == 1 and _eh_video(arquivos[0]):
         params = {"media_type": "REELS", "video_url": _media_url(arquivos[0]), "caption": caption}
         if trial:
-            params["trial_params"] = json.dumps({"graduation_strategy": config.STORIES_GRADUATION})
+            params["trial_params"] = json.dumps({"graduation_strategy": config.TRIAL_GRADUATION})
         container = _criar_container(params)
         # vídeo demora mais para processar
         if not _aguardar(container, tentativas=90, intervalo=5):

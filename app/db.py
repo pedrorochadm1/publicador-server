@@ -28,7 +28,8 @@ def conn():
                 youtube_description TEXT NOT NULL DEFAULT '',
                 tiktok_caption      TEXT NOT NULL DEFAULT '',
                 resultados          TEXT,     -- JSON: status por plataforma
-                trial               INTEGER NOT NULL DEFAULT 0  -- 1 = Trial Reel (só não-seguidores)
+                trial               INTEGER NOT NULL DEFAULT 0, -- 1 = publicar no IG como Trial Reel
+                pular_instagram     INTEGER NOT NULL DEFAULT 0  -- 1 = só fan-out (reel já está no IG)
             )
             """
         )
@@ -41,14 +42,16 @@ def conn():
             _conn.execute("ALTER TABLE posts ADD COLUMN resultados TEXT")
         if "trial" not in cols:
             _conn.execute("ALTER TABLE posts ADD COLUMN trial INTEGER NOT NULL DEFAULT 0")
-        # Controle do auto-repost: quais stories já viraram post (não republicar o mesmo)
+        if "pular_instagram" not in cols:
+            _conn.execute("ALTER TABLE posts ADD COLUMN pular_instagram INTEGER NOT NULL DEFAULT 0")
+        # Controle do auto-repost: quais reels já foram processados (não repostar o mesmo)
         _conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS stories_vistos (
-                story_id  TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS reels_vistos (
+                media_id  TEXT PRIMARY KEY,
                 visto_em  TEXT NOT NULL,
                 post_id   INTEGER,
-                motivo    TEXT          -- 'republicado' ou por que foi pulado
+                motivo    TEXT          -- 'repostado' ou por que foi pulado
             )
             """
         )
@@ -66,6 +69,7 @@ def _row(r):
     if d.get("resultados"):
         d["resultados"] = json.loads(d["resultados"])
     d["trial"] = bool(d.get("trial"))
+    d["pular_instagram"] = bool(d.get("pular_instagram"))
     return d
 
 
@@ -77,12 +81,13 @@ def criar_post(
     youtube_description: str = "",
     tiktok_caption: str = "",
     trial: bool = False,
+    pular_instagram: bool = False,
 ) -> dict:
     c = conn()
     cur = c.execute(
         "INSERT INTO posts (criado_em, publicar_em, caption, imagens, "
-        "youtube_title, youtube_description, tiktok_caption, trial) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "youtube_title, youtube_description, tiktok_caption, trial, pular_instagram) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             datetime.now(timezone.utc).isoformat(),
             publicar_em_utc,
@@ -92,25 +97,32 @@ def criar_post(
             youtube_description,
             tiktok_caption,
             1 if trial else 0,
+            1 if pular_instagram else 0,
         ),
     )
     c.commit()
     return get_post(cur.lastrowid)
 
 
-# ─── Auto-repost de stories ───
+def post_por_ig_id(ig_post_id: str) -> dict | None:
+    """Post que ESTE servidor publicou com esse ig_post_id (pra saber se um reel é nosso)."""
+    r = conn().execute("SELECT * FROM posts WHERE ig_post_id = ?", (ig_post_id,)).fetchone()
+    return _row(r) if r else None
 
-def story_ja_visto(story_id: str) -> bool:
+
+# ─── Auto-repost de trial reels ───
+
+def reel_ja_visto(media_id: str) -> bool:
     return conn().execute(
-        "SELECT 1 FROM stories_vistos WHERE story_id = ?", (story_id,)
+        "SELECT 1 FROM reels_vistos WHERE media_id = ?", (media_id,)
     ).fetchone() is not None
 
 
-def marcar_story_visto(story_id: str, post_id: int | None = None, motivo: str = "republicado"):
+def marcar_reel_visto(media_id: str, post_id: int | None = None, motivo: str = "repostado"):
     c = conn()
     c.execute(
-        "INSERT OR IGNORE INTO stories_vistos (story_id, visto_em, post_id, motivo) VALUES (?, ?, ?, ?)",
-        (story_id, datetime.now(timezone.utc).isoformat(), post_id, motivo),
+        "INSERT OR IGNORE INTO reels_vistos (media_id, visto_em, post_id, motivo) VALUES (?, ?, ?, ?)",
+        (media_id, datetime.now(timezone.utc).isoformat(), post_id, motivo),
     )
     c.commit()
 

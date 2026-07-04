@@ -93,3 +93,39 @@ def gerar_copy(transcricao: str) -> dict:
 def gerar_do_video(caminho_video: str) -> dict:
     """Atalho: transcreve e gera a copy completa a partir do arquivo de vídeo."""
     return gerar_copy(transcrever(caminho_video))
+
+
+_SYSTEM_YT = """\
+Você escreve o SEO do YouTube Shorts de reels do Dr. Pedro Rocha (@pedrorochadm1),
+médico que atua na área de endocrinologia (NUNCA chame de "endocrinologista"). Tema:
+diabetes tipo 1, saúde metabólica, CGM, SUS. Português do Brasil, direto e cru, sem
+travessão (—), sem adjetivo genérico, sem linguagem de coach.
+
+- youtube_title: até 100 caracteres. Comece com o TERMO QUE A PESSOA DIGITA na busca
+  (ex.: "insulina pelo SUS", "glicose normal com sintomas", "sensor de glicose"), NUNCA
+  com o nome técnico do fenômeno. Sem hashtag no título. Sem clickbait falso.
+- youtube_description: 1-2 linhas com keywords naturais + CTA curto de se inscrever
+  + 3 a 5 hashtags no fim, cada uma UMA palavra minúscula sem hífen (ex.: #diabetestipo1
+  #diabetes #cgm #saudemetabolica). Pode incluir #shorts.
+
+Responda SOMENTE com JSON: {"youtube_title": "...", "youtube_description": "..."}"""
+
+
+def gerar_youtube_seo(transcricao: str, legenda: str = "") -> dict:
+    """SEO do YouTube a partir da transcrição do reel (a legenda do trial entra como apoio)."""
+    base = transcricao.strip() or legenda.strip() or "(vídeo sem fala; use o tema geral de diabetes tipo 1)"
+    conteudo = base if not legenda.strip() else f"Legenda do reel: {legenda.strip()}\n\nTranscrição: {base}"
+    r = _openai().chat.completions.create(
+        model="gpt-4o",
+        temperature=0.7,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": _SYSTEM_YT},
+            {"role": "user", "content": conteudo},
+        ],
+    )
+    data = json.loads(r.choices[0].message.content)
+    return {
+        "youtube_title": (data.get("youtube_title") or "").strip()[:100],
+        "youtube_description": (data.get("youtube_description") or "").strip(),
+    }
