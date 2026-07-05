@@ -192,6 +192,17 @@ def cancelar(post_id: int) -> bool:
     return cur.rowcount > 0
 
 
+def remover(post_id: int) -> bool:
+    """Apaga de vez um post — só se estiver em 'erro' ou 'cancelado' (nunca publicado)."""
+    c = conn()
+    cur = c.execute(
+        "DELETE FROM posts WHERE id = ? AND status IN ('erro', 'cancelado')",
+        (post_id,),
+    )
+    c.commit()
+    return cur.rowcount > 0
+
+
 def reagendar(post_id: int, novo_publicar_em_utc: str, caption: str | None = None) -> bool:
     """Troca o horário (e opcionalmente a legenda) de um post sem reenviar a mídia.
     Reabre posts 'agendado', 'cancelado' ou 'erro' para 'agendado'."""

@@ -254,6 +254,17 @@ def cancelar(post_id: int):
     return {"id": post_id, "status": "cancelado"}
 
 
+@app.delete("/agenda/{post_id}/definitivo", dependencies=[Depends(auth)])
+def remover(post_id: int):
+    """Apaga o registro de vez — só posts em 'erro' ou 'cancelado' (nunca publicado)."""
+    p = db.get_post(post_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Post não encontrado.")
+    if not db.remover(post_id):
+        raise HTTPException(status_code=409, detail=f"Só remove posts em erro/cancelado (status atual: {p['status']}).")
+    return {"id": post_id, "status": "removido"}
+
+
 class Reagendamento(BaseModel):
     publicar_em: datetime = Field(..., description="Novo horário. ISO 8601; sem timezone assume America/Sao_Paulo.")
     caption: str | None = Field(None, description="Opcional: nova legenda. Se omitido, mantém a atual.")
