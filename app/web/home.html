@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Publicador — publique seus vídeos no TikTok com controle total</title>
 <meta name="description" content="Ferramenta para criadores conectarem a conta do TikTok e publicarem vídeos, escolhendo privacidade e interações a cada post.">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <style>
   :root { --fg:#161823; --muted:#5b6068; --line:#e7e9ec; --accent:#fe2c55; --bg:#fff; --soft:#f7f8fa; }
   * { box-sizing: border-box; }
@@ -14,7 +17,8 @@
   .wrap { max-width: 960px; margin: 0 auto; padding: 0 20px; }
   header { border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(255,255,255,.92); backdrop-filter: blur(8px); }
   nav { display: flex; align-items: center; justify-content: space-between; height: 60px; }
-  nav .logo { font-weight: 800; font-size: 18px; }
+  nav .logo { font-weight: 800; font-size: 18px; display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--fg); }
+  nav .logo img { width: 34px; height: 34px; display: block; }
   nav .links a { color: var(--fg); text-decoration: none; margin-left: 20px; font-size: 15px; }
   nav .links a.cta { background: var(--accent); color:#fff; padding: 8px 14px; border-radius: 8px; font-weight:600; }
   .hero { padding: 72px 0 48px; text-align: center; }
@@ -44,7 +48,7 @@
 <header>
   <div class="wrap">
     <nav>
-      <span class="logo">Publicador</span>
+      <a class="logo" href="/"><img src="/icon.png" alt="Ícone do app Publicador" width="34" height="34">Publicador</a>
       <span class="links">
         <a href="#como-funciona">Como funciona</a>
         <a href="#recursos">Recursos</a>

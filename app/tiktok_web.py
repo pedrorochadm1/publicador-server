@@ -16,7 +16,7 @@ import urllib.parse
 
 import requests
 from fastapi import APIRouter, BackgroundTasks, Form, Request, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 
 from . import config, tiktok
 
@@ -62,6 +62,36 @@ def home_page():
 @router.get("/tiktok", response_class=HTMLResponse)
 def export_page():
     return _html("export.html")
+
+
+# ─── Ícone do app (favicon na aba + logo no topo das páginas) ───
+# Mesmo ícone usado no Basic Info do app no TikTok, servido em todas as páginas.
+def _icon(nome: str, media: str) -> FileResponse:
+    return FileResponse(
+        os.path.join(_WEB_DIR, nome),
+        media_type=media,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@router.get("/favicon.ico", include_in_schema=False)
+def favicon_ico():
+    return _icon("favicon.ico", "image/x-icon")
+
+
+@router.get("/favicon-32.png", include_in_schema=False)
+def favicon_png():
+    return _icon("favicon-32.png", "image/png")
+
+
+@router.get("/icon.png", include_in_schema=False)
+def icon_png():
+    return _icon("icon.png", "image/png")
+
+
+@router.get("/icon-180.png", include_in_schema=False)
+def icon_180():
+    return _icon("icon-180.png", "image/png")
 
 
 @router.get("/privacy", response_class=HTMLResponse)

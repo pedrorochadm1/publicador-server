@@ -3,51 +3,176 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Política de Privacidade — Publicador @pedrorochadm1</title>
+<title>Política de Privacidade — Publicador</title>
+<meta name="description" content="Política de Privacidade do Publicador: como tratamos os dados de quem conecta a conta do TikTok para publicar conteúdo.">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <style>
+  :root { --fg:#161823; --muted:#5b6068; --line:#e7e9ec; --accent:#fe2c55; --soft:#f7f8fa; }
+  * { box-sizing: border-box; }
   body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-         max-width: 720px; margin: 0 auto; padding: 32px 24px; line-height: 1.6; color: #161823; }
-  h1 { font-size: 24px; } h2 { font-size: 18px; margin-top: 28px; }
-  a { color: #fe2c55; } .muted { color: #6b6f76; font-size: 14px; }
+         margin: 0; line-height: 1.65; color: var(--fg); background: #fff; }
+  .site-header { border-bottom: 1px solid var(--line); background: var(--soft); }
+  .site-header .bar { max-width: 760px; margin: 0 auto; padding: 14px 24px;
+         display: flex; align-items: center; gap: 12px; }
+  .site-header img { width: 40px; height: 40px; display: block; }
+  .site-header .name { font-weight: 800; font-size: 18px; letter-spacing: -.2px; }
+  .site-header a { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--fg); }
+  main { max-width: 760px; margin: 0 auto; padding: 36px 24px 60px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 18px; margin: 32px 0 8px; }
+  h3 { font-size: 15px; margin: 20px 0 4px; }
+  p, li { font-size: 15.5px; }
+  ul { padding-left: 22px; }
+  li { margin: 4px 0; }
+  a { color: var(--accent); }
+  .muted { color: var(--muted); font-size: 14px; }
+  .box { background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin: 18px 0; }
+  footer { border-top: 1px solid var(--line); background: var(--soft); }
+  footer .bar { max-width: 760px; margin: 0 auto; padding: 20px 24px; font-size: 13px; color: var(--muted); }
+  footer a { color: var(--fg); margin-right: 16px; }
 </style>
 </head>
 <body>
+  <header class="site-header">
+    <div class="bar">
+      <a href="/">
+        <img src="/icon.png" alt="Ícone do app Publicador" width="40" height="40">
+        <span class="name">Publicador</span>
+      </a>
+    </div>
+  </header>
+
+  <main>
   <h1>Política de Privacidade</h1>
-  <p class="muted">Última atualização: junho de 2026.</p>
+  <p class="muted">Última atualização: julho de 2026.</p>
 
-  <p>O Publicador é uma ferramenta que permite a criadores de conteúdo conectar a própria conta
-  do TikTok e publicar vídeos. Esta política explica como tratamos os dados de quem usa a
-  ferramenta.</p>
+  <p>Esta Política de Privacidade descreve como o <strong>Publicador</strong> (“aplicativo”, “nós”)
+  coleta, usa, armazena e protege os dados das pessoas que usam o aplicativo para conectar a própria
+  conta do TikTok e publicar conteúdo. Ao usar o Publicador, você concorda com as práticas descritas
+  aqui.</p>
 
-  <h2>1. Dados que tratamos</h2>
+  <div class="box">
+    <strong>Resumo:</strong> o Publicador só trata os dados estritamente necessários para publicar,
+    em seu nome e com sua autorização expressa, o conteúdo que você escolher na conta do TikTok que
+    você conectar. Não vendemos seus dados, não os usamos para publicidade e não os usamos para
+    treinar modelos de inteligência artificial.
+  </div>
+
+  <h2>1. Quem é o responsável pelo tratamento</h2>
+  <p>O responsável pelo tratamento dos dados (controlador) é <strong>Dr. Pedro Rocha</strong>,
+  criador e operador do Publicador. Para qualquer assunto relacionado a privacidade, o contato é
+  <a href="mailto:pedrorochadocarmo@gmail.com">pedrorochadocarmo@gmail.com</a>.</p>
+
+  <h2>2. O que é o Publicador</h2>
+  <p>O Publicador é uma ferramenta para criadores de conteúdo publicarem vídeos, fotos e legendas na
+  própria conta do TikTok, com controle das configurações de privacidade e interação a cada
+  publicação. O aplicativo usa exclusivamente as APIs oficiais do TikTok (Login Kit e Content Posting
+  API).</p>
+
+  <h2>3. Dados que coletamos</h2>
+  <h3>3.1. Dados da sua conta do TikTok (via API oficial)</h3>
   <ul>
-    <li><strong>Autorização do TikTok:</strong> ao conectar sua conta, recebemos um token de
-    acesso e informações básicas do perfil (apelido, opções de privacidade da conta) via a API
-    oficial do TikTok, exclusivamente para permitir a publicação que você solicitar.</li>
-    <li><strong>Conteúdo:</strong> o vídeo/imagens e a legenda que você escolhe publicar.</li>
+    <li><strong>Identificador e perfil básico:</strong> ao conectar sua conta pelo Login Kit oficial,
+    recebemos um identificador da conta (<em>open id</em>) e o apelido (<em>nickname</em>) do
+    criador.</li>
+    <li><strong>Configurações da conta:</strong> opções de privacidade disponíveis e configurações de
+    interação (comentário, Duet, Stitch) que a sua conta permite, usadas para montar a tela de
+    publicação corretamente.</li>
+    <li><strong>Tokens de autorização:</strong> tokens de acesso e de atualização (OAuth) que
+    autorizam o aplicativo a publicar em seu nome.</li>
+  </ul>
+  <h3>3.2. Conteúdo que você envia</h3>
+  <ul>
+    <li>O vídeo ou as imagens que você escolhe publicar, a legenda e as configurações da publicação
+    (privacidade, interações e divulgação de conteúdo comercial).</li>
+  </ul>
+  <h3>3.3. Dados técnicos mínimos</h3>
+  <ul>
+    <li>Um cookie de sessão para manter você conectado enquanto usa o aplicativo. Não usamos cookies
+    de rastreamento, publicidade ou perfilamento.</li>
   </ul>
 
-  <h2>2. Como usamos</h2>
-  <p>Os dados são usados apenas para executar a publicação que você autoriza expressamente.
-  Não vendemos, alugamos nem compartilhamos seus dados com terceiros para publicidade.</p>
+  <h2>4. Como e por que usamos os dados</h2>
+  <p>Tratamos os dados acima apenas para as seguintes finalidades:</p>
+  <ul>
+    <li>Autenticar sua conta do TikTok e manter sua sessão ativa.</li>
+    <li>Exibir as opções de privacidade e interação corretas da sua conta.</li>
+    <li>Enviar ao TikTok, em seu nome, o conteúdo e as configurações que você confirmar.</li>
+    <li>Mostrar o status de processamento da publicação.</li>
+  </ul>
+  <p><strong>Base legal (LGPD):</strong> o tratamento se apoia no seu <strong>consentimento</strong>
+  e na <strong>execução do serviço que você solicita</strong> (art. 7, incisos I e V, da Lei
+  13.709/2018). Você pode retirar o consentimento a qualquer momento, desconectando a conta.</p>
 
-  <h2>3. Armazenamento e retenção</h2>
-  <p>Os tokens de acesso ficam armazenados de forma restrita no servidor apenas pelo tempo
-  necessário para a publicação. A mídia enviada é apagada do servidor logo após a publicação.
-  Tokens de sessão da interface web expiram em até 24 horas.</p>
+  <h2>5. Uso dos dados da API do TikTok</h2>
+  <p>O uso das informações recebidas das APIs do TikTok obedece à
+  <a href="https://www.tiktok.com/legal/page/global/privacy-policy/pt-BR" target="_blank" rel="noopener">Política de Privacidade</a>
+  e aos <a href="https://developers.tiktok.com/terms" target="_blank" rel="noopener">Termos de Serviço para Desenvolvedores</a> do TikTok.
+  Os dados obtidos pela API são usados <strong>somente</strong> para executar a publicação que você
+  autoriza. Não os usamos para publicidade, não os revendemos e não os utilizamos para treinar
+  modelos de inteligência artificial.</p>
 
-  <h2>4. Compartilhamento com o TikTok</h2>
-  <p>Ao publicar, o conteúdo e as configurações escolhidas (privacidade, interações, divulgação
-  comercial) são enviados ao TikTok pela API oficial e passam a ser regidos pelos
-  <a href="https://www.tiktok.com/legal/page/global/privacy-policy/pt-BR" target="_blank">Termos e Política de Privacidade do TikTok</a>.</p>
+  <h2>6. Compartilhamento de dados</h2>
+  <p>Não vendemos, alugamos nem compartilhamos seus dados com terceiros para fins de marketing. O
+  único compartilhamento que ocorre é o envio do seu conteúdo e das configurações escolhidas ao
+  <strong>TikTok</strong>, pela API oficial, para publicar o que você pediu. A partir do envio, esse
+  conteúdo passa a ser regido pelas políticas do TikTok.</p>
 
-  <h2>5. Seus controles</h2>
-  <p>Você pode desconectar a conta a qualquer momento (botão “Sair”), o que remove o token da
-  sessão. Você também pode revogar o acesso do app nas configurações da sua conta TikTok.</p>
+  <h2>7. Armazenamento, segurança e retenção</h2>
+  <ul>
+    <li>Os tokens de autorização ficam armazenados de forma restrita no servidor e são usados apenas
+    para as publicações que você solicita.</li>
+    <li>A mídia enviada (vídeo/imagens) é <strong>apagada do servidor logo após a publicação</strong>.</li>
+    <li>O cookie de sessão e os tokens da sessão web <strong>expiram em até 24 horas</strong>.</li>
+    <li>Adotamos medidas técnicas razoáveis para proteger os dados, incluindo transporte por HTTPS e
+    acesso restrito aos tokens.</li>
+  </ul>
 
-  <h2>6. Contato</h2>
-  <p>Dúvidas sobre privacidade: pedrorochadocarmo@gmail.com.</p>
+  <h2>8. Exclusão de dados e revogação de acesso</h2>
+  <p>Você controla seus dados e pode removê-los a qualquer momento:</p>
+  <ul>
+    <li><strong>Desconectar no aplicativo:</strong> use o botão “Sair”, que encerra a sessão e
+    descarta os tokens da sessão.</li>
+    <li><strong>Revogar o acesso no TikTok:</strong> em <em>Configurações → Segurança e permissões →
+    Gerenciar permissões de apps</em>, remova o Publicador. Isso invalida imediatamente qualquer
+    token concedido.</li>
+    <li><strong>Solicitar exclusão:</strong> escreva para
+    <a href="mailto:pedrorochadocarmo@gmail.com">pedrorochadocarmo@gmail.com</a> pedindo a exclusão de
+    quaisquer dados associados à sua conta. Atendemos o pedido em até 30 dias.</li>
+  </ul>
 
-  <p class="muted"><a href="/">← Voltar para o início</a></p>
+  <h2>9. Seus direitos (LGPD)</h2>
+  <p>Nos termos da Lei Geral de Proteção de Dados, você tem direito a confirmar a existência do
+  tratamento, acessar, corrigir, anonimizar, portar ou eliminar seus dados, revogar o consentimento e
+  apresentar reclamação à Autoridade Nacional de Proteção de Dados (ANPD). Para exercer qualquer
+  desses direitos, entre em contato pelo e-mail acima.</p>
+
+  <h2>10. Dados de crianças e adolescentes</h2>
+  <p>O Publicador não é destinado a menores de 18 anos e não coleta intencionalmente dados de
+  crianças ou adolescentes.</p>
+
+  <h2>11. Transferência internacional</h2>
+  <p>O processamento pode ocorrer em servidores localizados fora do Brasil. Nesses casos, adotamos
+  salvaguardas compatíveis com a legislação aplicável para proteger seus dados.</p>
+
+  <h2>12. Alterações nesta política</h2>
+  <p>Podemos atualizar esta Política de Privacidade. Quando isso ocorrer, publicaremos a nova versão
+  nesta página com a data de atualização revisada.</p>
+
+  <h2>13. Contato</h2>
+  <p>Dúvidas ou solicitações sobre privacidade e proteção de dados:
+  <a href="mailto:pedrorochadocarmo@gmail.com">pedrorochadocarmo@gmail.com</a>.</p>
+  </main>
+
+  <footer>
+    <div class="bar">
+      <a href="/">Início</a>
+      <a href="/privacy">Política de Privacidade</a>
+      <a href="/terms">Termos de Serviço</a>
+      <div style="margin-top:8px">© 2026 Publicador · Dr. Pedro Rocha</div>
+    </div>
+  </footer>
 </body>
 </html>
