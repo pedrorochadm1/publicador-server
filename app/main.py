@@ -43,6 +43,7 @@ class Agendamento(BaseModel):
     youtube_title: str = ""
     youtube_description: str = ""
     tiktok_caption: str = ""
+    ig_trial: bool = Field(False, description="Publica o reel no Instagram como Trial Reel (só não-seguidores; graduação manual pelo app). Só vale pra vídeo.")
 
 
 class Upload(BaseModel):
@@ -107,6 +108,7 @@ def agendar(a: Agendamento):
     post = db.criar_post(
         quando_utc.isoformat(), a.caption, nomes,
         a.youtube_title, a.youtube_description, a.tiktok_caption,
+        ig_trial=a.ig_trial,
     )
     return {"id": post["id"], "publicar_em_utc": post["publicar_em"], "status": post["status"], "arquivos": len(nomes)}
 

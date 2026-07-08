@@ -37,7 +37,9 @@ TIKTOK_AUDITADO = os.environ.get("TIKTOK_AUDITADO", "").lower() in ("1", "true",
 # visitantes que conectam pelo site ficam só na própria sessão.
 TIKTOK_OWNER_OPEN_ID = os.environ.get("TIKTOK_OWNER_OPEN_ID", "")
 
-GRAPH = "https://graph.facebook.com/v19.0"
+GRAPH_BASE = "https://graph.facebook.com"
+# v22+ é necessário pro trial_params (Trial Reels); v19 é anterior ao recurso.
+GRAPH = f"{GRAPH_BASE}/v25.0"
 
 IMG_DIR = os.path.join(DATA_DIR, "img")
 DB_PATH = os.path.join(DATA_DIR, "agenda.db")

@@ -44,7 +44,7 @@ def status() -> int | None:
 
 def _dias_para_expirar(token: str) -> int | None:
     r = requests.get(
-        f"{config.GRAPH.replace('/v19.0', '')}/debug_token",
+        f"{config.GRAPH_BASE}/debug_token",
         params={"input_token": token, "access_token": token},
         timeout=30,
     )
@@ -76,7 +76,7 @@ def renovar_se_necessario():
         return
 
     r = requests.get(
-        f"{config.GRAPH.replace('/v19.0', '')}/oauth/access_token",
+        f"{config.GRAPH_BASE}/oauth/access_token",
         params={
             "grant_type": "fb_exchange_token",
             "client_id": config.FACEBOOK_APP_ID,

@@ -4,6 +4,7 @@ Sem scheduled_publish_time: toda chamada aqui publica na hora. O agendamento
 mora no scheduler deste servidor — o Instagram só recebe a ordem de publicar
 quando chega o horário, e enxerga como publicação imediata.
 """
+import json
 import time
 
 import requests
@@ -55,14 +56,20 @@ def _publicar(container_id: str) -> str:
     return r.json()["id"]
 
 
-def publicar(arquivos: list[str], caption: str) -> str:
-    """Publica reel (1 vídeo), foto única (1 imagem) ou carrossel (2-10 imagens)."""
+def publicar(arquivos: list[str], caption: str, ig_trial: bool = False) -> str:
+    """Publica reel (1 vídeo), foto única (1 imagem) ou carrossel (2-10 imagens).
+
+    ig_trial=True publica o reel como Trial Reel (só não-seguidores veem;
+    graduação manual pelo app). Só vale pra reel — foto/carrossel ignora.
+    """
     if not arquivos:
         raise ValueError("Nenhum arquivo.")
 
     # Reel: 1 vídeo
     if len(arquivos) == 1 and _eh_video(arquivos[0]):
         params = {"media_type": "REELS", "video_url": _media_url(arquivos[0]), "caption": caption}
+        if ig_trial:
+            params["trial_params"] = json.dumps({"graduation_strategy": "MANUAL"})
         container = _criar_container(params)
         # vídeo demora mais para processar
         if not _aguardar(container, tentativas=90, intervalo=5):

@@ -73,8 +73,10 @@ def _processar():
                 ig_id = None
                 resultados = {"instagram": {"status": "pulado", "motivo": "reel já publicado (trial)"}}
             else:
-                ig_id = publisher.publicar(arquivos, post["caption"])
+                ig_id = publisher.publicar(arquivos, post["caption"], ig_trial=post.get("ig_trial", False))
                 resultados = {"instagram": {"status": "ok", "post_id": ig_id}}
+                if post.get("ig_trial"):
+                    resultados["instagram"]["modo"] = "trial"
 
             # 2. Fan-out pras outras plataformas
             if len(arquivos) == 1 and _eh_video(arquivos[0]):

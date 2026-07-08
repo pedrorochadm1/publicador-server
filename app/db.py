@@ -28,7 +28,8 @@ def conn():
                 youtube_description TEXT NOT NULL DEFAULT '',
                 tiktok_caption      TEXT NOT NULL DEFAULT '',
                 resultados          TEXT,     -- JSON: status por plataforma
-                pular_instagram     INTEGER NOT NULL DEFAULT 0  -- 1 = só fan-out (reel já está no IG)
+                pular_instagram     INTEGER NOT NULL DEFAULT 0,  -- 1 = só fan-out (reel já está no IG)
+                ig_trial            INTEGER NOT NULL DEFAULT 0  -- 1 = publica o reel como Trial Reel no IG
             )
             """
         )
@@ -41,6 +42,8 @@ def conn():
             _conn.execute("ALTER TABLE posts ADD COLUMN resultados TEXT")
         if "pular_instagram" not in cols:
             _conn.execute("ALTER TABLE posts ADD COLUMN pular_instagram INTEGER NOT NULL DEFAULT 0")
+        if "ig_trial" not in cols:
+            _conn.execute("ALTER TABLE posts ADD COLUMN ig_trial INTEGER NOT NULL DEFAULT 0")
         # Controle do auto-repost: quais reels já foram processados (não repostar o mesmo)
         _conn.execute(
             """
@@ -68,6 +71,7 @@ def _row(r):
     # bancos antigos ainda têm a coluna 'trial' (desenho descontinuado); não expor.
     d.pop("trial", None)
     d["pular_instagram"] = bool(d.get("pular_instagram"))
+    d["ig_trial"] = bool(d.get("ig_trial"))
     return d
 
 
@@ -79,12 +83,13 @@ def criar_post(
     youtube_description: str = "",
     tiktok_caption: str = "",
     pular_instagram: bool = False,
+    ig_trial: bool = False,
 ) -> dict:
     c = conn()
     cur = c.execute(
         "INSERT INTO posts (criado_em, publicar_em, caption, imagens, "
-        "youtube_title, youtube_description, tiktok_caption, pular_instagram) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "youtube_title, youtube_description, tiktok_caption, pular_instagram, ig_trial) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             datetime.now(timezone.utc).isoformat(),
             publicar_em_utc,
@@ -94,6 +99,7 @@ def criar_post(
             youtube_description,
             tiktok_caption,
             1 if pular_instagram else 0,
+            1 if ig_trial else 0,
         ),
     )
     c.commit()
