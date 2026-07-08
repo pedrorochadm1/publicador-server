@@ -74,6 +74,9 @@ def _processar():
                 resultados = {"instagram": {"status": "pulado", "motivo": "reel já publicado (trial)"}}
             else:
                 ig_id = publisher.publicar(arquivos, post["caption"], ig_trial=post.get("ig_trial", False))
+                # marca já visto ANTES do fan-out: o ig_post_id só chega ao banco no fim,
+                # e o auto-repost pode rodar nesse intervalo e duplicar o reel como "trial do app"
+                db.marcar_reel_visto(ig_id, post_id=post["id"], motivo="pulado-nosso")
                 resultados = {"instagram": {"status": "ok", "post_id": ig_id}}
                 if post.get("ig_trial"):
                     resultados["instagram"]["modo"] = "trial"
