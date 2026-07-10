@@ -95,11 +95,13 @@ def icon_180():
 
 
 @router.get("/privacy", response_class=HTMLResponse)
+@router.get("/privacy-policy", response_class=HTMLResponse)
 def privacy_page():
     return _html("privacy.html")
 
 
 @router.get("/terms", response_class=HTMLResponse)
+@router.get("/terms-of-service", response_class=HTMLResponse)
 def terms_page():
     return _html("terms.html")
 
