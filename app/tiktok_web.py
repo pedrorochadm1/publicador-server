@@ -158,7 +158,9 @@ def callback(code: str = "", state: str = ""):
     }
     # Só a conta DONA (Pedro) atualiza o token GLOBAL da automação.
     # Qualquer outra pessoa que conectar fica só na própria sessão (posta na própria conta).
-    if config.TIKTOK_OWNER_OPEN_ID and data.get("open_id") == config.TIKTOK_OWNER_OPEN_ID:
+    # Sem TIKTOK_OWNER_OPEN_ID configurado (ex.: sandbox recém-trocado), o primeiro
+    # login vira o token global — configurar o open_id novo no env logo em seguida.
+    if (not config.TIKTOK_OWNER_OPEN_ID) or data.get("open_id") == config.TIKTOK_OWNER_OPEN_ID:
         try:
             tiktok._save_tokens(data["access_token"], data.get("refresh_token", ""))
         except Exception:  # noqa: BLE001
