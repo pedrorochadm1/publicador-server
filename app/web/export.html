@@ -51,28 +51,36 @@
     <input type="file" id="video" accept="video/mp4,video/quicktime">
     <video id="preview" class="hidden" controls></video>
 
-    <label for="caption">Legenda</label>
-    <textarea id="caption" rows="3" maxlength="2200" placeholder="Escreva a legenda (hashtags e @ são reconhecidos)"></textarea>
+    <!-- Modo: SEM valor padrão, o criador escolhe -->
+    <label>Como publicar</label>
+    <div class="check"><input type="radio" name="modo" id="modo-direto" value="direto"><span>Publicar direto no perfil</span></div>
+    <div class="check"><input type="radio" name="modo" id="modo-rascunho" value="rascunho"><span>Enviar pra caixa de entrada do TikTok (você finaliza no app)</span></div>
+    <p class="muted hidden" id="rascunho-note">No modo caixa de entrada, legenda, privacidade e interações são definidas por você dentro do app do TikTok.</p>
 
-    <!-- Privacidade: SEM valor padrão, opções vindas do creator_info -->
-    <label for="privacy">Quem pode ver este vídeo</label>
-    <select id="privacy">
-      <option value="" disabled selected>Selecione…</option>
-    </select>
+    <div id="direct-opts">
+      <label for="caption">Legenda</label>
+      <textarea id="caption" rows="3" maxlength="2200" placeholder="Escreva a legenda (hashtags e @ são reconhecidos)"></textarea>
 
-    <!-- Interações: nenhuma marcada por padrão; greyed se desabilitada na conta -->
-    <label>Permitir</label>
-    <div class="check" id="row-comment"><input type="checkbox" id="allow_comment"><span>Comentários</span></div>
-    <div class="check" id="row-duet"><input type="checkbox" id="allow_duet"><span>Duet</span></div>
-    <div class="check" id="row-stitch"><input type="checkbox" id="allow_stitch"><span>Stitch</span></div>
+      <!-- Privacidade: SEM valor padrão, opções vindas do creator_info -->
+      <label for="privacy">Quem pode ver este vídeo</label>
+      <select id="privacy">
+        <option value="" disabled selected>Selecione…</option>
+      </select>
 
-    <!-- Disclosure de conteúdo comercial: desligado por padrão -->
-    <label>Divulgar conteúdo comercial</label>
-    <div class="check"><input type="checkbox" id="commercial"><span>Este vídeo promove uma marca, produto ou serviço</span></div>
-    <div id="commercial-opts" class="hidden" style="padding-left:8px;">
-      <div class="check"><input type="checkbox" id="your_brand"><span>Sua marca (rotulado como “Conteúdo promocional”)</span></div>
-      <div class="check"><input type="checkbox" id="branded_content"><span>Conteúdo de marca / parceria paga (rotulado como “Parceria paga”)</span></div>
-      <p class="muted" id="branded-note"></p>
+      <!-- Interações: nenhuma marcada por padrão; greyed se desabilitada na conta -->
+      <label>Permitir</label>
+      <div class="check" id="row-comment"><input type="checkbox" id="allow_comment"><span>Comentários</span></div>
+      <div class="check" id="row-duet"><input type="checkbox" id="allow_duet"><span>Duet</span></div>
+      <div class="check" id="row-stitch"><input type="checkbox" id="allow_stitch"><span>Stitch</span></div>
+
+      <!-- Disclosure de conteúdo comercial: desligado por padrão -->
+      <label>Divulgar conteúdo comercial</label>
+      <div class="check"><input type="checkbox" id="commercial"><span>Este vídeo promove uma marca, produto ou serviço</span></div>
+      <div id="commercial-opts" class="hidden" style="padding-left:8px;">
+        <div class="check"><input type="checkbox" id="your_brand"><span>Sua marca (rotulado como “Conteúdo promocional”)</span></div>
+        <div class="check"><input type="checkbox" id="branded_content"><span>Conteúdo de marca / parceria paga (rotulado como “Parceria paga”)</span></div>
+        <p class="muted" id="branded-note"></p>
+      </div>
     </div>
 
     <p class="legal" id="compliance">Ao publicar, você concorda com a
@@ -139,6 +147,19 @@ $('commercial').addEventListener('change', e => {
 });
 ['privacy','branded_content','your_brand'].forEach(id => $(id).addEventListener('change', () => { applyBrandedRules(); validate(); }));
 
+['modo-direto','modo-rascunho'].forEach(id => $(id).addEventListener('change', () => {
+  const rascunho = $('modo-rascunho').checked;
+  $('direct-opts').classList.toggle('hidden', rascunho);
+  $('rascunho-note').classList.toggle('hidden', !rascunho);
+  validate();
+}));
+
+function modoEscolhido() {
+  if ($('modo-direto').checked) return 'direto';
+  if ($('modo-rascunho').checked) return 'rascunho';
+  return '';
+}
+
 function applyBrandedRules() {
   const branded = $('commercial').checked && $('branded_content').checked;
   const sel = $('privacy');
@@ -154,9 +175,11 @@ function applyBrandedRules() {
 
 function validate() {
   const hasVideo = $('video').files.length > 0;
+  const modo = modoEscolhido();
+  if (modo === 'rascunho') { $('publish').disabled = !hasVideo; return; }
   const hasPrivacy = !!$('privacy').value;
   const commercialOk = !$('commercial').checked || $('your_brand').checked || $('branded_content').checked;
-  $('publish').disabled = !(hasVideo && hasPrivacy && commercialOk);
+  $('publish').disabled = !(modo && hasVideo && hasPrivacy && commercialOk);
 }
 
 $('logout').addEventListener('click', async () => { await fetch('/tiktok/logout', {method:'POST'}); location.reload(); });
@@ -166,6 +189,7 @@ $('publish').addEventListener('click', async () => {
   $('status').textContent = '⏳ Enviando…';
   const fd = new FormData();
   fd.append('video', $('video').files[0]);
+  fd.append('modo', modoEscolhido());
   fd.append('caption', $('caption').value);
   fd.append('privacy_level', $('privacy').value);
   fd.append('allow_comment', $('allow_comment').checked);
@@ -198,6 +222,7 @@ async function poll(id, left) {
   const r = await fetch('/tiktok/status/' + id);
   const d = await r.json();
   if (d.status === 'PUBLISH_COMPLETE') { $('status').textContent = '✅ Publicado no TikTok!'; return; }
+  if (d.status === 'SEND_TO_USER_INBOX') { $('status').textContent = '✅ Enviado! Abra os avisos no app do TikTok pra finalizar a publicação.'; return; }
   if (d.status === 'FAILED') { $('status').textContent = '❌ Falhou: ' + (d.fail_reason || ''); $('publish').disabled = false; return; }
   setTimeout(() => poll(id, left - 1), 4000);
 }

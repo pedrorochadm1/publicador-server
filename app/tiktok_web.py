@@ -230,7 +230,8 @@ async def publish(
     background: BackgroundTasks,
     video: UploadFile = File(...),
     caption: str = Form(""),
-    privacy_level: str = Form(...),
+    privacy_level: str = Form(""),
+    modo: str = Form(""),
     allow_comment: str = Form("false"),
     allow_duet: str = Form("false"),
     allow_stitch: str = Form("false"),
@@ -245,20 +246,27 @@ async def publish(
     def _b(v):
         return str(v).lower() in ("1", "true", "on", "yes")
 
-    branded = _b(branded_content) and _b(commercial)
-    # Regra do TikTok: conteúdo de marca (branded) não pode ser privado.
-    if branded and privacy_level == "SELF_ONLY":
-        raise HTTPException(status_code=400, detail="Conteúdo de marca não pode ser privado.")
+    # Modo escolhido pelo usuário na página; sem o campo, mantém o comportamento
+    # antigo (rascunho quando não auditado, direto quando auditado).
+    direto = modo == "direto" or (modo == "" and config.TIKTOK_AUDITADO)
 
+    branded = _b(branded_content) and _b(commercial)
     token = s["access_token"]
 
-    # 1. valida privacidade contra a conta
-    try:
-        info = tiktok._creator_info(token)
-    except Exception as e:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"creator_info falhou: {e}")
-    if privacy_level not in info.get("privacy_level_options", []):
-        raise HTTPException(status_code=400, detail="privacy_level inválido para esta conta.")
+    if direto:
+        if not privacy_level:
+            raise HTTPException(status_code=400, detail="Escolha quem pode ver o vídeo.")
+        # Regra do TikTok: conteúdo de marca (branded) não pode ser privado.
+        if branded and privacy_level == "SELF_ONLY":
+            raise HTTPException(status_code=400, detail="Conteúdo de marca não pode ser privado.")
+
+        # 1. valida privacidade contra a conta
+        try:
+            info = tiktok._creator_info(token)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"creator_info falhou: {e}")
+        if privacy_level not in info.get("privacy_level_options", []):
+            raise HTTPException(status_code=400, detail="privacy_level inválido para esta conta.")
 
     # 2. salva o upload num arquivo temporário
     caminho = os.path.join(_TMP_DIR, f"{secrets.token_hex(8)}.mp4")
@@ -267,10 +275,11 @@ async def publish(
             f.write(chunk)
     file_size = os.path.getsize(caminho)
 
-    # 2.5. App NÃO auditado: o TikTok não deixa Direct Post em conta pública
-    # (unaudited_client_can_only_post_to_private_accounts). Sobe pro RASCUNHO (inbox);
-    # Pedro finaliza no app com 1 toque. Direct Post só quando TIKTOK_AUDITADO=true.
-    if not config.TIKTOK_AUDITADO:
+    # 2.5. Rascunho (inbox): o vídeo chega na caixa de entrada do TikTok e o criador
+    # finaliza no app. A API de inbox não aceita título/privacidade/interações.
+    # Obs: app NÃO auditado só consegue Direct Post em conta privada
+    # (unaudited_client_can_only_post_to_private_accounts).
+    if not direto:
         try:
             init = requests.post(
                 f"{tiktok.API}/v2/post/publish/inbox/video/init/",
