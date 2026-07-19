@@ -88,11 +88,13 @@ def _processar_reel(reel: dict):
         imagens=[nome],
         youtube_title=seo["youtube_title"],
         youtube_description=seo["youtube_description"],
-        tiktok_caption=legenda,                # TikTok = legenda idêntica à do trial (regra de voz)
+        # TikTok do repost é opt-in: Pedro posta à mão com o original do Edits
+        tiktok_caption=legenda if config.REPOST_TIKTOK else "",
         pular_instagram=True,                  # o reel já está no IG; só fan-out
     )
     db.marcar_reel_visto(media_id, post_id=post["id"], motivo="repostado")
-    print(f"[repost] Reel {media_id} enfileirado como post {post['id']} (só TikTok+Shorts): {legenda!r}")
+    destino = "TikTok+Shorts" if config.REPOST_TIKTOK else "só Shorts"
+    print(f"[repost] Reel {media_id} enfileirado como post {post['id']} ({destino}): {legenda!r}")
 
 
 def _urls_de_imagem(m: dict) -> list[str] | None:
@@ -172,6 +174,9 @@ def rodar():
                     print(f"[repost] OPENAI_API_KEY ausente — reel {mid} aguardando.")
                     continue
                 _processar_reel(m)
+            elif not config.REPOST_TIKTOK:
+                # foto/carrossel só teria o TikTok como destino (YouTube não faz foto)
+                db.marcar_reel_visto(mid, motivo="pulado-tiktok-manual")
             else:
                 _processar_foto(m)
         except Exception as e:  # noqa: BLE001

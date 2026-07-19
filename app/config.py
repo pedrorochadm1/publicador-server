@@ -22,6 +22,11 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 # YouTube Shorts (não republica no IG — já está lá). Desligado por padrão.
 REPOST_TRIALS = os.environ.get("REPOST_TRIALS", "").lower() in ("1", "true", "sim", "yes")
 REPOST_POLL_MINUTES = int(os.environ.get("REPOST_POLL_MINUTES", "12"))
+# Perna TikTok do auto-repost. Desligada por decisão de 2026-07-19: o repost usa a
+# cópia comprimida do IG, e Pedro prefere postar no TikTok à mão com o arquivo
+# original do Edits (qualidade máxima). O fluxo de publicação direta (via /agendar)
+# não é afetado — lá o TikTok continua saindo via Buffer.
+REPOST_TIKTOK = os.environ.get("REPOST_TIKTOK", "").lower() in ("1", "true", "sim", "yes")
 
 # ─── Buffer (perna do TikTok via app auditado do Buffer → post público) ───
 # Token pessoal: https://publish.buffer.com/settings/api
