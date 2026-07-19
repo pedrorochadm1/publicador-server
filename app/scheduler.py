@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from . import config, db, publisher, token_store, youtube, tiktok, repost
+from . import buffer_api, config, db, publisher, token_store, youtube, tiktok, repost
 
 _sched = BackgroundScheduler(timezone="UTC")
 _MAX_TENTATIVAS = 3
@@ -35,26 +35,50 @@ def _fan_out_video(post: dict, caminho_video: str) -> dict:
             extra["youtube"] = {"status": "erro", "motivo": str(e)}
             print(f"[scheduler] Post {post['id']} YouTube falhou: {e}")
 
-    if post.get("tiktok_caption") and tiktok.disponivel():
-        try:
-            extra["tiktok"] = tiktok.publicar(caminho_video, post["tiktok_caption"])
-        except Exception as e:  # noqa: BLE001
-            extra["tiktok"] = {"status": "erro", "motivo": str(e)}
-            print(f"[scheduler] Post {post['id']} TikTok falhou: {e}")
+    if post.get("tiktok_caption"):
+        nome = os.path.basename(caminho_video)
+        extra["tiktok"] = _tiktok_leg(
+            post,
+            via_buffer=lambda: buffer_api.publicar_video(
+                f"{config.PUBLIC_BASE_URL}/img/{nome}", post["tiktok_caption"]
+            ),
+            via_inbox=lambda: tiktok.publicar(caminho_video, post["tiktok_caption"]),
+        )
 
     return extra
+
+
+def _tiktok_leg(post: dict, via_buffer, via_inbox) -> dict:
+    """Perna do TikTok: Buffer (público) primeiro; inbox próprio só como fallback
+    quando o Buffer nem chegou a criar o post (BufferCreateError = nada saiu)."""
+    if buffer_api.disponivel():
+        try:
+            return via_buffer()
+        except buffer_api.BufferCreateError as e:
+            print(f"[scheduler] Post {post['id']} Buffer não criou o post ({e}); caindo pro inbox.")
+        except Exception as e:  # noqa: BLE001
+            # post pode ter sido criado no Buffer: NÃO cai no fallback (evita duplicar)
+            print(f"[scheduler] Post {post['id']} TikTok via Buffer falhou: {e}")
+            return {"status": "erro", "modo": "buffer-publico", "motivo": str(e)}
+    if tiktok.disponivel():
+        try:
+            return via_inbox()
+        except Exception as e:  # noqa: BLE001
+            print(f"[scheduler] Post {post['id']} TikTok (inbox) falhou: {e}")
+            return {"status": "erro", "modo": "rascunho", "motivo": str(e)}
+    return {"status": "indisponivel", "motivo": "nem Buffer nem TikTok próprio configurados"}
 
 
 def _fan_out_foto(post: dict, arquivos: list) -> dict:
     """Posta foto/carrossel no TikTok (Photo Mode). YouTube não faz foto."""
     extra = {}
-    if post.get("tiktok_caption") and tiktok.disponivel():
+    if post.get("tiktok_caption"):
         urls = [f"{config.PUBLIC_BASE_URL}/img/{n}" for n in arquivos]
-        try:
-            extra["tiktok"] = tiktok.publicar_foto(urls, post["tiktok_caption"])
-        except Exception as e:  # noqa: BLE001
-            extra["tiktok"] = {"status": "erro", "motivo": str(e)}
-            print(f"[scheduler] Post {post['id']} TikTok (foto) falhou: {e}")
+        extra["tiktok"] = _tiktok_leg(
+            post,
+            via_buffer=lambda: buffer_api.publicar_fotos(urls, post["tiktok_caption"]),
+            via_inbox=lambda: tiktok.publicar_foto(urls, post["tiktok_caption"]),
+        )
     return extra
 
 

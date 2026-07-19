@@ -23,6 +23,11 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 REPOST_TRIALS = os.environ.get("REPOST_TRIALS", "").lower() in ("1", "true", "sim", "yes")
 REPOST_POLL_MINUTES = int(os.environ.get("REPOST_POLL_MINUTES", "12"))
 
+# ─── Buffer (perna do TikTok via app auditado do Buffer → post público) ───
+# Token pessoal: https://publish.buffer.com/settings/api
+BUFFER_ACCESS_TOKEN = os.environ.get("BUFFER_ACCESS_TOKEN", "")
+BUFFER_TIKTOK_CHANNEL_ID = os.environ.get("BUFFER_TIKTOK_CHANNEL_ID", "")
+
 # ─── TikTok Content Posting API ───
 TIKTOK_CLIENT_KEY = os.environ.get("TIKTOK_CLIENT_KEY", "")
 TIKTOK_CLIENT_SECRET = os.environ.get("TIKTOK_CLIENT_SECRET", "")

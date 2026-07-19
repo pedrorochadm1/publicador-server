@@ -1,15 +1,20 @@
-"""Auto-repost de Trial Reels: o reel de teste que o Pedro publica no app vira
-TikTok + YouTube Shorts. NÃO republica no IG (o reel já está lá).
+"""Auto-repost do que Pedro publica pelo app do IG (decisões 2026-07-04 e 2026-07-19):
+  - reel (trial ou normal)  → TikTok + YouTube Shorts
+  - foto / carrossel        → TikTok Photo Mode (YouTube não faz foto)
+NÃO republica no IG (o post já está lá).
 
-O job roda no scheduler a cada REPOST_POLL_MINUTES. Fluxo por reel novo:
-  buscar (GET /media) → é nosso? (já foi pelo sistema, pula) → baixar → transcrever
-  + gerar SEO do YouTube → enfileirar post "pular_instagram" → o scheduler faz o
-  fan-out só pro TikTok e YouTube.
+O job roda no scheduler a cada REPOST_POLL_MINUTES. Fluxo por mídia nova:
+  buscar (GET /media) → é nossa? (já foi pelo sistema, pula) → baixar →
+  (reel: transcrever + gerar SEO do YouTube) → enfileirar post "pular_instagram" →
+  o scheduler faz o fan-out pras outras plataformas.
 
-Como distinguir o trial (do app) de um reel que o próprio sistema publicou: os que o
-sistema publicou têm o ig_post_id salvo no banco. Todo reel novo que NÃO está no banco
-é um trial feito no app → repostar. (Confirmado em spike 2026-07-04: trial reel aparece
-no GET /media como product=REELS, com media_url e caption.)
+Como distinguir o post do app de um que o próprio sistema publicou: os do sistema
+têm o ig_post_id salvo no banco. Toda mídia nova que NÃO está no banco veio do app
+→ repostar. (Confirmado em spike 2026-07-04 pra reels; GET /media também lista
+IMAGE e CAROUSEL_ALBUM com media_url/children.)
+
+Regras de pulo: carrossel com vídeo no meio não vai (TikTok Photo Mode é só imagem);
+foto/carrossel sem legenda não vai (a legenda do TikTok é a mesma do IG).
 """
 import os
 from datetime import datetime, timezone
@@ -22,11 +27,12 @@ from .token_store import get_token
 _MARCO = "repost_marco_inicial"
 
 
-def _buscar_reels() -> list[dict]:
+def _buscar_midias() -> list[dict]:
     r = requests.get(
         f"{config.GRAPH}/{config.INSTAGRAM_BUSINESS_ID}/media",
         params={
-            "fields": "id,media_type,media_product_type,media_url,caption,timestamp",
+            "fields": "id,media_type,media_product_type,media_url,caption,timestamp,"
+                      "children{media_url,media_type}",
             "limit": 10,
             "access_token": get_token(),
         },
@@ -45,9 +51,16 @@ def _eh_reel(m: dict) -> bool:
     return m.get("media_type") == "VIDEO" and m.get("media_product_type") == "REELS"
 
 
-def _baixar(media_url: str, media_id: str) -> str:
-    """Baixa o vídeo do reel para o IMG_DIR e devolve o nome do arquivo."""
-    nome = f"trial_{media_id}.mp4"
+def _eh_foto(m: dict) -> bool:
+    return m.get("media_type") == "IMAGE"
+
+
+def _eh_carrossel(m: dict) -> bool:
+    return m.get("media_type") == "CAROUSEL_ALBUM"
+
+
+def _baixar(media_url: str, nome: str) -> str:
+    """Baixa a mídia para o IMG_DIR e devolve o nome do arquivo."""
     r = requests.get(media_url, timeout=120)
     r.raise_for_status()
     with open(os.path.join(config.IMG_DIR, nome), "wb") as f:
@@ -55,10 +68,10 @@ def _baixar(media_url: str, media_id: str) -> str:
     return nome
 
 
-def _processar(reel: dict):
+def _processar_reel(reel: dict):
     media_id = reel["id"]
     legenda = (reel.get("caption") or "").strip()
-    nome = _baixar(reel["media_url"], media_id)
+    nome = _baixar(reel["media_url"], f"trial_{media_id}.mp4")
     caminho = os.path.join(config.IMG_DIR, nome)
     try:
         seo = copy_ia.gerar_youtube_seo(copy_ia.transcrever(caminho), legenda)
@@ -79,47 +92,88 @@ def _processar(reel: dict):
         pular_instagram=True,                  # o reel já está no IG; só fan-out
     )
     db.marcar_reel_visto(media_id, post_id=post["id"], motivo="repostado")
-    print(f"[repost] Trial {media_id} enfileirado como post {post['id']} (só TikTok+Shorts): {legenda!r}")
+    print(f"[repost] Reel {media_id} enfileirado como post {post['id']} (só TikTok+Shorts): {legenda!r}")
+
+
+def _urls_de_imagem(m: dict) -> list[str] | None:
+    """URLs das imagens da foto/carrossel; None se o carrossel tiver vídeo no meio."""
+    if _eh_foto(m):
+        return [m["media_url"]] if m.get("media_url") else None
+    filhos = (m.get("children") or {}).get("data", [])
+    if not filhos or any(f.get("media_type") != "IMAGE" for f in filhos):
+        return None
+    return [f["media_url"] for f in filhos if f.get("media_url")]
+
+
+def _processar_foto(m: dict):
+    media_id = m["id"]
+    legenda = (m.get("caption") or "").strip()
+    if not legenda:
+        db.marcar_reel_visto(media_id, motivo="pulado-sem-legenda")
+        return
+    urls = _urls_de_imagem(m)
+    if not urls:
+        db.marcar_reel_visto(media_id, motivo="pulado-carrossel-com-video")
+        return
+
+    nomes = [
+        _baixar(u, f"repost_{media_id}_{i}.jpg")
+        for i, u in enumerate(urls)
+    ]
+    post = db.criar_post(
+        publicar_em_utc=datetime.now(timezone.utc).isoformat(),
+        caption=legenda,                       # registro; não vai pro IG (pular_instagram)
+        imagens=nomes,
+        tiktok_caption=legenda,                # TikTok = legenda idêntica à do IG (regra de voz)
+        pular_instagram=True,
+    )
+    db.marcar_reel_visto(media_id, post_id=post["id"], motivo="repostado")
+    print(f"[repost] Foto/carrossel {media_id} enfileirado como post {post['id']} (só TikTok): {legenda!r}")
 
 
 def rodar():
-    """Chamado pelo scheduler. Reposta os trial reels novos (publicados após o marco)."""
+    """Chamado pelo scheduler. Reposta as mídias novas do app (publicadas após o marco)."""
     if not config.REPOST_TRIALS:
-        return
-    if not copy_ia.disponivel():
-        print("[repost] OPENAI_API_KEY ausente — auto-repost pausado.")
         return
 
     # Na primeira execução, fixa o marco e NÃO reposta o que já estava no ar.
     marco = db.get_meta(_MARCO)
     if marco is None:
         db.set_meta(_MARCO, datetime.now(timezone.utc).isoformat())
-        print("[repost] Marco inicial definido. A partir de agora, só trial reels novos são repostados.")
+        print("[repost] Marco inicial definido. A partir de agora, só mídias novas são repostadas.")
         return
     marco_dt = _parse_ts(marco)
 
     try:
-        reels = _buscar_reels()
+        midias = _buscar_midias()
     except Exception as e:  # noqa: BLE001
-        print(f"[repost] Falha ao buscar reels: {e}")
+        print(f"[repost] Falha ao buscar mídias: {e}")
         return
 
-    for m in reels:
+    for m in midias:
         mid = m.get("id")
         if not mid or db.reel_ja_visto(mid):
             continue
-        if not _eh_reel(m):
-            db.marcar_reel_visto(mid, motivo="pulado-nao-reel")
+        if not (_eh_reel(m) or _eh_foto(m) or _eh_carrossel(m)):
+            db.marcar_reel_visto(mid, motivo="pulado-nao-repostavel")
             continue
         if not m.get("timestamp") or _parse_ts(m["timestamp"]) <= marco_dt:
             db.marcar_reel_visto(mid, motivo="anterior-ao-marco")
             continue
         if db.post_por_ig_id(mid):
-            # foi o próprio sistema que publicou → já foi pro TikTok/Shorts no fan-out
+            # foi o próprio sistema que publicou → já foi pro fan-out na publicação
             db.marcar_reel_visto(mid, motivo="pulado-nosso")
             continue
         try:
-            _processar(m)
+            if _eh_reel(m):
+                if not copy_ia.disponivel():
+                    # sem OPENAI_API_KEY não dá pra gerar o SEO do YouTube;
+                    # não marca visto: tenta de novo quando a key voltar
+                    print(f"[repost] OPENAI_API_KEY ausente — reel {mid} aguardando.")
+                    continue
+                _processar_reel(m)
+            else:
+                _processar_foto(m)
         except Exception as e:  # noqa: BLE001
             # não marca visto: tenta de novo no próximo ciclo
-            print(f"[repost] Falha ao processar trial {mid}: {e}")
+            print(f"[repost] Falha ao processar mídia {mid}: {e}")
