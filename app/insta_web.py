@@ -17,7 +17,7 @@ from fastapi import APIRouter, Body, Cookie, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from . import automacoes, config
-from .token_store import get_token, status as token_status
+from .token_store import status as token_status
 
 router = APIRouter()
 
@@ -156,7 +156,7 @@ def api_testar(dados: dict = Body(...), insta_sess: str | None = Cookie(default=
 def api_rodar(insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
     automacoes.rodar()
-    return {"ok": True}
+    return {"ok": True, "dms_pendentes_enviados": automacoes.retentar_dms()}
 
 
 @router.get("/insta/api/status")

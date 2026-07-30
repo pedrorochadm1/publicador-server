@@ -137,6 +137,10 @@ def iniciar():
             automacoes.rodar, "interval", seconds=config.AUTOMACOES_POLL_SEGUNDOS,
             id="automacoes", max_instances=1, coalesce=True,
         )
+        _sched.add_job(
+            automacoes.retentar_dms, "interval", minutes=5,
+            id="automacoes_dm", max_instances=1, coalesce=True,
+        )
         print(f"[scheduler] Automações de comentário ligadas (a cada {config.AUTOMACOES_POLL_SEGUNDOS}s).")
     _sched.start()
     token_store.renovar_se_necessario()

@@ -55,6 +55,7 @@ def _init():
             escopo             TEXT NOT NULL DEFAULT 'proximo', -- 'proximo' | 'midia' | 'todos'
             midia_id           TEXT,                          -- post alvo (engatado ou fixo)
             respostas          TEXT NOT NULL DEFAULT '[]',    -- JSON: respostas públicas (sorteia 1)
+            respostas_sem_dm   TEXT NOT NULL DEFAULT '[]',    -- JSON: respostas quando o direct NÃO sai
             dm_texto           TEXT NOT NULL DEFAULT '',
             botao_texto        TEXT NOT NULL DEFAULT '',
             botao_url          TEXT NOT NULL DEFAULT '',
@@ -82,6 +83,9 @@ def _init():
         )
         """
     )
+    cols = {r[1] for r in c.execute("PRAGMA table_info(automacoes)").fetchall()}
+    if "respostas_sem_dm" not in cols:
+        c.execute("ALTER TABLE automacoes ADD COLUMN respostas_sem_dm TEXT NOT NULL DEFAULT '[]'")
     c.commit()
 
 
@@ -89,6 +93,7 @@ def _row(r) -> dict:
     d = dict(r)
     d["palavras"] = json.loads(d["palavras"])
     d["respostas"] = json.loads(d["respostas"])
+    d["respostas_sem_dm"] = json.loads(d.get("respostas_sem_dm") or "[]")
     for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa"):
         d[b] = bool(d[b])
     return d
@@ -110,14 +115,14 @@ def get(aid: int) -> dict | None:
 
 
 _CAMPOS = (
-    "nome", "ativa", "palavras", "modo", "escopo", "midia_id", "respostas", "dm_texto",
-    "botao_texto", "botao_url", "responder_publico", "enviar_dm", "uma_vez_por_pessoa",
+    "nome", "ativa", "palavras", "modo", "escopo", "midia_id", "respostas", "respostas_sem_dm",
+    "dm_texto", "botao_texto", "botao_url", "responder_publico", "enviar_dm", "uma_vez_por_pessoa",
 )
 
 
 def _serializar(dados: dict) -> dict:
     v = {k: dados[k] for k in _CAMPOS if k in dados}
-    for lista in ("palavras", "respostas"):
+    for lista in ("palavras", "respostas", "respostas_sem_dm"):
         if lista in v:
             itens = v[lista]
             if isinstance(itens, str):
@@ -217,6 +222,15 @@ def _fechar_evento(comment_id: str, resposta: str = "", dm_status: str = "", err
     c.execute(
         "UPDATE automacao_eventos SET resposta = ?, dm_status = ?, erro = ? WHERE comment_id = ?",
         (resposta, dm_status, erro or None, comment_id),
+    )
+    c.commit()
+
+
+def _atualizar_dm(comment_id: str, dm_status: str, erro: str = ""):
+    c = db.conn()
+    c.execute(
+        "UPDATE automacao_eventos SET dm_status = ?, erro = ? WHERE comment_id = ?",
+        (dm_status, erro or None, comment_id),
     )
     c.commit()
 
@@ -429,17 +443,10 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
     if not _reservar_comentario(a["id"], comentario, midia_id):
         return False
 
-    resposta = dm_status = ""
+    dm_status = ""
     erros = []
 
-    if a["responder_publico"] and a["respostas"]:
-        resposta = random.choice(a["respostas"])
-        try:
-            responder_comentario(comentario["id"], resposta)
-        except Exception as e:  # noqa: BLE001
-            erros.append(str(e))
-            resposta = ""
-
+    # 1º o direct: a resposta pública depende de ele ter saído ou não.
     if a["enviar_dm"] and a["dm_texto"]:
         quando = _parse_ts(comentario.get("timestamp"))
         if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS):
@@ -450,6 +457,21 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
             except Exception as e:  # noqa: BLE001
                 dm_status = "erro"
                 erros.append(str(e))
+
+    # 2º a resposta pública. Se o direct não saiu, não prometer direct: usa a lista
+    # alternativa (o direct continua na fila e sai sozinho — ver retentar_dms).
+    opcoes = a["respostas"]
+    if dm_status in ("erro", "fora-da-janela") and a["respostas_sem_dm"]:
+        opcoes = a["respostas_sem_dm"]
+
+    resposta = ""
+    if a["responder_publico"] and opcoes:
+        resposta = random.choice(opcoes)
+        try:
+            responder_comentario(comentario["id"], resposta)
+        except Exception as e:  # noqa: BLE001
+            erros.append(str(e))
+            resposta = ""
 
     _fechar_evento(comentario["id"], resposta, dm_status, " | ".join(erros))
     print(f"[automacoes] #{a['id']} @{usuario}: resposta={bool(resposta)} dm={dm_status} {erros or ''}")
@@ -476,6 +498,35 @@ def rodar():
                             break
         except Exception as e:  # noqa: BLE001
             print(f"[automacoes] #{a['id']} falhou na rodada: {e}")
+
+
+def retentar_dms(limite: int = 20) -> int:
+    """Direct que falhou fica na fila e sai sozinho quando o Instagram voltar a aceitar
+    (ex.: capability de mensagens ligada no app depois do comentário). A janela de
+    private reply é de 7 dias; passou disso, marca como perdido e para de tentar."""
+    _init()
+    corte = (datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)).isoformat()
+    pendentes = db.conn().execute(
+        "SELECT * FROM automacao_eventos WHERE dm_status = 'erro' ORDER BY id DESC LIMIT ?",
+        (limite,),
+    ).fetchall()
+    enviados = 0
+    for e in pendentes:
+        if (e["quando"] or "") < corte:
+            _atualizar_dm(e["comment_id"], "fora-da-janela", e["erro"] or "")
+            continue
+        a = get(e["automacao_id"])
+        if not a or not a["enviar_dm"] or not a["dm_texto"]:
+            continue
+        try:
+            status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
+        except Exception as err:  # noqa: BLE001
+            _atualizar_dm(e["comment_id"], "erro", str(err))
+            continue
+        _atualizar_dm(e["comment_id"], status)
+        enviados += 1
+        print(f"[automacoes] direct pendente de @{e['usuario']} saiu ({status}).")
+    return enviados
 
 
 def tratar_webhook(payload: dict) -> int:
@@ -519,6 +570,11 @@ SEMENTE_SENSOR = {
         "Não deixa de participar, te enviei o link no privado!",
         "Vamos lá, te enviei o link para participar no direct!",
         "Isso aí, vamos fazer a nossa parte! Te enviei o link no direct.",
+    ],
+    # usadas quando o direct não sai (não prometer o que não foi entregue)
+    "respostas_sem_dm": [
+        "O link da consulta está aqui: https://brasilparticipativo.presidencia.gov.br/processes/consultas-publicas-conitec/f/5171/",
+        "Participa aqui: https://brasilparticipativo.presidencia.gov.br/processes/consultas-publicas-conitec/f/5171/",
     ],
     "dm_texto": "Consulta pública para incorporação do sensor no sus.",
     "botao_texto": "Participar",

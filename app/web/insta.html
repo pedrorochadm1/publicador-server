@@ -105,7 +105,7 @@ let automacoes = [], midias = [], atual = null;
 
 const VAZIA = {
   nome:"", ativa:true, palavras:[], modo:"contem", escopo:"proximo", midia_id:null,
-  respostas:[], dm_texto:"", botao_texto:"Participar", botao_url:"",
+  respostas:[], respostas_sem_dm:[], dm_texto:"", botao_texto:"Participar", botao_url:"",
   responder_publico:true, enviar_dm:true, uma_vez_por_pessoa:true
 };
 
@@ -185,6 +185,8 @@ function pintarEditor(){
       <label class="sw"><input type="checkbox" id="f_pub" ${a.responder_publico?"checked":""}>Responder no comentário</label>
       <label>Respostas <span class="dica">uma por linha; sorteia uma a cada comentário</span></label>
       <textarea id="f_respostas">${esc(a.respostas.join("\n"))}</textarea>
+      <label>Respostas quando o direct não sai <span class="dica">o Instagram às vezes recusa o direct; aqui não se promete o que não foi entregue. Vazio = não responde nesse caso</span></label>
+      <textarea id="f_respostas_sem_dm" style="min-height:64px">${esc((a.respostas_sem_dm||[]).join("\n"))}</textarea>
     </div>
 
     <div class="bloco">
@@ -247,6 +249,7 @@ function coletar(){
     escopo: $("#f_escopo").value,
     midia_id: $("#f_escopo").value === "todos" ? null : atual.midia_id,
     respostas: $("#f_respostas").value.split("\n").map(s=>s.trim()).filter(Boolean),
+    respostas_sem_dm: $("#f_respostas_sem_dm").value.split("\n").map(s=>s.trim()).filter(Boolean),
     dm_texto: $("#f_dm_texto").value.trim(),
     botao_texto: $("#f_botao").value.trim(),
     botao_url: $("#f_url").value.trim(),
