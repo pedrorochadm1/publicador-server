@@ -47,6 +47,16 @@ TIKTOK_AUDITADO = os.environ.get("TIKTOK_AUDITADO", "").lower() in ("1", "true",
 # visitantes que conectam pelo site ficam só na própria sessão.
 TIKTOK_OWNER_OPEN_ID = os.environ.get("TIKTOK_OWNER_OPEN_ID", "")
 
+# ─── Automações de comentário → resposta + direct (painel insta.pedrorochadm1.com) ───
+# Senha do painel. Vazio = painel desligado.
+INSTA_UI_PASSWORD = os.environ.get("INSTA_UI_PASSWORD", "")
+# Token que a Meta usa pra validar o callback do webhook (o valor é escolhido aqui).
+IG_WEBHOOK_VERIFY_TOKEN = os.environ.get("IG_WEBHOOK_VERIFY_TOKEN", "")
+# O motor varre os comentários do post alvo neste intervalo. O webhook, quando
+# configurado no app do Facebook, responde na hora; o polling é a rede de segurança.
+AUTOMACOES_ATIVAS = os.environ.get("AUTOMACOES_ATIVAS", "true").lower() in ("1", "true", "sim", "yes")
+AUTOMACOES_POLL_SEGUNDOS = int(os.environ.get("AUTOMACOES_POLL_SEGUNDOS", "60"))
+
 GRAPH_BASE = "https://graph.facebook.com"
 # v22+ é necessário pro trial_params (Trial Reels); v19 é anterior ao recurso.
 GRAPH = f"{GRAPH_BASE}/v25.0"

@@ -13,11 +13,12 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import config, db, repost, scheduler, tiktok_web
+from . import automacoes, config, db, insta_web, repost, scheduler, tiktok_web
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    automacoes.semear()
     scheduler.iniciar()
     yield
     scheduler.parar()
@@ -27,6 +28,8 @@ app = FastAPI(title="Publicador @pedrorochadm1", lifespan=lifespan)
 app.mount("/img", StaticFiles(directory=config.IMG_DIR), name="img")
 # Interface web do TikTok (Login Kit + página de publicação conforme + política/termos)
 app.include_router(tiktok_web.router)
+# Painel das automações de comentário (insta.pedrorochadm1.com) + webhook da Meta
+app.include_router(insta_web.router)
 
 
 def auth(x_api_key: str = Header(default="")):

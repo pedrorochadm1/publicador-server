@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from . import buffer_api, config, db, publisher, token_store, youtube, tiktok, repost
+from . import automacoes, buffer_api, config, db, publisher, token_store, youtube, tiktok, repost
 
 _sched = BackgroundScheduler(timezone="UTC")
 _MAX_TENTATIVAS = 3
@@ -132,6 +132,12 @@ def iniciar():
             id="repost", max_instances=1, coalesce=True,
         )
         print(f"[scheduler] Auto-repost de trial reels ligado (a cada {config.REPOST_POLL_MINUTES} min).")
+    if config.AUTOMACOES_ATIVAS:
+        _sched.add_job(
+            automacoes.rodar, "interval", seconds=config.AUTOMACOES_POLL_SEGUNDOS,
+            id="automacoes", max_instances=1, coalesce=True,
+        )
+        print(f"[scheduler] Automações de comentário ligadas (a cada {config.AUTOMACOES_POLL_SEGUNDOS}s).")
     _sched.start()
     token_store.renovar_se_necessario()
     print("[scheduler] Iniciado.")

@@ -53,8 +53,11 @@ def _sessao(request: Request) -> dict | None:
 # ─────────────────────────── Páginas estáticas ───────────────────────────
 
 @router.get("/", response_class=HTMLResponse)
-def home_page():
-    # Homepage real (site externo completo) — exigência da auditoria do TikTok.
+def home_page(request: Request):
+    # O domínio insta.* é o painel de automações; os outros veem a homepage real
+    # (site externo completo) — exigência da auditoria do TikTok.
+    if request.headers.get("host", "").split(":")[0].startswith("insta."):
+        return RedirectResponse("/insta", status_code=307)
     return _html("home.html")
 
 

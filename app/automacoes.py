@@ -1,0 +1,535 @@
+"""Automações de comentário → resposta pública + DM (estilo ManyChat).
+
+Fluxo de uma automação:
+  alguém comenta a palavra-chave no post alvo
+    → o servidor responde o comentário em público (uma das respostas, sorteada)
+    → e manda a DM (private reply) com texto + botão de link
+
+Duas formas de detectar o comentário novo:
+  1. WEBHOOK (instantâneo) — Meta chama POST /webhook/instagram. Precisa do callback
+     configurado no app do Facebook; ver insta_web.py.
+  2. POLLING (garantido) — job no scheduler varre os comentários do post alvo a cada
+     AUTOMACOES_POLL_SEGUNDOS. Funciona sem nenhuma configuração extra.
+Os dois caminhos caem no mesmo tratador, e o comment_id é gravado antes de responder,
+então nunca respondem duas vezes o mesmo comentário.
+
+Escopos:
+  proximo — engata na PRÓXIMA mídia publicada depois que a automação foi criada e
+            passa a valer só pra ela (é o "meu próximo post" do Pedro).
+  midia   — um post específico (media_id fixo).
+  todos   — qualquer post; só comentários posteriores à criação da automação.
+
+Limites da API do Instagram que o código respeita:
+  - private reply: 1 por comentário, dentro de 7 dias do comentário.
+  - só comentários de terceiros (nunca responde a si mesmo).
+"""
+import json
+import random
+import sqlite3
+import unicodedata
+from datetime import datetime, timedelta, timezone
+
+import requests
+
+from . import config, db
+from .token_store import get_token
+
+# Comentário mais velho que isso não recebe DM (janela de private reply da Meta)
+JANELA_DM_DIAS = 7
+# Teto por rodada, por automação — trava de segurança contra tempestade de comentário
+MAX_POR_RODADA = 25
+
+
+# ─────────────────────────── Banco ───────────────────────────
+
+def _init():
+    c = db.conn()
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS automacoes (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome               TEXT NOT NULL DEFAULT '',
+            ativa              INTEGER NOT NULL DEFAULT 1,
+            palavras           TEXT NOT NULL DEFAULT '[]',   -- JSON: lista de palavras-chave
+            modo               TEXT NOT NULL DEFAULT 'contem',  -- 'contem' | 'exata'
+            escopo             TEXT NOT NULL DEFAULT 'proximo', -- 'proximo' | 'midia' | 'todos'
+            midia_id           TEXT,                          -- post alvo (engatado ou fixo)
+            respostas          TEXT NOT NULL DEFAULT '[]',    -- JSON: respostas públicas (sorteia 1)
+            dm_texto           TEXT NOT NULL DEFAULT '',
+            botao_texto        TEXT NOT NULL DEFAULT '',
+            botao_url          TEXT NOT NULL DEFAULT '',
+            responder_publico  INTEGER NOT NULL DEFAULT 1,
+            enviar_dm          INTEGER NOT NULL DEFAULT 1,
+            uma_vez_por_pessoa INTEGER NOT NULL DEFAULT 1,
+            criada_em          TEXT NOT NULL,
+            engatada_em        TEXT
+        )
+        """
+    )
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS automacao_eventos (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            automacao_id INTEGER NOT NULL,
+            comment_id   TEXT NOT NULL UNIQUE,
+            midia_id     TEXT,
+            usuario      TEXT,
+            texto        TEXT,
+            resposta     TEXT,
+            dm_status    TEXT,
+            erro         TEXT,
+            quando       TEXT NOT NULL
+        )
+        """
+    )
+    c.commit()
+
+
+def _row(r) -> dict:
+    d = dict(r)
+    d["palavras"] = json.loads(d["palavras"])
+    d["respostas"] = json.loads(d["respostas"])
+    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa"):
+        d[b] = bool(d[b])
+    return d
+
+
+def listar(so_ativas: bool = False) -> list[dict]:
+    _init()
+    sql = "SELECT * FROM automacoes"
+    if so_ativas:
+        sql += " WHERE ativa = 1"
+    sql += " ORDER BY id DESC"
+    return [_row(r) for r in db.conn().execute(sql).fetchall()]
+
+
+def get(aid: int) -> dict | None:
+    _init()
+    r = db.conn().execute("SELECT * FROM automacoes WHERE id = ?", (aid,)).fetchone()
+    return _row(r) if r else None
+
+
+_CAMPOS = (
+    "nome", "ativa", "palavras", "modo", "escopo", "midia_id", "respostas", "dm_texto",
+    "botao_texto", "botao_url", "responder_publico", "enviar_dm", "uma_vez_por_pessoa",
+)
+
+
+def _serializar(dados: dict) -> dict:
+    v = {k: dados[k] for k in _CAMPOS if k in dados}
+    for lista in ("palavras", "respostas"):
+        if lista in v:
+            itens = v[lista]
+            if isinstance(itens, str):
+                itens = [x.strip() for x in itens.splitlines()]
+            v[lista] = json.dumps([x for x in itens if str(x).strip()])
+    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa"):
+        if b in v:
+            v[b] = 1 if v[b] else 0
+    if v.get("escopo") != "midia" and "escopo" in v:
+        v["midia_id"] = v.get("midia_id") or None
+    return v
+
+
+def criar(dados: dict) -> dict:
+    _init()
+    v = _serializar(dados)
+    v.setdefault("criada_em", datetime.now(timezone.utc).isoformat())
+    colunas = ", ".join(v)
+    marcas = ", ".join("?" for _ in v)
+    c = db.conn()
+    cur = c.execute(f"INSERT INTO automacoes ({colunas}) VALUES ({marcas})", list(v.values()))
+    c.commit()
+    return get(cur.lastrowid)
+
+
+def atualizar(aid: int, dados: dict) -> dict | None:
+    if not get(aid):
+        return None
+    v = _serializar(dados)
+    if v:
+        sets = ", ".join(f"{k} = ?" for k in v)
+        c = db.conn()
+        c.execute(f"UPDATE automacoes SET {sets} WHERE id = ?", [*v.values(), aid])
+        c.commit()
+    return get(aid)
+
+
+def remover(aid: int) -> bool:
+    _init()
+    c = db.conn()
+    cur = c.execute("DELETE FROM automacoes WHERE id = ?", (aid,))
+    c.commit()
+    return cur.rowcount > 0
+
+
+def eventos(automacao_id: int | None = None, limite: int = 100) -> list[dict]:
+    _init()
+    sql = "SELECT * FROM automacao_eventos"
+    params: list = []
+    if automacao_id:
+        sql += " WHERE automacao_id = ?"
+        params.append(automacao_id)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params.append(limite)
+    return [dict(r) for r in db.conn().execute(sql, params).fetchall()]
+
+
+def contadores(automacao_id: int) -> dict:
+    _init()
+    r = db.conn().execute(
+        "SELECT COUNT(*) AS total, "
+        "SUM(CASE WHEN resposta IS NOT NULL AND resposta != '' THEN 1 ELSE 0 END) AS respondidos, "
+        "SUM(CASE WHEN dm_status = 'ok' THEN 1 ELSE 0 END) AS dms, "
+        "MAX(quando) AS ultimo "
+        "FROM automacao_eventos WHERE automacao_id = ?",
+        (automacao_id,),
+    ).fetchone()
+    return {
+        "acionamentos": r["total"] or 0,
+        "respostas": r["respondidos"] or 0,
+        "dms": r["dms"] or 0,
+        "ultimo": r["ultimo"],
+    }
+
+
+def _reservar_comentario(automacao_id: int, comentario: dict, midia_id: str) -> bool:
+    """Grava o comentário ANTES de responder. False = já foi tratado (não repetir)."""
+    _init()
+    c = db.conn()
+    try:
+        c.execute(
+            "INSERT INTO automacao_eventos (automacao_id, comment_id, midia_id, usuario, texto, quando) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                automacao_id, comentario["id"], midia_id, comentario.get("username", ""),
+                comentario.get("text", ""), datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        c.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def _fechar_evento(comment_id: str, resposta: str = "", dm_status: str = "", erro: str = ""):
+    c = db.conn()
+    c.execute(
+        "UPDATE automacao_eventos SET resposta = ?, dm_status = ?, erro = ? WHERE comment_id = ?",
+        (resposta, dm_status, erro or None, comment_id),
+    )
+    c.commit()
+
+
+def _ja_atendeu(automacao_id: int, usuario: str) -> bool:
+    if not usuario:
+        return False
+    return db.conn().execute(
+        "SELECT 1 FROM automacao_eventos WHERE automacao_id = ? AND usuario = ? AND dm_status = 'ok'",
+        (automacao_id, usuario),
+    ).fetchone() is not None
+
+
+# ─────────────────────────── Casamento de palavra-chave ───────────────────────────
+
+def _normalizar(texto: str) -> str:
+    sem_acento = unicodedata.normalize("NFD", texto or "")
+    sem_acento = "".join(ch for ch in sem_acento if unicodedata.category(ch) != "Mn")
+    return sem_acento.lower().strip()
+
+
+def _so_letras(texto: str) -> list[str]:
+    limpo = "".join(ch if ch.isalnum() else " " for ch in texto)
+    return limpo.split()
+
+
+def casa(texto: str, palavras: list[str], modo: str = "contem") -> bool:
+    alvo = _normalizar(texto)
+    if not alvo:
+        return False
+    tokens = _so_letras(alvo)
+    for p in palavras:
+        chave = _normalizar(p)
+        if not chave:
+            continue
+        if modo == "exata":
+            if alvo.strip() == chave or tokens == _so_letras(chave):
+                return True
+        elif chave in alvo or chave in tokens:
+            return True
+    return False
+
+
+# ─────────────────────────── Instagram ───────────────────────────
+
+def _usuario_proprio() -> str:
+    global _CACHE_USERNAME
+    if _CACHE_USERNAME is None:
+        try:
+            r = requests.get(
+                f"{config.GRAPH}/{config.INSTAGRAM_BUSINESS_ID}",
+                params={"fields": "username", "access_token": get_token()}, timeout=20,
+            )
+            _CACHE_USERNAME = _normalizar(r.json().get("username", ""))
+        except Exception:  # noqa: BLE001
+            _CACHE_USERNAME = ""
+    return _CACHE_USERNAME
+
+
+_CACHE_USERNAME: str | None = None
+
+
+def _erro_graph(r: requests.Response) -> str:
+    try:
+        return r.json()["error"]["message"]
+    except Exception:  # noqa: BLE001
+        return f"HTTP {r.status_code}: {r.text[:200]}"
+
+
+def responder_comentario(comment_id: str, mensagem: str):
+    r = requests.post(
+        f"{config.GRAPH}/{comment_id}/replies",
+        params={"message": mensagem, "access_token": get_token()}, timeout=30,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(f"resposta pública falhou: {_erro_graph(r)}")
+
+
+def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str = ""):
+    """Private reply: DM pra quem comentou. Com botão quando há link.
+
+    O template genérico é o formato que renderiza botão no Instagram. Se a conta/app
+    não aceitar template, cai pra mensagem de texto com o link no corpo (nunca fica
+    sem responder).
+    """
+    def _enviar(payload: dict) -> requests.Response:
+        return requests.post(
+            f"{config.GRAPH}/{config.INSTAGRAM_BUSINESS_ID}/messages",
+            params={"access_token": get_token()},
+            json={"recipient": {"comment_id": comment_id}, "message": payload},
+            timeout=30,
+        )
+
+    if botao_url and botao_texto:
+        # title do template genérico tem limite de 80 caracteres
+        if len(texto) > 80:
+            r_txt = _enviar({"text": texto})
+            if r_txt.status_code >= 400:
+                raise RuntimeError(f"DM falhou: {_erro_graph(r_txt)}")
+            titulo = botao_texto
+        else:
+            titulo = texto
+        r = _enviar({
+            "attachment": {
+                "type": "template",
+                "payload": {
+                    "template_type": "generic",
+                    "elements": [{
+                        "title": titulo,
+                        "buttons": [{"type": "web_url", "url": botao_url, "title": botao_texto[:20]}],
+                    }],
+                },
+            }
+        })
+        if r.status_code < 400:
+            return "ok"
+        motivo = _erro_graph(r)
+        # sem botão: manda o link no texto
+        r2 = _enviar({"text": f"{texto}\n{botao_url}"})
+        if r2.status_code >= 400:
+            raise RuntimeError(f"DM falhou: {motivo} | fallback: {_erro_graph(r2)}")
+        return "ok-sem-botao"
+
+    r = _enviar({"text": f"{texto}\n{botao_url}".strip()})
+    if r.status_code >= 400:
+        raise RuntimeError(f"DM falhou: {_erro_graph(r)}")
+    return "ok"
+
+
+def buscar_midias(limite: int = 10) -> list[dict]:
+    r = requests.get(
+        f"{config.GRAPH}/{config.INSTAGRAM_BUSINESS_ID}/media",
+        params={
+            "fields": "id,caption,media_type,media_product_type,permalink,timestamp,thumbnail_url,media_url",
+            "limit": limite, "access_token": get_token(),
+        },
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json().get("data", [])
+
+
+def _buscar_comentarios(midia_id: str) -> list[dict]:
+    r = requests.get(
+        f"{config.GRAPH}/{midia_id}/comments",
+        params={
+            "fields": "id,text,username,timestamp,replies{id,text,username,timestamp}",
+            "limit": 50, "access_token": get_token(),
+        },
+        timeout=30,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(_erro_graph(r))
+    achatado: list[dict] = []
+    for c in r.json().get("data", []):
+        achatado.append(c)
+        achatado.extend(c.get("replies", {}).get("data", []))
+    return achatado
+
+
+def _parse_ts(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("+0000", "+00:00"))
+    except ValueError:
+        return None
+
+
+# ─────────────────────────── Motor ───────────────────────────
+
+def _desde(a: dict) -> datetime:
+    """Só trata comentário posterior a isto (não mexe em comentário velho)."""
+    marco = _parse_ts(a.get("engatada_em")) or _parse_ts(a.get("criada_em"))
+    return marco or datetime.now(timezone.utc)
+
+
+def engatar_proximo(a: dict) -> dict:
+    """Escopo 'proximo': fixa a automação na primeira mídia publicada após a criação."""
+    if a["escopo"] != "proximo" or a.get("midia_id"):
+        return a
+    criada = _parse_ts(a.get("criada_em")) or datetime.now(timezone.utc)
+    candidatas = [m for m in buscar_midias() if (_parse_ts(m.get("timestamp")) or criada) > criada]
+    if not candidatas:
+        return a
+    nova = min(candidatas, key=lambda m: _parse_ts(m["timestamp"]))
+    print(f"[automacoes] #{a['id']} engatou no post {nova['id']} ({nova.get('permalink')})")
+    return atualizar(a["id"], {
+        "midia_id": nova["id"],
+        "engatada_em": _parse_ts(nova["timestamp"]).isoformat(),
+    }) or a
+
+
+def _midias_alvo(a: dict) -> list[str]:
+    if a["escopo"] == "todos":
+        return [m["id"] for m in buscar_midias(limite=5)]
+    return [a["midia_id"]] if a.get("midia_id") else []
+
+
+def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
+    """Responde um comentário. Devolve True se acionou a automação."""
+    texto = comentario.get("text", "")
+    usuario = comentario.get("username", "")
+    if not casa(texto, a["palavras"], a["modo"]):
+        return False
+    if usuario and _normalizar(usuario) == _usuario_proprio():
+        return False
+    if a["uma_vez_por_pessoa"] and _ja_atendeu(a["id"], usuario):
+        return False
+    if not _reservar_comentario(a["id"], comentario, midia_id):
+        return False
+
+    resposta = dm_status = ""
+    erros = []
+
+    if a["responder_publico"] and a["respostas"]:
+        resposta = random.choice(a["respostas"])
+        try:
+            responder_comentario(comentario["id"], resposta)
+        except Exception as e:  # noqa: BLE001
+            erros.append(str(e))
+            resposta = ""
+
+    if a["enviar_dm"] and a["dm_texto"]:
+        quando = _parse_ts(comentario.get("timestamp"))
+        if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS):
+            dm_status = "fora-da-janela"
+        else:
+            try:
+                dm_status = enviar_dm(comentario["id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
+            except Exception as e:  # noqa: BLE001
+                dm_status = "erro"
+                erros.append(str(e))
+
+    _fechar_evento(comentario["id"], resposta, dm_status, " | ".join(erros))
+    print(f"[automacoes] #{a['id']} @{usuario}: resposta={bool(resposta)} dm={dm_status} {erros or ''}")
+    return True
+
+
+def rodar():
+    """Varre os comentários dos posts alvo das automações ativas (job do scheduler)."""
+    for a in listar(so_ativas=True):
+        try:
+            if a["escopo"] == "proximo" and not a.get("midia_id"):
+                a = engatar_proximo(a)
+            desde = _desde(a)
+            for midia_id in _midias_alvo(a):
+                tratados = 0
+                for c in _buscar_comentarios(midia_id):
+                    quando = _parse_ts(c.get("timestamp"))
+                    if quando and quando < desde:
+                        continue
+                    if tratar_comentario(a, midia_id, c):
+                        tratados += 1
+                        if tratados >= MAX_POR_RODADA:
+                            print(f"[automacoes] #{a['id']} atingiu o teto da rodada ({MAX_POR_RODADA}).")
+                            break
+        except Exception as e:  # noqa: BLE001
+            print(f"[automacoes] #{a['id']} falhou na rodada: {e}")
+
+
+def tratar_webhook(payload: dict) -> int:
+    """Comentário chegando pelo webhook da Meta (caminho instantâneo)."""
+    tratados = 0
+    for entry in payload.get("entry", []):
+        for ch in entry.get("changes", []):
+            if ch.get("field") != "comments":
+                continue
+            v = ch.get("value", {})
+            comentario = {
+                "id": v.get("id"),
+                "text": v.get("text", ""),
+                "username": (v.get("from") or {}).get("username", ""),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            midia_id = (v.get("media") or {}).get("id", "")
+            if not comentario["id"]:
+                continue
+            for a in listar(so_ativas=True):
+                if a["escopo"] == "proximo" and not a.get("midia_id"):
+                    a = engatar_proximo(a)
+                alvos = _midias_alvo(a)
+                if a["escopo"] != "todos" and midia_id not in alvos:
+                    continue
+                if tratar_comentario(a, midia_id, comentario):
+                    tratados += 1
+                    break
+    return tratados
+
+
+# ─────────────────────────── Semente ───────────────────────────
+
+SEMENTE_SENSOR = {
+    "nome": "Consulta pública do sensor",
+    "palavras": ["sensor"],
+    "modo": "contem",
+    "escopo": "proximo",
+    "respostas": [
+        "Te enviei o link para participar no direct!",
+        "Não deixa de participar, te enviei o link no privado!",
+        "Vamos lá, te enviei o link para participar no direct!",
+        "Isso aí, vamos fazer a nossa parte! Te enviei o link no direct.",
+    ],
+    "dm_texto": "Consulta pública para incorporação do sensor no sus.",
+    "botao_texto": "Participar",
+    "botao_url": "https://brasilparticipativo.presidencia.gov.br/processes/consultas-publicas-conitec/f/5171/",
+}
+
+
+def semear():
+    """Cria a automação inicial do sensor na primeira subida (só se não houver nenhuma)."""
+    _init()
+    if db.conn().execute("SELECT COUNT(*) FROM automacoes").fetchone()[0]:
+        return
+    criar(SEMENTE_SENSOR)
+    print("[automacoes] Automação inicial 'sensor' criada (aguardando a próxima publicação).")

@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automações · @pedrorochadm1</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<style>
+  :root { --fg:#161823; --muted:#5b6068; --line:#e7e9ec; --accent:#d62976; --soft:#f7f8fa;
+          --ok:#0a8f5b; --off:#98a0a8; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+         color:var(--fg); background:var(--soft); line-height:1.5; }
+  header { background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10; }
+  header .wrap { max-width:1100px; margin:0 auto; padding:12px 20px; display:flex; align-items:center;
+                 justify-content:space-between; gap:12px; }
+  .marca { font-weight:800; font-size:17px; display:flex; align-items:center; gap:9px; }
+  .marca img { width:28px; height:28px; border-radius:7px; }
+  .chip { font-size:12px; padding:3px 9px; border-radius:99px; background:var(--soft);
+          border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
+  .chip.on { color:var(--ok); border-color:#bfe6d3; background:#eefaf4; }
+  header a { color:var(--muted); font-size:14px; text-decoration:none; }
+  main { max-width:1100px; margin:0 auto; padding:20px; display:grid; grid-template-columns:340px 1fr; gap:20px;
+         align-items:start; }
+  .col { display:grid; gap:14px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .card.sel { border-color:var(--accent); box-shadow:0 0 0 3px rgba(214,41,118,.08); }
+  .lista .card { cursor:pointer; }
+  .lista .card h3 { margin:0 0 6px; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .ponto { width:8px; height:8px; border-radius:50%; background:var(--off); flex:none; }
+  .ponto.on { background:var(--ok); }
+  .kw { display:inline-block; font-size:12px; background:#fdeaf3; color:var(--accent); border-radius:6px;
+        padding:2px 8px; margin:2px 4px 2px 0; font-weight:600; }
+  .meta { font-size:12px; color:var(--muted); margin-top:8px; }
+  h2 { font-size:16px; margin:0 0 14px; }
+  label { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+  .dica { font-weight:400; color:var(--muted); font-size:12px; }
+  input[type=text], input[type=url], select, textarea {
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font-size:15px;
+    font-family:inherit; background:var(--soft); }
+  textarea { min-height:92px; resize:vertical; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--accent); background:#fff; }
+  .linha { display:flex; gap:10px; } .linha > * { flex:1; }
+  .sw { display:flex; align-items:center; gap:10px; margin:12px 0; font-size:14px; font-weight:600; cursor:pointer; }
+  .sw input { appearance:none; width:40px; height:23px; border-radius:99px; background:#d6dade; position:relative;
+              cursor:pointer; flex:none; transition:.15s; margin:0; }
+  .sw input:checked { background:var(--accent); }
+  .sw input::after { content:""; position:absolute; top:2px; left:2px; width:19px; height:19px; border-radius:50%;
+                     background:#fff; transition:.15s; }
+  .sw input:checked::after { left:19px; }
+  button { padding:11px 16px; border:0; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer;
+           background:var(--accent); color:#fff; }
+  button.sec { background:#fff; color:var(--fg); border:1px solid var(--line); }
+  button.perigo { background:#fff; color:#c02b3a; border:1px solid #f0cdd2; }
+  .acoes { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; }
+  .bloco { border-top:1px solid var(--line); margin-top:18px; padding-top:4px; }
+  .posts { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:8px; margin-top:8px; }
+  .posts figure { margin:0; cursor:pointer; border:2px solid transparent; border-radius:10px; overflow:hidden;
+                  background:#eee; aspect-ratio:1; }
+  .posts figure.sel { border-color:var(--accent); }
+  .posts img { width:100%; height:100%; object-fit:cover; display:block; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  .badge { font-size:11px; padding:2px 7px; border-radius:99px; background:var(--soft); border:1px solid var(--line); }
+  .badge.ok { color:var(--ok); border-color:#bfe6d3; background:#eefaf4; }
+  .badge.erro { color:#c02b3a; border-color:#f0cdd2; background:#fdf0f2; }
+  .vazio { color:var(--muted); font-size:14px; }
+  #aviso { position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#161823; color:#fff;
+           padding:10px 18px; border-radius:99px; font-size:14px; opacity:0; transition:.2s; pointer-events:none; }
+  #aviso.ver { opacity:1; }
+  @media (max-width:860px){ main { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <span class="marca"><img src="/icon.png" alt="">Automações</span>
+    <span id="status" class="chip">carregando…</span>
+    <a href="/insta/sair">Sair</a>
+  </div>
+</header>
+
+<main>
+  <div class="col lista">
+    <button id="nova">+ Nova automação</button>
+    <div id="cards"></div>
+  </div>
+
+  <div class="col">
+    <div class="card" id="editor"></div>
+    <div class="card">
+      <h2>Histórico</h2>
+      <div id="historico" class="vazio">Nada ainda.</div>
+    </div>
+  </div>
+</main>
+
+<div id="aviso"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let automacoes = [], midias = [], atual = null;
+
+const VAZIA = {
+  nome:"", ativa:true, palavras:[], modo:"contem", escopo:"proximo", midia_id:null,
+  respostas:[], dm_texto:"", botao_texto:"Participar", botao_url:"",
+  responder_publico:true, enviar_dm:true, uma_vez_por_pessoa:true
+};
+
+function aviso(txt){ const a=$("#aviso"); a.textContent=txt; a.classList.add("ver");
+  setTimeout(()=>a.classList.remove("ver"), 2600); }
+
+async function api(rota, opts={}){
+  const r = await fetch(rota, {headers:{"Content-Type":"application/json"}, ...opts});
+  if (r.status === 401){ location.reload(); return; }
+  if (!r.ok){ aviso("Erro: " + (await r.text()).slice(0,120)); throw new Error(r.status); }
+  return r.status === 204 ? null : r.json();
+}
+
+function data(iso){
+  if(!iso) return "";
+  return new Date(iso.endsWith("Z")||iso.includes("+") ? iso : iso+"Z")
+    .toLocaleString("pt-BR", {day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit"});
+}
+const esc = t => (t||"").replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+function rotuloEscopo(a){
+  if (a.escopo === "todos") return "Todos os posts";
+  if (a.escopo === "midia") return "Post específico";
+  return a.midia_id ? "Engatada no post" : "Aguardando a próxima publicação";
+}
+
+// ─── lista ───
+function pintarLista(){
+  $("#cards").innerHTML = automacoes.map(a => `
+    <div class="card ${atual && atual.id===a.id ? "sel":""}" data-id="${a.id}">
+      <h3><span class="ponto ${a.ativa?"on":""}"></span>${esc(a.nome) || "Sem nome"}</h3>
+      <div>${a.palavras.map(p=>`<span class="kw">${esc(p)}</span>`).join("")}</div>
+      <div class="meta">${rotuloEscopo(a)}<br>
+        ${a.contadores.acionamentos} acionamentos · ${a.contadores.dms} directs
+        ${a.contadores.ultimo ? " · último em "+data(a.contadores.ultimo) : ""}</div>
+    </div>`).join("") || `<p class="vazio">Nenhuma automação ainda.</p>`;
+  document.querySelectorAll("#cards .card").forEach(el =>
+    el.onclick = () => selecionar(automacoes.find(a => a.id == el.dataset.id)));
+}
+
+// ─── editor ───
+function pintarEditor(){
+  const a = atual;
+  if (!a){ $("#editor").innerHTML = `<p class="vazio">Escolha uma automação ou crie uma nova.</p>`; return; }
+  $("#editor").innerHTML = `
+    <h2>${a.id ? "Editar automação" : "Nova automação"}</h2>
+    <label>Nome</label>
+    <input type="text" id="f_nome" value="${esc(a.nome)}" placeholder="Ex.: consulta pública do sensor">
+    <label class="sw"><input type="checkbox" id="f_ativa" ${a.ativa?"checked":""}>Automação ligada</label>
+
+    <div class="bloco">
+      <label>Palavra-chave <span class="dica">separe por vírgula</span></label>
+      <input type="text" id="f_palavras" value="${esc(a.palavras.join(", "))}" placeholder="sensor">
+      <div class="linha">
+        <div>
+          <label>Como comparar</label>
+          <select id="f_modo">
+            <option value="contem" ${a.modo==="contem"?"selected":""}>Comentário contém a palavra</option>
+            <option value="exata" ${a.modo==="exata"?"selected":""}>Comentário é exatamente a palavra</option>
+          </select>
+        </div>
+        <div>
+          <label>Onde vale</label>
+          <select id="f_escopo">
+            <option value="proximo" ${a.escopo==="proximo"?"selected":""}>Próxima publicação</option>
+            <option value="midia" ${a.escopo==="midia"?"selected":""}>Post específico</option>
+            <option value="todos" ${a.escopo==="todos"?"selected":""}>Todos os posts</option>
+          </select>
+        </div>
+      </div>
+      <div id="escolha_post"></div>
+      <label>Testar <span class="dica">escreve um comentário de exemplo</span></label>
+      <div class="linha"><input type="text" id="f_teste" placeholder="quero o sensor"><span id="r_teste" class="chip" style="flex:none;align-self:center"></span></div>
+    </div>
+
+    <div class="bloco">
+      <label class="sw"><input type="checkbox" id="f_pub" ${a.responder_publico?"checked":""}>Responder no comentário</label>
+      <label>Respostas <span class="dica">uma por linha; sorteia uma a cada comentário</span></label>
+      <textarea id="f_respostas">${esc(a.respostas.join("\n"))}</textarea>
+    </div>
+
+    <div class="bloco">
+      <label class="sw"><input type="checkbox" id="f_dm" ${a.enviar_dm?"checked":""}>Mandar direct</label>
+      <label>Mensagem do direct</label>
+      <textarea id="f_dm_texto" style="min-height:64px">${esc(a.dm_texto)}</textarea>
+      <div class="linha">
+        <div><label>Texto do botão</label><input type="text" id="f_botao" value="${esc(a.botao_texto)}"></div>
+        <div><label>Link do botão</label><input type="url" id="f_url" value="${esc(a.botao_url)}"></div>
+      </div>
+      <label class="sw"><input type="checkbox" id="f_uma" ${a.uma_vez_por_pessoa?"checked":""}>Só uma vez por pessoa</label>
+    </div>
+
+    <div class="acoes">
+      <button id="salvar">Salvar</button>
+      ${a.id ? `<button class="sec" id="rodar">Verificar comentários agora</button>
+                <button class="perigo" id="excluir">Excluir</button>` : `<button class="sec" id="cancelar">Cancelar</button>`}
+    </div>`;
+
+  $("#f_escopo").onchange = pintarEscolhaPost;
+  $("#f_teste").oninput = testar;
+  $("#salvar").onclick = salvar;
+  if (a.id){ $("#rodar").onclick = rodar; $("#excluir").onclick = excluir; }
+  else $("#cancelar").onclick = () => { atual = null; pintarEditor(); pintarLista(); };
+  pintarEscolhaPost();
+}
+
+function pintarEscolhaPost(){
+  const escopo = $("#f_escopo").value, alvo = $("#escolha_post");
+  if (escopo !== "midia"){
+    alvo.innerHTML = escopo === "proximo" && atual.midia_id
+      ? `<p class="meta">Já engatou no post publicado em ${data(atual.engatada_em)}.</p>` : "";
+    return;
+  }
+  alvo.innerHTML = `<label>Escolha o post</label><div class="posts">${
+    midias.map(m => `<figure data-id="${m.id}" class="${atual.midia_id===m.id?"sel":""}" title="${esc((m.caption||"").slice(0,80))}">
+      <img src="${m.thumbnail_url || m.media_url || ""}" alt=""></figure>`).join("")}</div>`;
+  alvo.querySelectorAll("figure").forEach(f => f.onclick = () => {
+    atual.midia_id = f.dataset.id;
+    alvo.querySelectorAll("figure").forEach(o => o.classList.toggle("sel", o === f));
+  });
+}
+
+async function testar(){
+  const texto = $("#f_teste").value;
+  const el = $("#r_teste");
+  if (!texto){ el.textContent = ""; el.className = "chip"; return; }
+  const r = await api("/insta/api/testar", {method:"POST", body: JSON.stringify(
+    {texto, palavras: $("#f_palavras").value.split(","), modo: $("#f_modo").value})});
+  el.textContent = r.casa ? "aciona" : "não aciona";
+  el.className = "chip" + (r.casa ? " on" : "");
+}
+
+function coletar(){
+  return {
+    nome: $("#f_nome").value.trim(),
+    ativa: $("#f_ativa").checked,
+    palavras: $("#f_palavras").value.split(",").map(s=>s.trim()).filter(Boolean),
+    modo: $("#f_modo").value,
+    escopo: $("#f_escopo").value,
+    midia_id: $("#f_escopo").value === "todos" ? null : atual.midia_id,
+    respostas: $("#f_respostas").value.split("\n").map(s=>s.trim()).filter(Boolean),
+    dm_texto: $("#f_dm_texto").value.trim(),
+    botao_texto: $("#f_botao").value.trim(),
+    botao_url: $("#f_url").value.trim(),
+    responder_publico: $("#f_pub").checked,
+    enviar_dm: $("#f_dm").checked,
+    uma_vez_por_pessoa: $("#f_uma").checked
+  };
+}
+
+async function salvar(){
+  const dados = coletar();
+  if (!dados.palavras.length) return aviso("Falta a palavra-chave.");
+  if (dados.escopo === "midia" && !dados.midia_id) return aviso("Escolha o post.");
+  const salva = atual.id
+    ? await api("/insta/api/automacoes/"+atual.id, {method:"PUT", body: JSON.stringify(dados)})
+    : await api("/insta/api/automacoes", {method:"POST", body: JSON.stringify(dados)});
+  aviso("Salvo.");
+  await carregar();
+  selecionar(automacoes.find(a => a.id === salva.id));
+}
+
+async function excluir(){
+  if (!confirm("Excluir esta automação? O histórico fica.")) return;
+  await api("/insta/api/automacoes/"+atual.id, {method:"DELETE"});
+  atual = null; aviso("Excluída."); await carregar(); pintarEditor();
+}
+
+async function rodar(){
+  aviso("Verificando…");
+  await api("/insta/api/rodar", {method:"POST"});
+  await carregar(); await pintarHistorico();
+  aviso("Pronto.");
+}
+
+function selecionar(a){ atual = a ? JSON.parse(JSON.stringify(a)) : null; pintarLista(); pintarEditor(); pintarHistorico(); }
+
+async function pintarHistorico(){
+  const ev = await api("/insta/api/eventos" + (atual && atual.id ? "?automacao_id="+atual.id : ""));
+  $("#historico").className = ev.length ? "" : "vazio";
+  $("#historico").innerHTML = ev.length ? `<table>
+    <tr><th>Quando</th><th>Quem</th><th>Comentário</th><th>Resposta</th><th>Direct</th></tr>
+    ${ev.map(e => `<tr>
+      <td>${data(e.quando)}</td>
+      <td>@${esc(e.usuario)}</td>
+      <td>${esc((e.texto||"").slice(0,60))}</td>
+      <td>${esc((e.resposta||"").slice(0,60)) || "—"}</td>
+      <td><span class="badge ${e.dm_status && e.dm_status.startsWith("ok") ? "ok" : (e.dm_status ? "erro":"")}"
+          title="${esc(e.erro||"")}">${esc(e.dm_status||"—")}</span></td>
+    </tr>`).join("")}</table>` : "Nada ainda.";
+}
+
+async function carregar(){
+  automacoes = await api("/insta/api/automacoes");
+  if (atual && atual.id) atual = JSON.parse(JSON.stringify(automacoes.find(a => a.id === atual.id) || atual));
+  pintarLista();
+}
+
+async function inicio(){
+  const st = await api("/insta/api/status");
+  $("#status").textContent = st.ligado
+    ? `verificando a cada ${st.polling_segundos}s${st.token_dias!=null ? " · token "+st.token_dias+"d":""}`
+    : "automações desligadas no servidor";
+  $("#status").className = "chip" + (st.ligado ? " on" : "");
+  await carregar();
+  try { midias = await api("/insta/api/midias"); } catch(e){ midias = []; }
+  if (automacoes.length) selecionar(automacoes[0]); else pintarEditor();
+  await pintarHistorico();
+}
+
+$("#nova").onclick = () => { atual = JSON.parse(JSON.stringify(VAZIA)); pintarLista(); pintarEditor(); };
+inicio();
+setInterval(async () => { if (!document.hidden) { await carregar(); await pintarHistorico(); } }, 60000);
+</script>
+</body>
+</html>
