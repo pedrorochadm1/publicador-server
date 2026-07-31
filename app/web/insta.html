@@ -21,7 +21,7 @@
           border:1px solid var(--line); color:var(--muted); white-space:nowrap; }
   .chip.on { color:var(--ok); border-color:#bfe6d3; background:#eefaf4; }
   header a { color:var(--muted); font-size:14px; text-decoration:none; }
-  main { max-width:1100px; margin:0 auto; padding:20px; display:grid; grid-template-columns:340px 1fr; gap:20px;
+  main { max-width:1360px; margin:0 auto; padding:20px; display:grid; grid-template-columns:300px 1fr 320px; gap:20px;
          align-items:start; }
   .col { display:grid; gap:14px; }
   .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
@@ -70,6 +70,36 @@
   #aviso { position:fixed; left:50%; transform:translateX(-50%); bottom:24px; background:#161823; color:#fff;
            padding:10px 18px; border-radius:99px; font-size:14px; opacity:0; transition:.2s; pointer-events:none; }
   #aviso.ver { opacity:1; }
+  /* contador de caracteres */
+  .conta { font-size:11px; color:var(--muted); text-align:right; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .conta.perto { color:#b26a00; }
+  .conta.estourou { color:#c02b3a; font-weight:700; }
+  .campo-ruim { border-color:#e79aa4 !important; background:#fdf6f7 !important; }
+
+  /* preview */
+  .previa { position:sticky; top:76px; display:grid; gap:14px; }
+  .previa h4 { margin:0 0 10px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+  .fone { border:1px solid var(--line); border-radius:16px; overflow:hidden; background:#fff; }
+  .fone .topo { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line);
+                font-size:13px; font-weight:700; }
+  .ava { width:26px; height:26px; border-radius:50%; flex:none;
+         background:linear-gradient(45deg,#f9ce34,#ee2a7b,#6228d7); }
+  .ava.cinza { background:#dfe3e8; }
+  .fone .corpo { padding:12px; display:grid; gap:8px; background:#fff; }
+  .bolha { max-width:88%; padding:9px 13px; border-radius:18px; font-size:14px; background:#efefef;
+           border-bottom-left-radius:5px; white-space:pre-wrap; word-break:break-word; }
+  .cartao { max-width:88%; border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .cartao .txt { padding:11px 13px; font-size:14px; white-space:pre-wrap; word-break:break-word; }
+  .cartao .bt { border-top:1px solid var(--line); padding:10px; text-align:center; font-size:14px;
+                font-weight:600; color:#0095f6; }
+  .quem { font-size:11px; color:var(--muted); margin-left:4px; }
+  .coment { display:grid; gap:10px; padding:12px; }
+  .coment .item { display:flex; gap:9px; }
+  .coment .item.resp { margin-left:32px; }
+  .coment .bal { font-size:13px; }
+  .coment .bal b { font-size:13px; }
+  .previa .nada { color:var(--muted); font-size:13px; padding:12px; }
+  @media (max-width:1180px){ main { grid-template-columns:320px 1fr; } .previa { position:static; } }
   @media (max-width:860px){ main { grid-template-columns:1fr; } }
 </style>
 </head>
@@ -95,6 +125,8 @@
       <div id="historico" class="vazio">Nada ainda.</div>
     </div>
   </div>
+
+  <div class="col previa" id="previa"></div>
 </main>
 
 <div id="aviso"></div>
@@ -149,7 +181,8 @@ function pintarLista(){
 // ─── editor ───
 function pintarEditor(){
   const a = atual;
-  if (!a){ $("#editor").innerHTML = `<p class="vazio">Escolha uma automação ou crie uma nova.</p>`; return; }
+  if (!a){ $("#editor").innerHTML = `<p class="vazio">Escolha uma automação ou crie uma nova.</p>`;
+           $("#previa").innerHTML = ""; return; }
   $("#editor").innerHTML = `
     <h2>${a.id ? "Editar automação" : "Nova automação"}</h2>
     <label>Nome</label>
@@ -185,17 +218,24 @@ function pintarEditor(){
       <label class="sw"><input type="checkbox" id="f_pub" ${a.responder_publico?"checked":""}>Responder no comentário</label>
       <label>Respostas <span class="dica">uma por linha; sorteia uma a cada comentário</span></label>
       <textarea id="f_respostas">${esc(a.respostas.join("\n"))}</textarea>
-      <label>Respostas quando o direct não sai <span class="dica">o Instagram às vezes recusa o direct; aqui não se promete o que não foi entregue. Vazio = não responde nesse caso</span></label>
+      <div class="conta" id="c_respostas"></div>
+      <label>Respostas quando o direct não sai <span class="dica">vazio = não responde nesse caso. Nunca coloque link aqui</span></label>
       <textarea id="f_respostas_sem_dm" style="min-height:64px">${esc((a.respostas_sem_dm||[]).join("\n"))}</textarea>
+      <div class="conta" id="c_respostas_sem_dm"></div>
     </div>
 
     <div class="bloco">
       <label class="sw"><input type="checkbox" id="f_dm" ${a.enviar_dm?"checked":""}>Mandar direct</label>
       <label>Mensagem do direct</label>
-      <textarea id="f_dm_texto" style="min-height:64px">${esc(a.dm_texto)}</textarea>
+      <textarea id="f_dm_texto" style="min-height:64px" maxlength="${LIM.dmComBotao}">${esc(a.dm_texto)}</textarea>
+      <div class="conta" id="c_dm_texto"></div>
       <div class="linha">
-        <div><label>Texto do botão</label><input type="text" id="f_botao" value="${esc(a.botao_texto)}"></div>
-        <div><label>Link do botão</label><input type="url" id="f_url" value="${esc(a.botao_url)}"></div>
+        <div><label>Texto do botão</label>
+          <input type="text" id="f_botao" maxlength="${LIM.botao}" value="${esc(a.botao_texto)}">
+          <div class="conta" id="c_botao"></div></div>
+        <div><label>Link do botão</label>
+          <input type="url" id="f_url" value="${esc(a.botao_url)}">
+          <div class="conta" id="c_url"></div></div>
       </div>
       <label class="sw"><input type="checkbox" id="f_uma" ${a.uma_vez_por_pessoa?"checked":""}>Só uma vez por pessoa</label>
     </div>
@@ -212,6 +252,99 @@ function pintarEditor(){
   if (a.id){ $("#rodar").onclick = rodar; $("#excluir").onclick = excluir; }
   else $("#cancelar").onclick = () => { atual = null; pintarEditor(); pintarLista(); };
   pintarEscolhaPost();
+
+  ["f_respostas","f_respostas_sem_dm","f_dm_texto","f_botao","f_url","f_palavras","f_pub","f_dm"]
+    .forEach(id => { const el = $("#"+id); if (el) el.addEventListener("input", revisar); });
+  ["f_pub","f_dm"].forEach(id => $("#"+id).addEventListener("change", revisar));
+  revisar();
+}
+
+/* ─────────── limites, contadores e prévia ─────────── */
+
+// Tetos da Meta. dmComBotao é o texto do template de botão; sem botão a private
+// reply é texto puro e cabe mais. Botão: 20 chars. Comentário: 2200.
+const LIM = { dmComBotao:640, dmSemBotao:1000, botao:20, comentario:2200 };
+
+function contar(idCampo, idConta, limite, rotulo){
+  const el = $("#"+idCampo), c = $("#"+idConta);
+  if (!el || !c) return true;
+  const n = (el.value || "").length;
+  c.textContent = `${n} / ${limite}${rotulo ? " " + rotulo : ""}`;
+  c.className = "conta" + (n > limite ? " estourou" : n > limite*0.9 ? " perto" : "");
+  el.classList.toggle("campo-ruim", n > limite);
+  return n <= limite;
+}
+
+function contarLinhas(idCampo, idConta, limite){
+  const el = $("#"+idCampo), c = $("#"+idConta);
+  const linhas = (el.value || "").split("\n").map(s => s.trim()).filter(Boolean);
+  const maior = linhas.reduce((m,l) => Math.max(m, l.length), 0);
+  const ruim = linhas.filter(l => l.length > limite).length;
+  c.textContent = ruim ? `${ruim} resposta(s) passando de ${limite} caracteres`
+                       : `${linhas.length} resposta(s) · maior tem ${maior} / ${limite}`;
+  c.className = "conta" + (ruim ? " estourou" : maior > limite*0.9 ? " perto" : "");
+  el.classList.toggle("campo-ruim", !!ruim);
+  return !ruim;
+}
+
+function temBotao(){ return !!($("#f_botao").value.trim() && $("#f_url").value.trim()); }
+
+function revisar(){
+  const limDm = temBotao() ? LIM.dmComBotao : LIM.dmSemBotao;
+  $("#f_dm_texto").maxLength = limDm;
+  const ok = [
+    contarLinhas("f_respostas", "c_respostas", LIM.comentario),
+    contarLinhas("f_respostas_sem_dm", "c_respostas_sem_dm", LIM.comentario),
+    contar("f_dm_texto", "c_dm_texto", limDm, temBotao() ? "(com botão)" : "(sem botão)"),
+    contar("f_botao", "c_botao", LIM.botao),
+  ].every(Boolean);
+  const url = $("#f_url").value.trim();
+  const urlOk = !url || /^https?:\/\/.+/i.test(url);
+  $("#c_url").textContent = url ? (urlOk ? "link válido" : "o link precisa começar com https://") : "";
+  $("#c_url").className = "conta" + (url && !urlOk ? " estourou" : "");
+  $("#f_url").classList.toggle("campo-ruim", !!url && !urlOk);
+  $("#salvar").disabled = !(ok && urlOk);
+  $("#salvar").style.opacity = ok && urlOk ? "" : ".5";
+  pintarPrevia();
+  return ok && urlOk;
+}
+
+function pintarPrevia(){
+  const alvo = $("#previa");
+  if (!atual){ alvo.innerHTML = ""; return; }
+  const palavra = ($("#f_palavras").value.split(",")[0] || "sensor").trim() || "sensor";
+  const resps = $("#f_respostas").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const dmTexto = $("#f_dm_texto").value.trim();
+  const bt = $("#f_botao").value.trim(), url = $("#f_url").value.trim();
+
+  const comentario = !$("#f_pub").checked ? `<p class="nada">Sem resposta no comentário.</p>` : `
+    <div class="coment">
+      <div class="item"><span class="ava cinza"></span>
+        <div class="bal"><b>maria.souza</b><br>${esc(palavra)}</div></div>
+      <div class="item resp"><span class="ava"></span>
+        <div class="bal"><b>pedrorochadm1</b><br>${esc(resps[0] || "—")}</div></div>
+    </div>${resps.length > 1 ? `<p class="quem" style="padding:0 12px 12px">+${resps.length-1} variação(ões), sorteadas a cada comentário</p>` : ""}`;
+
+  const direto = !$("#f_dm").checked || !dmTexto ? `<p class="nada">Sem direct.</p>` : (
+    bt && url
+      ? `<div class="corpo"><div class="cartao">
+           <div class="txt">${esc(dmTexto)}</div>
+           <div class="bt">${esc(bt)}</div></div>
+           <span class="quem">botão abre ${esc(url.replace(/^https?:\/\//,"").slice(0,34))}…</span></div>`
+      : `<div class="corpo"><div class="bolha">${esc(dmTexto)}</div></div>`);
+
+  alvo.innerHTML = `
+    <div class="card">
+      <h4>No comentário</h4>
+      <div class="fone">${comentario}</div>
+    </div>
+    <div class="card">
+      <h4>No direct</h4>
+      <div class="fone">
+        <div class="topo"><span class="ava"></span>pedrorochadm1</div>
+        ${direto}
+      </div>
+    </div>`;
 }
 
 function pintarEscolhaPost(){
@@ -263,6 +396,9 @@ async function salvar(){
   const dados = coletar();
   if (!dados.palavras.length) return aviso("Falta a palavra-chave.");
   if (dados.escopo === "midia" && !dados.midia_id) return aviso("Escolha o post.");
+  if (!revisar()) return aviso("Tem campo passando do limite. Corrija o que está em vermelho.");
+  if (dados.respostas_sem_dm.some(r => /https?:\/\//i.test(r)))
+    return aviso("Link em resposta de comentário não é permitido. Link só vai no direct.");
   const salva = atual.id
     ? await api("/insta/api/automacoes/"+atual.id, {method:"PUT", body: JSON.stringify(dados)})
     : await api("/insta/api/automacoes", {method:"POST", body: JSON.stringify(dados)});
