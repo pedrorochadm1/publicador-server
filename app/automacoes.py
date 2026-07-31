@@ -342,6 +342,9 @@ LIMITE_DM_HORA = 690
 DESCANSOS_MIN = (3, 8, 15, 30, 45, 60)
 _DESCANSO_ATE: dict = {"quando": None, "nivel": 0}
 _RITMO: dict = {"minuto": LIMITE_MINUTO_BASE, "limpos": 0}
+# pulso do marca-passo: sem isso não dá pra saber se a thread está viva ou morreu calada
+_PULSO: dict = {"quando": None, "voltas": 0}
+_THREAD: dict = {"t": None}
 
 
 def ritmo_atual() -> dict:
@@ -710,6 +713,7 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
 
 def rodar():
     """Varre os comentários dos posts alvo das automações ativas (job do scheduler)."""
+    iniciar_marca_passo()          # religa o marca-passo se ele tiver morrido
     for a in listar(so_ativas=True):
         try:
             if a["escopo"] == "proximo" and not a.get("midia_id"):
@@ -865,17 +869,34 @@ def limpar_envenenados() -> int:
     return cur.rowcount
 
 
+def marca_passo_vivo() -> dict:
+    t = _THREAD["t"]
+    return {"vivo": bool(t and t.is_alive()),
+            "ultimo_pulso": _PULSO["quando"].isoformat() if _PULSO["quando"] else None,
+            "voltas": _PULSO["voltas"]}
+
+
 def iniciar_marca_passo():
-    """Thread dedicada ao direct. Não depende do APScheduler: tick curto lá é descartado
-    como misfire quando o worker está ocupado varrendo comentário, e a fila não anda."""
+    """Thread dedicada ao direct, com pulso e auto-religa.
+
+    Não fica no APScheduler porque tick curto lá é descartado como misfire quando o
+    worker está ocupado varrendo comentário. E como uma thread que morre calada já custou
+    caro aqui, quem chama `rodar` confere o pulso e religa se preciso.
+    """
+    t = _THREAD["t"]
+    if t and t.is_alive():
+        return
+
     def laco():
         for tarefa in (limpar_envenenados, garantir_webhook):
             try:
                 tarefa()
             except Exception as e:  # noqa: BLE001
                 print(f"[automacoes] {tarefa.__name__} falhou: {e}")
-        print(f"[automacoes] marca-passo do direct ligado ({_RITMO['s']:.1f}s entre envios).")
+        print(f"[automacoes] marca-passo do direct ligado ({_RITMO['minuto']}/min).")
         while True:
+            _PULSO["quando"] = datetime.now(timezone.utc)
+            _PULSO["voltas"] += 1
             try:
                 pode, motivo = _pode_enviar_dm()
                 if pode:
@@ -890,7 +911,10 @@ def iniciar_marca_passo():
             except Exception as e:  # noqa: BLE001
                 print(f"[automacoes] marca-passo tropeçou: {e}")
                 time.sleep(5)
-    threading.Thread(target=laco, name="direct", daemon=True).start()
+
+    novo_t = threading.Thread(target=laco, name="direct", daemon=True)
+    _THREAD["t"] = novo_t
+    novo_t.start()
 
 
 def marcar_fora_da_janela() -> int:
