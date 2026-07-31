@@ -485,10 +485,19 @@ async function carregar(){
 
 async function inicio(){
   const st = await api("/insta/api/status");
-  $("#status").textContent = st.ligado
-    ? `verificando a cada ${st.polling_segundos}s${st.token_dias!=null ? " · token "+st.token_dias+"d":""}`
-    : "automações desligadas no servidor";
-  $("#status").className = "chip" + (st.ligado ? " on" : "");
+  // o que importa saber de relance: chega na hora ou depende da varredura?
+  const partes = [];
+  if (!st.ligado) partes.push("automações desligadas no servidor");
+  else if (st.webhook && st.webhook.ativo) partes.push("tempo real");
+  else partes.push(`sem webhook · varrendo a cada ${st.polling_segundos}s`);
+  if (st.ligado && st.marca_passo && !st.marca_passo.vivo) partes.push("envio parado");
+  if (st.token_dias != null) partes.push(`token ${st.token_dias}d`);
+  $("#status").textContent = partes.join(" · ");
+  const saudavel = st.ligado && st.webhook && st.webhook.ativo && st.marca_passo && st.marca_passo.vivo;
+  $("#status").className = "chip" + (saudavel ? " on" : "");
+  $("#status").title = st.ligado && st.webhook && st.webhook.ativo
+    ? `Comentário chega pela Meta no instante em que é escrito (${st.webhook.callback}). A varredura a cada ${st.polling_segundos}s fica só de rede de segurança.`
+    : "";
   await carregar();
   try { midias = await api("/insta/api/midias"); } catch(e){ midias = []; }
   if (automacoes.length) selecionar(automacoes[0]); else pintarEditor();

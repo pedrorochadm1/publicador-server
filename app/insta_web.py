@@ -199,8 +199,8 @@ def api_status(insta_sess: str | None = Cookie(default=None)):
         "token_dias": token_status(),
         "polling_segundos": config.AUTOMACOES_POLL_SEGUNDOS,
         "ligado": config.AUTOMACOES_ATIVAS,
-        "webhook_configurado": bool(config.IG_WEBHOOK_VERIFY_TOKEN),
-        "webhook_url": f"{config.PUBLIC_BASE_URL}/webhook/instagram" if config.PUBLIC_BASE_URL else "",
+        "webhook": automacoes.webhook_status(),
+        "marca_passo": automacoes.marca_passo_vivo(),
     }
 
 

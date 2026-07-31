@@ -367,7 +367,7 @@ def _frear():
 
 
 def _registrar_envio():
-    """Grava o envio em disco: se o container reiniciar, o ritmo continua de onde parou."""
+    """Grava a CHAMADA em disco: se o container reiniciar, o ritmo continua de onde parou."""
     c = db.conn()
     c.execute("INSERT INTO dm_envios (quando) VALUES (?)", (datetime.now(timezone.utc).isoformat(),))
     c.execute("DELETE FROM dm_envios WHERE quando < ?",
@@ -501,6 +501,9 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
     def _enviar(payload: dict) -> requests.Response | None:
         """Primeira resposta boa. Devolve None quando nenhum caminho aceitou."""
         for rotulo, url, token in _tentativas():
+            # conta ANTES de chamar: o limite da Meta é por chamada, não por entrega.
+            # Contar só o sucesso deixava uma fila de falhas passar batido pelos tetos.
+            _registrar_envio()
             r = requests.post(
                 url, params={"access_token": token},
                 json={"recipient": {"comment_id": comment_id}, "message": payload},
@@ -510,7 +513,6 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
                 if _HOST_BOM["url"] != url:
                     _HOST_BOM["url"] = url
                     print(f"[automacoes] direct sai por {rotulo} ({url}).")
-                _registrar_envio()
                 _acelerar()
                 _DESCANSO_ATE["nivel"] = 0     # passou: o castigo acabou, zera a escada
                 return r
@@ -755,12 +757,12 @@ PENDENTES = ("na-fila", "erro", "aguardando-limite")
 
 
 def enviar_fila() -> int:
-    """Marca-passo do direct: manda UM por vez, respeitando o intervalo.
+    """Atende UMA pessoa por vez: direct primeiro, resposta pública logo depois.
 
-    Ordem de prioridade, que é a que o Pedro pediu:
+    Ordem de prioridade:
       1. quem acabou de comentar (evento mais recente primeiro)
-      2. o que sobrou de trás, conforme a fila da frente esvazia
-    Como roda a cada poucos segundos, a fila anda sozinha sem nunca fazer rajada.
+      2. o que sobrou de trás, conforme a frente esvazia
+    Quem segura o ritmo é _pode_enviar_dm; aqui é um por chamada.
     """
     pode, motivo = _pode_enviar_dm()
     if not pode:
@@ -844,6 +846,34 @@ def garantir_webhook() -> dict:
     out["ok"] = out.get("assinatura_app") == "ok"
     print(f"[automacoes] webhook: {out}")
     return out
+
+
+_WEBHOOK_CACHE: dict = {"quando": None, "dados": None}
+
+
+def webhook_status(forcar: bool = False) -> dict:
+    """Se a Meta está mesmo entregando comentário na hora. Pergunta pra ela, não pro .env:
+    ter verify_token configurado não significa assinatura ativa (foi o caso até hoje)."""
+    agora = datetime.now(timezone.utc)
+    if not forcar and _WEBHOOK_CACHE["quando"] and agora - _WEBHOOK_CACHE["quando"] < timedelta(minutes=10):
+        return _WEBHOOK_CACHE["dados"]
+    dados = {"ativo": False, "campos": [], "callback": ""}
+    try:
+        r = requests.get(
+            f"{config.GRAPH}/{config.FACEBOOK_APP_ID}/subscriptions",
+            params={"access_token": f"{config.FACEBOOK_APP_ID}|{config.FACEBOOK_APP_SECRET}"},
+            timeout=20,
+        )
+        for s in (r.json().get("data", []) if r.status_code < 400 else []):
+            if s.get("object") != "instagram":
+                continue
+            campos = [f.get("name") for f in s.get("fields", [])]
+            dados = {"ativo": bool(s.get("active")) and "comments" in campos,
+                     "campos": campos, "callback": s.get("callback_url", "")}
+    except Exception as e:  # noqa: BLE001
+        dados["erro"] = str(e)
+    _WEBHOOK_CACHE.update({"quando": agora, "dados": dados})
+    return dados
 
 
 def limpar_envenenados() -> int:
