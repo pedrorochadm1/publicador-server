@@ -683,31 +683,13 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
     if not _reservar_comentario(a["id"], comentario, midia_id):
         return False
 
-    dm_status = ""
-    erros = []
-
-    # O direct NÃO sai daqui: entra na fila e o marca-passo (enviar_fila) manda no ritmo.
-    # Assim a resposta pública sai na hora pra quem acabou de comentar, que é o que a
-    # pessoa vê, e o direct nunca vira rajada em cima da Meta.
-    if a["enviar_dm"] and a["dm_texto"]:
-        quando = _parse_ts(comentario.get("timestamp"))
-        dm_status = ("fora-da-janela"
-                     if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS)
-                     else "na-fila")
-
-    # 2º a resposta pública, que sai na hora. O direct vai pela fila (enviar_fila),
-    # então a resposta é sempre a mesma: não existe versão "sem direct".
-    resposta = ""
-    if a["responder_publico"] and a["respostas"]:
-        resposta = random.choice(a["respostas"])
-        try:
-            responder_comentario(comentario["id"], resposta)
-        except Exception as e:  # noqa: BLE001
-            erros.append(str(e))
-            resposta = ""
-
-    _fechar_evento(comentario["id"], resposta, dm_status, " | ".join(erros))
-    print(f"[automacoes] #{a['id']} @{usuario}: resposta={bool(resposta)} dm={dm_status} {erros or ''}")
+    # NADA sai daqui: o comentário entra na fila e o marca-passo trata a pessoa inteira.
+    # A ordem importa e é inegociável: o direct PRIMEIRO, a resposta pública depois. Se a
+    # resposta pública sai antes, a Meta passa a considerar o comentário já respondido e
+    # recusa a private reply com (#-1) 2534023.
+    quando = _parse_ts(comentario.get("timestamp"))
+    fora = quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS)
+    _fechar_evento(comentario["id"], "", "fora-da-janela" if fora else "na-fila", "")
     return True
 
 
@@ -781,13 +763,25 @@ def enviar_fila() -> int:
     if not a or not a["enviar_dm"] or not a["dm_texto"]:
         _atualizar_dm(e["comment_id"], "sem-direct")
         return 0
+    # 1º o direct. Só depois a resposta pública: invertido, a Meta recusa a private reply.
     try:
         status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
     except Exception as err:  # noqa: BLE001
         _atualizar_dm(e["comment_id"], _definitivo(str(err)) or "erro", str(err))
         return 0
     _atualizar_dm(e["comment_id"], status)
-    print(f"[automacoes] direct pra @{e['usuario']} ({status}).")
+
+    if a["responder_publico"] and a["respostas"] and not (e["resposta"] or ""):
+        resposta = random.choice(a["respostas"])
+        try:
+            responder_comentario(e["comment_id"], resposta)
+            c = db.conn()
+            c.execute("UPDATE automacao_eventos SET resposta = ? WHERE comment_id = ?",
+                      (resposta, e["comment_id"]))
+            c.commit()
+        except Exception as err:  # noqa: BLE001
+            print(f"[automacoes] resposta pública de @{e['usuario']} falhou: {err}")
+    print(f"[automacoes] @{e['usuario']}: direct {status} + resposta pública.")
     return 1
 
 
