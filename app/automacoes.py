@@ -319,6 +319,49 @@ def responder_comentario(comment_id: str, mensagem: str):
 LIMITE_TEXTO_BOTAO = 640
 LIMITE_TITULO_BOTAO = 20
 
+# Credenciais da Página, resolvidas uma vez e reaproveitadas
+_PAGINA: dict = {"id": "", "token": "", "quando": None}
+_PAGINA_VALIDA_H = 6
+
+
+def _credenciais_pagina() -> tuple[str, str]:
+    """(page_id, page_token) da Página ligada à conta do Instagram.
+
+    O envio de mensagem no graph.facebook.com é do Messenger Platform: vai pro ID da
+    PÁGINA com TOKEN DA PÁGINA. Mandar pro id do Instagram com token de usuário devolve
+    "(#3) Application does not have the capability to make this API call" — foi o que
+    derrubou todos os directs até aqui. Comentário é o contrário: continua no id do
+    Instagram com o token de usuário.
+    """
+    agora = datetime.now(timezone.utc)
+    if _PAGINA["token"] and _PAGINA["quando"] and agora - _PAGINA["quando"] < timedelta(hours=_PAGINA_VALIDA_H):
+        return _PAGINA["id"], _PAGINA["token"]
+
+    r = requests.get(
+        f"{config.GRAPH}/me/accounts",
+        params={"fields": "id,name,access_token,instagram_business_account",
+                "access_token": get_token()},
+        timeout=30,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(f"não consegui listar as Páginas: {_erro_graph(r)}")
+    paginas = r.json().get("data", [])
+    escolhida = next(
+        (p for p in paginas
+         if (p.get("instagram_business_account") or {}).get("id") == config.INSTAGRAM_BUSINESS_ID),
+        None,
+    )
+    if not escolhida:
+        nomes = ", ".join(p.get("name", "?") for p in paginas) or "nenhuma"
+        raise RuntimeError(
+            f"nenhuma Página ligada ao Instagram {config.INSTAGRAM_BUSINESS_ID} (Páginas visíveis: {nomes})")
+    if not escolhida.get("access_token"):
+        raise RuntimeError(f"a Página {escolhida.get('name')} veio sem token (falta pages_show_list?)")
+
+    _PAGINA.update({"id": escolhida["id"], "token": escolhida["access_token"], "quando": agora})
+    print(f"[automacoes] direct vai pela Página {escolhida.get('name')} ({escolhida['id']}).")
+    return _PAGINA["id"], _PAGINA["token"]
+
 
 def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str = ""):
     """Private reply: DM pra quem comentou. Com botão quando há link.
@@ -334,10 +377,12 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
     O template de botão aceita 640 chars de texto (contra 80 do título do genérico),
     então some também a gambiarra de partir a mensagem em duas quando passava de 80.
     """
+    page_id, page_token = _credenciais_pagina()
+
     def _enviar(payload: dict) -> requests.Response:
         return requests.post(
-            f"{config.GRAPH}/{config.INSTAGRAM_BUSINESS_ID}/messages",
-            params={"access_token": get_token()},
+            f"{config.GRAPH}/{page_id}/messages",
+            params={"access_token": page_token},
             json={"recipient": {"comment_id": comment_id}, "message": payload},
             timeout=30,
         )
