@@ -319,48 +319,16 @@ def responder_comentario(comment_id: str, mensagem: str):
 LIMITE_TEXTO_BOTAO = 640
 LIMITE_TITULO_BOTAO = 20
 
-# Credenciais da Página, resolvidas uma vez e reaproveitadas
-_PAGINA: dict = {"id": "", "token": "", "quando": None}
-_PAGINA_VALIDA_H = 6
-
-
-def _credenciais_pagina() -> tuple[str, str]:
-    """(page_id, page_token) da Página ligada à conta do Instagram.
-
-    O envio de mensagem no graph.facebook.com é do Messenger Platform: vai pro ID da
-    PÁGINA com TOKEN DA PÁGINA. Mandar pro id do Instagram com token de usuário devolve
-    "(#3) Application does not have the capability to make this API call" — foi o que
-    derrubou todos os directs até aqui. Comentário é o contrário: continua no id do
-    Instagram com o token de usuário.
-    """
-    agora = datetime.now(timezone.utc)
-    if _PAGINA["token"] and _PAGINA["quando"] and agora - _PAGINA["quando"] < timedelta(hours=_PAGINA_VALIDA_H):
-        return _PAGINA["id"], _PAGINA["token"]
-
-    r = requests.get(
-        f"{config.GRAPH}/me/accounts",
-        params={"fields": "id,name,access_token,instagram_business_account",
-                "access_token": get_token()},
-        timeout=30,
-    )
-    if r.status_code >= 400:
-        raise RuntimeError(f"não consegui listar as Páginas: {_erro_graph(r)}")
-    paginas = r.json().get("data", [])
-    escolhida = next(
-        (p for p in paginas
-         if (p.get("instagram_business_account") or {}).get("id") == config.INSTAGRAM_BUSINESS_ID),
-        None,
-    )
-    if not escolhida:
-        nomes = ", ".join(p.get("name", "?") for p in paginas) or "nenhuma"
-        raise RuntimeError(
-            f"nenhuma Página ligada ao Instagram {config.INSTAGRAM_BUSINESS_ID} (Páginas visíveis: {nomes})")
-    if not escolhida.get("access_token"):
-        raise RuntimeError(f"a Página {escolhida.get('name')} veio sem token (falta pages_show_list?)")
-
-    _PAGINA.update({"id": escolhida["id"], "token": escolhida["access_token"], "quando": agora})
-    print(f"[automacoes] direct vai pela Página {escolhida.get('name')} ({escolhida['id']}).")
-    return _PAGINA["id"], _PAGINA["token"]
+_VERSAO = config.GRAPH.rstrip("/").rsplit("/", 1)[-1]
+# Hosts de envio, na ordem em que valem a pena tentar.
+#   graph.instagram.com — Instagram API with Instagram Login. É o caso desta conta: o
+#     token é Instagram-scoped e /me/accounts volta vazio (não existe Página do Facebook).
+#     É também o host que o OpenReply usa em produção pra private reply.
+#   graph.facebook.com  — só serve quando existe Página ligada. Fica de segundo caminho
+#     pra não quebrar se a conta virar Business com Página depois.
+HOSTS_DM = (f"https://graph.instagram.com/{_VERSAO}", config.GRAPH)
+# Host que funcionou, pra não pagar a tentativa perdida em todo envio
+_HOST_BOM: dict = {"url": ""}
 
 
 def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str = ""):
@@ -376,19 +344,34 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
 
     O template de botão aceita 640 chars de texto (contra 80 do título do genérico),
     então some também a gambiarra de partir a mensagem em duas quando passava de 80.
-    """
-    page_id, page_token = _credenciais_pagina()
 
-    def _enviar(payload: dict) -> requests.Response:
-        return requests.post(
-            f"{config.GRAPH}/{page_id}/messages",
-            params={"access_token": page_token},
-            json={"recipient": {"comment_id": comment_id}, "message": payload},
-            timeout=30,
-        )
+    E o envio vai pro host certo (ver HOSTS_DM): nesta conta é o graph.instagram.com.
+    Pelo graph.facebook.com a resposta é "(#3) Application does not have the capability",
+    porque lá mensagem é Messenger Platform e exige Página, que esta conta não tem.
+    """
+    erros: list[str] = []
+
+    def _enviar(payload: dict) -> requests.Response | None:
+        """Primeira resposta boa. Devolve None quando nenhum host aceitou."""
+        hosts = ([_HOST_BOM["url"]] if _HOST_BOM["url"] else []) + [h for h in HOSTS_DM if h != _HOST_BOM["url"]]
+        ultima = None
+        for host in hosts:
+            ultima = requests.post(
+                f"{host}/{config.INSTAGRAM_BUSINESS_ID}/messages",
+                params={"access_token": get_token()},
+                json={"recipient": {"comment_id": comment_id}, "message": payload},
+                timeout=30,
+            )
+            if ultima.status_code < 400:
+                if _HOST_BOM["url"] != host:
+                    _HOST_BOM["url"] = host
+                    print(f"[automacoes] direct sai pelo {host}.")
+                return ultima
+            erros.append(f"{host.split('//')[1].split('/')[0]}: {_erro_graph(ultima)}")
+        return None
 
     if botao_url and botao_texto:
-        r = _enviar({
+        if _enviar({
             "attachment": {
                 "type": "template",
                 "payload": {
@@ -401,21 +384,17 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
                     }],
                 },
             }
-        })
-        if r.status_code < 400:
+        }):
             return "ok"
-        motivo = _erro_graph(r)
         # último recurso: link no texto. Só chega aqui se o template foi recusado,
         # e recusa é validação — não gasta a private reply.
-        r2 = _enviar({"text": f"{texto}\n{botao_url}"})
-        if r2.status_code >= 400:
-            raise RuntimeError(f"DM falhou: {motivo} | fallback: {_erro_graph(r2)}")
-        return "ok-sem-botao"
+        if _enviar({"text": f"{texto}\n{botao_url}"}):
+            return "ok-sem-botao"
+        raise RuntimeError("DM falhou: " + " | ".join(erros))
 
-    r = _enviar({"text": f"{texto}\n{botao_url}".strip()})
-    if r.status_code >= 400:
-        raise RuntimeError(f"DM falhou: {_erro_graph(r)}")
-    return "ok"
+    if _enviar({"text": f"{texto}\n{botao_url}".strip()}):
+        return "ok"
+    raise RuntimeError("DM falhou: " + " | ".join(erros))
 
 
 def buscar_midias(limite: int = 10) -> list[dict]:
