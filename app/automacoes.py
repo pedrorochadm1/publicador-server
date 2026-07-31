@@ -331,8 +331,10 @@ LIMITE_TITULO_BOTAO = 20
 INTERVALO_BASE_S = 5.2          # 5,2s => ~690/h, logo abaixo do teto de 750 da Meta
 INTERVALO_TETO_S = 15.0
 LIMITE_DM_HORA = 690
-DESCANSO_APOS_613 = timedelta(minutes=3)
-_DESCANSO_ATE: dict = {"quando": None}
+# Recuo depois de (#613). Cresce a cada castigo seguido: insistir de 3 em 3 minutos
+# mantém a conta marcada. Zera assim que um direct passa.
+DESCANSOS_MIN = (3, 8, 15, 30, 45, 60)
+_DESCANSO_ATE: dict = {"quando": None, "nivel": 0}
 # o ritmo cede quando a Meta reclama e volta a acelerar sozinho depois de uma sequência limpa
 _RITMO: dict = {"s": INTERVALO_BASE_S, "limpos": 0}
 
@@ -392,8 +394,12 @@ def enviados_na_hora() -> int:
 
 def _tomar_folego():
     _frear()
-    _DESCANSO_ATE["quando"] = datetime.now(timezone.utc) + DESCANSO_APOS_613
-    print(f"[automacoes] (#613) limite da Meta. Direct pausado até {_DESCANSO_ATE['quando']:%H:%M:%S}.")
+    n = min(_DESCANSO_ATE["nivel"], len(DESCANSOS_MIN) - 1)
+    minutos = DESCANSOS_MIN[n]
+    _DESCANSO_ATE["nivel"] = n + 1
+    _DESCANSO_ATE["quando"] = datetime.now(timezone.utc) + timedelta(minutes=minutos)
+    print(f"[automacoes] (#613) limite da Meta. Direct pausado {minutos} min, "
+          f"até {_DESCANSO_ATE['quando']:%H:%M:%S}.")
 
 _VERSAO = config.GRAPH.rstrip("/").rsplit("/", 1)[-1]
 # Hosts de envio, na ordem em que valem a pena tentar.
@@ -495,6 +501,7 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
                     print(f"[automacoes] direct sai por {rotulo} ({url}).")
                 _registrar_envio()
                 _acelerar()
+                _DESCANSO_ATE["nivel"] = 0     # passou: o castigo acabou, zera a escada
                 return r
             motivo = _erro_graph(r)
             if "613" in motivo:
