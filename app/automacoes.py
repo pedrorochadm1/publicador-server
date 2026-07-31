@@ -294,10 +294,16 @@ _CACHE_USERNAME: str | None = None
 
 
 def _erro_graph(r: requests.Response) -> str:
+    """Erro da Graph com code/subcode juntos — sem eles não dá pra saber por que falhou."""
     try:
-        return r.json()["error"]["message"]
+        e = r.json()["error"]
     except Exception:  # noqa: BLE001
         return f"HTTP {r.status_code}: {r.text[:200]}"
+    partes = [e.get("message") or "", e.get("error_user_msg") or ""]
+    if e.get("code") is not None:
+        sub = e.get("error_subcode")
+        partes.append(f"code {e['code']}" + (f"/{sub}" if sub else ""))
+    return " | ".join(p for p in partes if p)
 
 
 def responder_comentario(comment_id: str, mensagem: str):
@@ -309,12 +315,24 @@ def responder_comentario(comment_id: str, mensagem: str):
         raise RuntimeError(f"resposta pública falhou: {_erro_graph(r)}")
 
 
+# Limites do template de botão da Meta
+LIMITE_TEXTO_BOTAO = 640
+LIMITE_TITULO_BOTAO = 20
+
+
 def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str = ""):
     """Private reply: DM pra quem comentou. Com botão quando há link.
 
-    O template genérico é o formato que renderiza botão no Instagram. Se a conta/app
-    não aceitar template, cai pra mensagem de texto com o link no corpo (nunca fica
-    sem responder).
+    Duas regras da Meta mandam no formato deste envio:
+
+    1. A private reply é UMA mensagem por comentário, pra sempre. Então nunca fazer
+       duas chamadas no caminho feliz: a primeira gasta a cota e a segunda morre.
+    2. O formato com botão é o template de BOTÃO (`template_type: "button"`), não o
+       genérico. O genérico é card de carrossel e a private reply recusa — era por
+       isso que o botão nunca chegava e o link caía como texto puro.
+
+    O template de botão aceita 640 chars de texto (contra 80 do título do genérico),
+    então some também a gambiarra de partir a mensagem em duas quando passava de 80.
     """
     def _enviar(payload: dict) -> requests.Response:
         return requests.post(
@@ -325,22 +343,16 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
         )
 
     if botao_url and botao_texto:
-        # title do template genérico tem limite de 80 caracteres
-        if len(texto) > 80:
-            r_txt = _enviar({"text": texto})
-            if r_txt.status_code >= 400:
-                raise RuntimeError(f"DM falhou: {_erro_graph(r_txt)}")
-            titulo = botao_texto
-        else:
-            titulo = texto
         r = _enviar({
             "attachment": {
                 "type": "template",
                 "payload": {
-                    "template_type": "generic",
-                    "elements": [{
-                        "title": titulo,
-                        "buttons": [{"type": "web_url", "url": botao_url, "title": botao_texto[:20]}],
+                    "template_type": "button",
+                    "text": texto[:LIMITE_TEXTO_BOTAO],
+                    "buttons": [{
+                        "type": "web_url",
+                        "url": botao_url,
+                        "title": botao_texto[:LIMITE_TITULO_BOTAO],
                     }],
                 },
             }
@@ -348,7 +360,8 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
         if r.status_code < 400:
             return "ok"
         motivo = _erro_graph(r)
-        # sem botão: manda o link no texto
+        # último recurso: link no texto. Só chega aqui se o template foi recusado,
+        # e recusa é validação — não gasta a private reply.
         r2 = _enviar({"text": f"{texto}\n{botao_url}"})
         if r2.status_code >= 400:
             raise RuntimeError(f"DM falhou: {motivo} | fallback: {_erro_graph(r2)}")
