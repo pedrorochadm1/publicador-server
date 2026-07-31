@@ -137,9 +137,14 @@ def iniciar():
             automacoes.rodar, "interval", seconds=config.AUTOMACOES_POLL_SEGUNDOS,
             id="automacoes", max_instances=1, coalesce=True,
         )
+        # marca-passo do direct: um envio por vez, no ritmo de INTERVALO_DM_S
         _sched.add_job(
-            automacoes.retentar_dms, "interval", minutes=5,
+            automacoes.enviar_fila, "interval", seconds=automacoes.INTERVALO_DM_S,
             id="automacoes_dm", max_instances=1, coalesce=True,
+        )
+        _sched.add_job(
+            automacoes.marcar_fora_da_janela, "interval", hours=6,
+            id="automacoes_janela", max_instances=1, coalesce=True,
         )
         print(f"[scheduler] Automações de comentário ligadas (a cada {config.AUTOMACOES_POLL_SEGUNDOS}s).")
     _sched.start()

@@ -156,7 +156,7 @@ def api_testar(dados: dict = Body(...), insta_sess: str | None = Cookie(default=
 def api_rodar(insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
     automacoes.rodar()
-    return {"ok": True, "dms_pendentes_enviados": automacoes.retentar_dms()}
+    return {"ok": True, "direct_na_fila": automacoes.pendentes_na_fila()}
 
 
 @router.get("/insta/api/diagnostico")

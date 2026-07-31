@@ -84,6 +84,9 @@ def _init():
         )
         """
     )
+    # marca-passo do direct: um registro por envio, pra segurar o ritmo mesmo após reinício
+    c.execute("CREATE TABLE IF NOT EXISTS dm_envios (id INTEGER PRIMARY KEY AUTOINCREMENT, quando TEXT NOT NULL)")
+    c.execute("CREATE INDEX IF NOT EXISTS ix_dm_envios_quando ON dm_envios (quando)")
     cols = {r[1] for r in c.execute("PRAGMA table_info(automacoes)").fetchall()}
     if "respostas_sem_dm" not in cols:
         c.execute("ALTER TABLE automacoes ADD COLUMN respostas_sem_dm TEXT NOT NULL DEFAULT '[]'")
@@ -320,26 +323,42 @@ def responder_comentario(comment_id: str, mensagem: str):
 LIMITE_TEXTO_BOTAO = 640
 LIMITE_TITULO_BOTAO = 20
 
-# A Meta aceita 750 private replies por hora. Ficamos abaixo disso de propósito: passar
-# do teto devolve (#613) e o comentário volta pra fila, o que só gasta chamada à toa.
+# Ritmo do direct. A Meta aceita 750 private replies por hora; mandamos 1 a cada 6s, que
+# dá 600/h com folga e, principalmente, sem rajada — rajada é o que dispara o (#613).
+# O teto por hora fica como segunda trava, caso o intervalo escorregue.
+INTERVALO_DM_S = 6
 LIMITE_DM_HORA = 600
-DESCANSO_APOS_613 = timedelta(minutes=5)
-_ENVIOS: list[datetime] = []
+DESCANSO_APOS_613 = timedelta(minutes=3)
 _DESCANSO_ATE: dict = {"quando": None}
 
 
-def _pode_enviar_dm() -> bool:
-    """Freio do envio. A resposta pública não passa por aqui: ela tem limite próprio,
-    bem mais folgado, e é o que segura a experiência de quem comentou."""
+def _registrar_envio():
+    """Grava o envio em disco: se o container reiniciar, o ritmo continua de onde parou."""
+    c = db.conn()
+    c.execute("INSERT INTO dm_envios (quando) VALUES (?)", (datetime.now(timezone.utc).isoformat(),))
+    c.execute("DELETE FROM dm_envios WHERE quando < ?",
+              ((datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),))
+    c.commit()
+
+
+def _pode_enviar_dm() -> tuple[bool, str]:
+    """(pode, motivo). A resposta pública NÃO passa por aqui: ela tem limite próprio e
+    bem mais folgado, e é ela que faz quem comentou ser atendido na hora."""
     agora = datetime.now(timezone.utc)
     if _DESCANSO_ATE["quando"] and agora < _DESCANSO_ATE["quando"]:
-        return False
-    _ENVIOS[:] = [t for t in _ENVIOS if agora - t < timedelta(hours=1)]
-    return len(_ENVIOS) < LIMITE_DM_HORA
-
-
-def _registrar_envio():
-    _ENVIOS.append(datetime.now(timezone.utc))
+        return False, "descansando"
+    _init()
+    c = db.conn()
+    ultimo = c.execute("SELECT MAX(quando) FROM dm_envios").fetchone()[0]
+    if ultimo:
+        faltam = INTERVALO_DM_S - (agora - datetime.fromisoformat(ultimo)).total_seconds()
+        if faltam > 0:
+            return False, "intervalo"
+    corte = (agora - timedelta(hours=1)).isoformat()
+    na_hora = c.execute("SELECT COUNT(*) FROM dm_envios WHERE quando >= ?", (corte,)).fetchone()[0]
+    if na_hora >= LIMITE_DM_HORA:
+        return False, "teto-da-hora"
+    return True, ""
 
 
 def _tomar_folego():
@@ -636,22 +655,16 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
     dm_status = ""
     erros = []
 
-    # 1º o direct: a resposta pública depende de ele ter saído ou não.
+    # O direct NÃO sai daqui: entra na fila e o marca-passo (enviar_fila) manda no ritmo.
+    # Assim a resposta pública sai na hora pra quem acabou de comentar, que é o que a
+    # pessoa vê, e o direct nunca vira rajada em cima da Meta.
     if a["enviar_dm"] and a["dm_texto"]:
         quando = _parse_ts(comentario.get("timestamp"))
-        if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS):
-            dm_status = "fora-da-janela"
-        elif not _pode_enviar_dm():
-            # segura o direct sem segurar a resposta pública; a fila manda depois
-            dm_status = "aguardando-limite"
-        else:
-            try:
-                dm_status = enviar_dm(comentario["id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
-            except Exception as e:  # noqa: BLE001
-                dm_status = _definitivo(str(e)) or "erro"
-                erros.append(str(e))
+        dm_status = ("fora-da-janela"
+                     if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS)
+                     else "na-fila")
 
-    # 2º a resposta pública. Direct que falhou fica na fila e sai sozinho (retentar_dms),
+    # 2º a resposta pública, que sai na hora. O direct vai pela fila (enviar_fila),
     # então a resposta é sempre a mesma: não existe versão "sem direct".
     resposta = ""
     if a["responder_publico"] and a["respostas"]:
@@ -704,52 +717,73 @@ def _definitivo(erro: str) -> str:
     return ""
 
 
-def retentar_dms(limite: int = 40) -> int:
-    """Repassa quem comentou e não recebeu o direct, seja porque falhou, seja porque a
-    tentativa nem chegou a acontecer (evento reservado e o processo caiu no meio).
+# Estados que ainda esperam direct. 'na-fila' é o normal; os outros são tentativa que
+# não vingou e continua valendo enquanto estiver dentro dos 7 dias.
+PENDENTES = ("na-fila", "erro", "aguardando-limite")
 
-    A janela de private reply é de 7 dias; passou disso, marca como perdido e para.
-    Se a resposta pública também ficou faltando, ela sai junto — quem comentou não pode
-    terminar sem nada.
+
+def enviar_fila() -> int:
+    """Marca-passo do direct: manda UM por vez, respeitando o intervalo.
+
+    Ordem de prioridade, que é a que o Pedro pediu:
+      1. quem acabou de comentar (evento mais recente primeiro)
+      2. o que sobrou de trás, conforme a fila da frente esvazia
+    Como roda a cada poucos segundos, a fila anda sozinha sem nunca fazer rajada.
     """
+    pode, motivo = _pode_enviar_dm()
+    if not pode:
+        return 0
     _init()
     corte = (datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)).isoformat()
-    pendentes = db.conn().execute(
-        """SELECT * FROM automacao_eventos
-           WHERE dm_status IN ('erro', 'aguardando-limite') OR dm_status IS NULL OR dm_status = ''
-           ORDER BY id DESC LIMIT ?""",
-        (limite,),
-    ).fetchall()
-    enviados = 0
-    for e in pendentes:
-        if (e["quando"] or "") < corte:
-            _atualizar_dm(e["comment_id"], "fora-da-janela", e["erro"] or "")
-            continue
-        a = get(e["automacao_id"])
-        if not a or not a["enviar_dm"] or not a["dm_texto"]:
-            continue
-        if not _pode_enviar_dm():
-            break          # no teto da hora: o resto fica pra próxima rodada
-        try:
-            status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
-        except Exception as err:  # noqa: BLE001
-            _atualizar_dm(e["comment_id"], _definitivo(str(err)) or "erro", str(err))
-            continue
-        _atualizar_dm(e["comment_id"], status)
-        enviados += 1
+    marcas = ", ".join("?" for _ in PENDENTES)
+    e = db.conn().execute(
+        f"""SELECT * FROM automacao_eventos
+            WHERE (dm_status IN ({marcas}) OR dm_status IS NULL OR dm_status = '')
+              AND quando >= ?
+            ORDER BY id DESC LIMIT 1""",
+        (*PENDENTES, corte),
+    ).fetchone()
+    if not e:
+        return 0
 
-        if a["responder_publico"] and a["respostas"] and not (e["resposta"] or ""):
-            resposta = random.choice(a["respostas"])
-            try:
-                responder_comentario(e["comment_id"], resposta)
-                c = db.conn()
-                c.execute("UPDATE automacao_eventos SET resposta = ? WHERE comment_id = ?",
-                          (resposta, e["comment_id"]))
-                c.commit()
-            except Exception as err:  # noqa: BLE001
-                print(f"[automacoes] resposta pública atrasada de @{e['usuario']} falhou: {err}")
-        print(f"[automacoes] direct pendente de @{e['usuario']} saiu ({status}).")
-    return enviados
+    a = get(e["automacao_id"])
+    if not a or not a["enviar_dm"] or not a["dm_texto"]:
+        _atualizar_dm(e["comment_id"], "sem-direct")
+        return 0
+    try:
+        status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
+    except Exception as err:  # noqa: BLE001
+        _atualizar_dm(e["comment_id"], _definitivo(str(err)) or "erro", str(err))
+        return 0
+    _atualizar_dm(e["comment_id"], status)
+    print(f"[automacoes] direct pra @{e['usuario']} ({status}).")
+    return 1
+
+
+def marcar_fora_da_janela() -> int:
+    """Passou dos 7 dias, a Meta não aceita mais. Sai da fila pra não bater à toa."""
+    _init()
+    corte = (datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)).isoformat()
+    marcas = ", ".join("?" for _ in PENDENTES)
+    c = db.conn()
+    cur = c.execute(
+        f"""UPDATE automacao_eventos SET dm_status = 'fora-da-janela'
+            WHERE (dm_status IN ({marcas}) OR dm_status IS NULL OR dm_status = '') AND quando < ?""",
+        (*PENDENTES, corte),
+    )
+    c.commit()
+    return cur.rowcount
+
+
+def pendentes_na_fila() -> int:
+    _init()
+    marcas = ", ".join("?" for _ in PENDENTES)
+    corte = (datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)).isoformat()
+    return db.conn().execute(
+        f"""SELECT COUNT(*) FROM automacao_eventos
+            WHERE (dm_status IN ({marcas}) OR dm_status IS NULL OR dm_status = '') AND quando >= ?""",
+        (*PENDENTES, corte),
+    ).fetchone()[0]
 
 
 def tratar_webhook(payload: dict) -> int:
