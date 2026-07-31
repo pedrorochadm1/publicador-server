@@ -343,8 +343,8 @@ function revisar(){
   $("#c_url").textContent = url ? (urlOk ? "link válido" : "o link precisa começar com https://") : "";
   $("#c_url").className = "conta" + (url && !urlOk ? " estourou" : "");
   $("#f_url").classList.toggle("campo-ruim", !!url && !urlOk);
-  $("#salvar").disabled = !(ok && urlOk);
-  $("#salvar").style.opacity = ok && urlOk ? "" : ".5";
+  const bt = $("#criar");                  // só existe em automação nova
+  if (bt){ bt.disabled = !(ok && urlOk); bt.style.opacity = ok && urlOk ? "" : ".5"; }
   pintarPrevia();
   return ok && urlOk;
 }
