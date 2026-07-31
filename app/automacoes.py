@@ -328,33 +328,39 @@ LIMITE_TITULO_BOTAO = 20
 # Ritmo do direct. A Meta aceita 750 private replies por hora; mandamos 1 a cada 6s, que
 # dá 600/h com folga e, principalmente, sem rajada — rajada é o que dispara o (#613).
 # O teto por hora fica como segunda trava, caso o intervalo escorregue.
-INTERVALO_BASE_S = 5.2          # 5,2s => ~690/h, logo abaixo do teto de 750 da Meta
-INTERVALO_TETO_S = 15.0
+# Ritmo do direct. O objetivo é latência baixa, não cadência bonita: quem comentou tem
+# que receber em segundos. Então a regra é janela deslizante com rajada, não intervalo fixo.
+#   - até RAJADA envios seguidos, separados só por ESPACO_MIN_S (fila vazia = resposta na hora)
+#   - no máximo LIMITE_MINUTO em qualquer janela de 60s
+#   - no máximo LIMITE_DM_HORA em qualquer janela de 1h (teto da Meta é 750)
+# A janela de minuto é o que segura rajada, que é o que dispara (#613); o teto de hora é a
+# rede de segurança. Os dois cedem sozinhos quando a Meta reclama.
+ESPACO_MIN_S = 0.8
+RAJADA = 10
+LIMITE_MINUTO_BASE = 10
 LIMITE_DM_HORA = 690
-# Recuo depois de (#613). Cresce a cada castigo seguido: insistir de 3 em 3 minutos
-# mantém a conta marcada. Zera assim que um direct passa.
 DESCANSOS_MIN = (3, 8, 15, 30, 45, 60)
 _DESCANSO_ATE: dict = {"quando": None, "nivel": 0}
-# o ritmo cede quando a Meta reclama e volta a acelerar sozinho depois de uma sequência limpa
-_RITMO: dict = {"s": INTERVALO_BASE_S, "limpos": 0}
+_RITMO: dict = {"minuto": LIMITE_MINUTO_BASE, "limpos": 0}
 
 
-def INTERVALO_DM_S() -> float:  # noqa: N802 - lido pelo painel e pelo laço
-    return _RITMO["s"]
+def ritmo_atual() -> dict:
+    return {"por_minuto": _RITMO["minuto"], "por_hora": LIMITE_DM_HORA,
+            "espaco_min_s": ESPACO_MIN_S, "rajada": RAJADA}
 
 
 def _acelerar():
     _RITMO["limpos"] += 1
-    if _RITMO["limpos"] >= 120 and _RITMO["s"] > INTERVALO_BASE_S:
-        _RITMO["s"] = max(INTERVALO_BASE_S, _RITMO["s"] - 1)
+    if _RITMO["limpos"] >= 60 and _RITMO["minuto"] < LIMITE_MINUTO_BASE:
+        _RITMO["minuto"] += 1
         _RITMO["limpos"] = 0
-        print(f"[automacoes] ritmo de volta pra {_RITMO['s']:.1f}s entre directs.")
+        print(f"[automacoes] ritmo de volta pra {_RITMO['minuto']}/min.")
 
 
 def _frear():
-    _RITMO["s"] = min(INTERVALO_TETO_S, _RITMO["s"] + 2)
+    _RITMO["minuto"] = max(3, _RITMO["minuto"] - 2)
     _RITMO["limpos"] = 0
-    print(f"[automacoes] ritmo reduzido pra {_RITMO['s']:.1f}s entre directs.")
+    print(f"[automacoes] ritmo reduzido pra {_RITMO['minuto']}/min.")
 
 
 def _registrar_envio():
@@ -367,20 +373,22 @@ def _registrar_envio():
 
 
 def _pode_enviar_dm() -> tuple[bool, str]:
-    """(pode, motivo). A resposta pública NÃO passa por aqui: ela tem limite próprio e
-    bem mais folgado, e é ela que faz quem comentou ser atendido na hora."""
+    """(pode, motivo). A resposta pública sai logo depois do direct, no mesmo passo,
+    então quem comentou é atendido inteiro de uma vez."""
     agora = datetime.now(timezone.utc)
     if _DESCANSO_ATE["quando"] and agora < _DESCANSO_ATE["quando"]:
         return False, "descansando"
     _init()
     c = db.conn()
     ultimo = c.execute("SELECT MAX(quando) FROM dm_envios").fetchone()[0]
-    if ultimo:
-        faltam = _RITMO["s"] - (agora - datetime.fromisoformat(ultimo)).total_seconds()
-        if faltam > 0:
-            return False, "intervalo"
-    corte = (agora - timedelta(hours=1)).isoformat()
-    na_hora = c.execute("SELECT COUNT(*) FROM dm_envios WHERE quando >= ?", (corte,)).fetchone()[0]
+    if ultimo and (agora - datetime.fromisoformat(ultimo)).total_seconds() < ESPACO_MIN_S:
+        return False, "espaco"
+    no_minuto = c.execute("SELECT COUNT(*) FROM dm_envios WHERE quando >= ?",
+                          ((agora - timedelta(seconds=60)).isoformat(),)).fetchone()[0]
+    if no_minuto >= _RITMO["minuto"]:
+        return False, "teto-do-minuto"
+    na_hora = c.execute("SELECT COUNT(*) FROM dm_envios WHERE quando >= ?",
+                        ((agora - timedelta(hours=1)).isoformat(),)).fetchone()[0]
     if na_hora >= LIMITE_DM_HORA:
         return False, "teto-da-hora"
     return True, ""
@@ -792,6 +800,48 @@ def enviar_fila() -> int:
     return 1
 
 
+def garantir_webhook() -> dict:
+    """Assina o webhook de comentários da Meta. É isso que dá resposta em segundos.
+
+    Sem assinatura, o comentário só aparece no polling e a pessoa espera até um ciclo
+    inteiro. Roda na subida e é idempotente: reassinar não duplica nada.
+    """
+    if not (config.FACEBOOK_APP_ID and config.FACEBOOK_APP_SECRET and config.PUBLIC_BASE_URL):
+        return {"ok": False, "motivo": "faltam FACEBOOK_APP_ID/SECRET ou PUBLIC_BASE_URL"}
+    if not config.IG_WEBHOOK_VERIFY_TOKEN:
+        return {"ok": False, "motivo": "falta IG_WEBHOOK_VERIFY_TOKEN"}
+
+    app_token = f"{config.FACEBOOK_APP_ID}|{config.FACEBOOK_APP_SECRET}"
+    callback = f"{config.PUBLIC_BASE_URL.rstrip('/')}/webhook/instagram"
+    out: dict = {"callback": callback}
+
+    r = requests.post(
+        f"{config.GRAPH}/{config.FACEBOOK_APP_ID}/subscriptions",
+        params={
+            "object": "instagram", "callback_url": callback, "fields": "comments",
+            "verify_token": config.IG_WEBHOOK_VERIFY_TOKEN, "include_values": "true",
+            "access_token": app_token,
+        },
+        timeout=30,
+    )
+    out["assinatura_app"] = "ok" if r.status_code < 400 else _erro_graph(r)
+
+    # a Página também precisa ter o app inscrito, senão a Meta não entrega o evento
+    page_id, page_token = _pagina()
+    if page_id:
+        r = requests.post(
+            f"{config.GRAPH}/{page_id}/subscribed_apps",
+            params={"subscribed_fields": "feed", "access_token": page_token}, timeout=30,
+        )
+        out["assinatura_pagina"] = "ok" if r.status_code < 400 else _erro_graph(r)
+    else:
+        out["assinatura_pagina"] = "sem Página resolvida"
+
+    out["ok"] = out.get("assinatura_app") == "ok"
+    print(f"[automacoes] webhook: {out}")
+    return out
+
+
 def limpar_envenenados() -> int:
     """Tira da fila quem já recebeu resposta pública sem ter recebido o direct.
 
@@ -819,44 +869,28 @@ def iniciar_marca_passo():
     """Thread dedicada ao direct. Não depende do APScheduler: tick curto lá é descartado
     como misfire quando o worker está ocupado varrendo comentário, e a fila não anda."""
     def laco():
-        try:
-            limpar_envenenados()
-        except Exception as e:  # noqa: BLE001
-            print(f"[automacoes] limpeza da fila falhou: {e}")
+        for tarefa in (limpar_envenenados, garantir_webhook):
+            try:
+                tarefa()
+            except Exception as e:  # noqa: BLE001
+                print(f"[automacoes] {tarefa.__name__} falhou: {e}")
         print(f"[automacoes] marca-passo do direct ligado ({_RITMO['s']:.1f}s entre envios).")
         while True:
             try:
                 pode, motivo = _pode_enviar_dm()
-                if pode and not enviar_fila():
-                    time.sleep(3)          # fila vazia: não martelar o banco
-                elif not pode:
-                    time.sleep(5 if motivo in ("teto-da-hora", "descansando") else 0.5)
+                if pode:
+                    if not enviar_fila():
+                        time.sleep(1)      # fila vazia: acorda rápido quando chegar comentário
+                elif motivo in ("teto-da-hora", "descansando"):
+                    time.sleep(10)
+                elif motivo == "teto-do-minuto":
+                    time.sleep(2)
+                else:                      # só o espaçamento mínimo entre envios
+                    time.sleep(ESPACO_MIN_S / 2)
             except Exception as e:  # noqa: BLE001
                 print(f"[automacoes] marca-passo tropeçou: {e}")
                 time.sleep(5)
     threading.Thread(target=laco, name="direct", daemon=True).start()
-
-
-def drenar_fila(segundos: int = 55) -> int:
-    """Fica mandando direct no ritmo por ~1 minuto, um a cada INTERVALO_DM_S.
-
-    É um laço próprio em vez de um job de 6 em 6 segundos porque tick curto no
-    APScheduler é descartado quando o worker está ocupado com a varredura de
-    comentários, e aí a fila simplesmente não anda.
-    """
-    fim = time.monotonic() + segundos
-    enviados = 0
-    while time.monotonic() < fim:
-        pode, motivo = _pode_enviar_dm()
-        if not pode:
-            if motivo in ("teto-da-hora", "descansando"):
-                return enviados          # não adianta girar em falso até a próxima rodada
-            time.sleep(1)                # só o intervalo entre envios
-            continue
-        if not enviar_fila():
-            return enviados              # fila vazia ou item que não dá pra mandar agora
-        enviados += 1
-    return enviados
 
 
 def marcar_fora_da_janela() -> int:
