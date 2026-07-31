@@ -26,6 +26,7 @@ Limites da API do Instagram que o código respeita:
 import json
 import random
 import sqlite3
+import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
@@ -764,6 +765,28 @@ def enviar_fila() -> int:
     _atualizar_dm(e["comment_id"], status)
     print(f"[automacoes] direct pra @{e['usuario']} ({status}).")
     return 1
+
+
+def drenar_fila(segundos: int = 55) -> int:
+    """Fica mandando direct no ritmo por ~1 minuto, um a cada INTERVALO_DM_S.
+
+    É um laço próprio em vez de um job de 6 em 6 segundos porque tick curto no
+    APScheduler é descartado quando o worker está ocupado com a varredura de
+    comentários, e aí a fila simplesmente não anda.
+    """
+    fim = time.monotonic() + segundos
+    enviados = 0
+    while time.monotonic() < fim:
+        pode, motivo = _pode_enviar_dm()
+        if not pode:
+            if motivo in ("teto-da-hora", "descansando"):
+                return enviados          # não adianta girar em falso até a próxima rodada
+            time.sleep(1)                # só o intervalo entre envios
+            continue
+        if not enviar_fila():
+            return enviados              # fila vazia ou item que não dá pra mandar agora
+        enviados += 1
+    return enviados
 
 
 def marcar_fora_da_janela() -> int:

@@ -137,10 +137,10 @@ def iniciar():
             automacoes.rodar, "interval", seconds=config.AUTOMACOES_POLL_SEGUNDOS,
             id="automacoes", max_instances=1, coalesce=True,
         )
-        # marca-passo do direct: um envio por vez, no ritmo de INTERVALO_DM_S
+        # marca-passo do direct: o laço interno segura o ritmo de INTERVALO_DM_S
         _sched.add_job(
-            automacoes.enviar_fila, "interval", seconds=automacoes.INTERVALO_DM_S,
-            id="automacoes_dm", max_instances=1, coalesce=True,
+            automacoes.drenar_fila, "interval", seconds=60,
+            id="automacoes_dm", max_instances=1, coalesce=True, misfire_grace_time=60,
         )
         _sched.add_job(
             automacoes.marcar_fora_da_janela, "interval", hours=6,
