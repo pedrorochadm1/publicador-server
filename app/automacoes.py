@@ -36,8 +36,9 @@ from .token_store import get_token
 
 # Comentário mais velho que isso não recebe DM (janela de private reply da Meta)
 JANELA_DM_DIAS = 7
-# Teto por rodada, por automação — trava de segurança contra tempestade de comentário
-MAX_POR_RODADA = 25
+# Teto por rodada, por automação. Existe pra não estourar limite da Meta numa tempestade
+# de comentário; o que passar disso fica pra rodada seguinte, nada se perde.
+MAX_POR_RODADA = 50
 
 
 # ─────────────────────────── Banco ───────────────────────────
@@ -514,21 +515,37 @@ def buscar_midias(limite: int = 10) -> list[dict]:
     return r.json().get("data", [])
 
 
-def _buscar_comentarios(midia_id: str) -> list[dict]:
-    r = requests.get(
-        f"{config.GRAPH}/{midia_id}/comments",
-        params={
-            "fields": "id,text,username,timestamp,replies{id,text,username,timestamp}",
-            "limit": 50, "access_token": get_token(),
-        },
-        timeout=30,
-    )
-    if r.status_code >= 400:
-        raise RuntimeError(_erro_graph(r))
+MAX_PAGINAS = 30  # 30 x 50 = 1500 comentários por rodada, teto de segurança
+
+
+def _buscar_comentarios(midia_id: str, desde: datetime | None = None) -> list[dict]:
+    """Comentários do post, seguindo a paginação da Graph.
+
+    Sem paginar, uma enxurrada empurra os comentários pra fora da primeira página e eles
+    nunca chegam a ser atendidos. Para de paginar quando a página inteira já é anterior a
+    `desde`, que é de onde a automação vale.
+    """
+    url = f"{config.GRAPH}/{midia_id}/comments"
+    params: dict | None = {
+        "fields": "id,text,username,timestamp,replies{id,text,username,timestamp}",
+        "limit": 50, "access_token": get_token(),
+    }
     achatado: list[dict] = []
-    for c in r.json().get("data", []):
-        achatado.append(c)
-        achatado.extend(c.get("replies", {}).get("data", []))
+    for _ in range(MAX_PAGINAS):
+        r = requests.get(url, params=params, timeout=30)
+        if r.status_code >= 400:
+            raise RuntimeError(_erro_graph(r))
+        corpo = r.json()
+        pagina = corpo.get("data", [])
+        for c in pagina:
+            achatado.append(c)
+            achatado.extend(c.get("replies", {}).get("data", []))
+        proxima = (corpo.get("paging") or {}).get("next")
+        if not pagina or not proxima:
+            break
+        if desde and all((_parse_ts(c.get("timestamp")) or desde) < desde for c in pagina):
+            break
+        url, params = proxima, None  # o next já vem com token e cursor embutidos
     return achatado
 
 
@@ -624,7 +641,7 @@ def rodar():
             desde = _desde(a)
             for midia_id in _midias_alvo(a):
                 tratados = 0
-                for c in _buscar_comentarios(midia_id):
+                for c in _buscar_comentarios(midia_id, desde):
                     quando = _parse_ts(c.get("timestamp"))
                     if quando and quando < desde:
                         continue
