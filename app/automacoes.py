@@ -361,6 +361,12 @@ def _pode_enviar_dm() -> tuple[bool, str]:
     return True, ""
 
 
+def enviados_na_hora() -> int:
+    _init()
+    corte = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    return db.conn().execute("SELECT COUNT(*) FROM dm_envios WHERE quando >= ?", (corte,)).fetchone()[0]
+
+
 def _tomar_folego():
     _DESCANSO_ATE["quando"] = datetime.now(timezone.utc) + DESCANSO_APOS_613
     print(f"[automacoes] (#613) limite da Meta. Direct pausado até {_DESCANSO_ATE['quando']:%H:%M:%S}.")
