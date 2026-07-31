@@ -792,10 +792,37 @@ def enviar_fila() -> int:
     return 1
 
 
+def limpar_envenenados() -> int:
+    """Tira da fila quem já recebeu resposta pública sem ter recebido o direct.
+
+    Esses são da fase em que a resposta pública saía primeiro. A Meta recusa a private
+    reply desses comentários pra sempre, e cada tentativa é uma chamada que conta no
+    limite da conta — ou seja, fila envenenada mantém o (#613) vivo sem entregar nada.
+    """
+    _init()
+    marcas = ", ".join("?" for _ in PENDENTES)
+    c = db.conn()
+    cur = c.execute(
+        f"""UPDATE automacao_eventos SET dm_status = 'ja-respondido',
+                   erro = COALESCE(NULLIF(erro, ''), 'resposta pública saiu antes do direct')
+            WHERE (dm_status IN ({marcas}) OR dm_status IS NULL OR dm_status = '')
+              AND resposta IS NOT NULL AND resposta != ''""",
+        PENDENTES,
+    )
+    c.commit()
+    if cur.rowcount:
+        print(f"[automacoes] {cur.rowcount} comentários saíram da fila: já tinham resposta pública.")
+    return cur.rowcount
+
+
 def iniciar_marca_passo():
     """Thread dedicada ao direct. Não depende do APScheduler: tick curto lá é descartado
     como misfire quando o worker está ocupado varrendo comentário, e a fila não anda."""
     def laco():
+        try:
+            limpar_envenenados()
+        except Exception as e:  # noqa: BLE001
+            print(f"[automacoes] limpeza da fila falhou: {e}")
         print(f"[automacoes] marca-passo do direct ligado ({_RITMO['s']:.1f}s entre envios).")
         while True:
             try:
