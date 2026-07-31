@@ -320,6 +320,32 @@ def responder_comentario(comment_id: str, mensagem: str):
 LIMITE_TEXTO_BOTAO = 640
 LIMITE_TITULO_BOTAO = 20
 
+# A Meta aceita 750 private replies por hora. Ficamos abaixo disso de propósito: passar
+# do teto devolve (#613) e o comentário volta pra fila, o que só gasta chamada à toa.
+LIMITE_DM_HORA = 600
+DESCANSO_APOS_613 = timedelta(minutes=5)
+_ENVIOS: list[datetime] = []
+_DESCANSO_ATE: dict = {"quando": None}
+
+
+def _pode_enviar_dm() -> bool:
+    """Freio do envio. A resposta pública não passa por aqui: ela tem limite próprio,
+    bem mais folgado, e é o que segura a experiência de quem comentou."""
+    agora = datetime.now(timezone.utc)
+    if _DESCANSO_ATE["quando"] and agora < _DESCANSO_ATE["quando"]:
+        return False
+    _ENVIOS[:] = [t for t in _ENVIOS if agora - t < timedelta(hours=1)]
+    return len(_ENVIOS) < LIMITE_DM_HORA
+
+
+def _registrar_envio():
+    _ENVIOS.append(datetime.now(timezone.utc))
+
+
+def _tomar_folego():
+    _DESCANSO_ATE["quando"] = datetime.now(timezone.utc) + DESCANSO_APOS_613
+    print(f"[automacoes] (#613) limite da Meta. Direct pausado até {_DESCANSO_ATE['quando']:%H:%M:%S}.")
+
 _VERSAO = config.GRAPH.rstrip("/").rsplit("/", 1)[-1]
 # Hosts de envio, na ordem em que valem a pena tentar.
 #   graph.instagram.com — Instagram API with Instagram Login. É o caso desta conta: o
@@ -395,13 +421,13 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
     page_id, page_token = _pagina()
 
     def _tentativas() -> list[tuple[str, str, str]]:
-        """(rótulo, url, token), na ordem que vale a pena tentar."""
-        t = []
+        """(rótulo, url, token). Com Página resolvida é só ela: os outros hosts já são
+        conhecidamente recusados nesta conta, e insistir neles só gasta cota de API e
+        polui o erro gravado."""
         if page_id:
-            t.append(("pagina", f"{config.GRAPH}/{page_id}/messages", page_token))
-        for host in HOSTS_DM:
-            t.append((host.split("//")[1].split("/")[0],
-                      f"{host}/{config.INSTAGRAM_BUSINESS_ID}/messages", get_token()))
+            return [("pagina", f"{config.GRAPH}/{page_id}/messages", page_token)]
+        t = [(h.split("//")[1].split("/")[0],
+              f"{h}/{config.INSTAGRAM_BUSINESS_ID}/messages", get_token()) for h in HOSTS_DM]
         if _HOST_BOM["url"]:
             t.sort(key=lambda x: x[1] != _HOST_BOM["url"])
         return t
@@ -418,8 +444,14 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
                 if _HOST_BOM["url"] != url:
                     _HOST_BOM["url"] = url
                     print(f"[automacoes] direct sai por {rotulo} ({url}).")
+                _registrar_envio()
                 return r
-            erros.append(f"{rotulo}: {_erro_graph(r)}")
+            motivo = _erro_graph(r)
+            if "613" in motivo:
+                _tomar_folego()
+                erros.append(f"{rotulo}: {motivo}")
+                return None          # bateu no teto: parar aqui, não queimar mais chamada
+            erros.append(f"{rotulo}: {motivo}")
         return None
 
     if botao_url and botao_texto:
@@ -609,11 +641,14 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
         quando = _parse_ts(comentario.get("timestamp"))
         if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS):
             dm_status = "fora-da-janela"
+        elif not _pode_enviar_dm():
+            # segura o direct sem segurar a resposta pública; a fila manda depois
+            dm_status = "aguardando-limite"
         else:
             try:
                 dm_status = enviar_dm(comentario["id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
             except Exception as e:  # noqa: BLE001
-                dm_status = "erro"
+                dm_status = _definitivo(str(e)) or "erro"
                 erros.append(str(e))
 
     # 2º a resposta pública. Direct que falhou fica na fila e sai sozinho (retentar_dms),
@@ -662,6 +697,8 @@ def _definitivo(erro: str) -> str:
     e = erro.lower()
     if "2534023" in e or "já tem uma resposta" in e:
         return "ja-respondido"
+    if "2534001" in e or "arquivou ou excluiu esta conversa" in e:
+        return "conversa-indisponivel"
     if "inválido" in e and "comment_id" in e:
         return "comentario-sumiu"
     return ""
@@ -679,7 +716,7 @@ def retentar_dms(limite: int = 40) -> int:
     corte = (datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)).isoformat()
     pendentes = db.conn().execute(
         """SELECT * FROM automacao_eventos
-           WHERE dm_status = 'erro' OR dm_status IS NULL OR dm_status = ''
+           WHERE dm_status IN ('erro', 'aguardando-limite') OR dm_status IS NULL OR dm_status = ''
            ORDER BY id DESC LIMIT ?""",
         (limite,),
     ).fetchall()
@@ -691,6 +728,8 @@ def retentar_dms(limite: int = 40) -> int:
         a = get(e["automacao_id"])
         if not a or not a["enviar_dm"] or not a["dm_texto"]:
             continue
+        if not _pode_enviar_dm():
+            break          # no teto da hora: o resto fica pra próxima rodada
         try:
             status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
         except Exception as err:  # noqa: BLE001
