@@ -330,6 +330,46 @@ HOSTS_DM = (f"https://graph.instagram.com/{_VERSAO}", config.GRAPH)
 # Host que funcionou, pra não pagar a tentativa perdida em todo envio
 _HOST_BOM: dict = {"url": ""}
 
+# Página ligada à conta, resolvida uma vez e reaproveitada
+_PAGINA: dict = {"id": "", "token": "", "quando": None}
+_PAGINA_VALIDA_H = 6
+
+
+def _pagina() -> tuple[str, str]:
+    """(page_id, page_token) da Página ligada ao Instagram, ou ("", "") se não houver.
+
+    É o caminho preferencial do direct: no graph.facebook.com mensagem é Messenger
+    Platform, que fala com o ID da PÁGINA usando TOKEN DA PÁGINA. Enquanto o token
+    de usuário não trouxer Página (granular_scopes sem target_ids, /me/accounts
+    vazio), isso devolve vazio e o envio cai nos hosts de HOSTS_DM.
+    """
+    agora = datetime.now(timezone.utc)
+    if _PAGINA["quando"] and agora - _PAGINA["quando"] < timedelta(hours=_PAGINA_VALIDA_H):
+        return _PAGINA["id"], _PAGINA["token"]
+    _PAGINA["quando"] = agora
+    try:
+        r = requests.get(
+            f"{config.GRAPH}/me/accounts",
+            params={"fields": "id,name,access_token,instagram_business_account",
+                    "access_token": get_token()},
+            timeout=30,
+        )
+        paginas = r.json().get("data", []) if r.status_code < 400 else []
+    except Exception as e:  # noqa: BLE001
+        print(f"[automacoes] não consegui listar Páginas: {e}")
+        paginas = []
+    escolhida = next(
+        (p for p in paginas
+         if (p.get("instagram_business_account") or {}).get("id") == config.INSTAGRAM_BUSINESS_ID
+         and p.get("access_token")),
+        None,
+    )
+    _PAGINA["id"] = escolhida["id"] if escolhida else ""
+    _PAGINA["token"] = escolhida["access_token"] if escolhida else ""
+    if escolhida:
+        print(f"[automacoes] direct vai pela Página {escolhida.get('name')} ({escolhida['id']}).")
+    return _PAGINA["id"], _PAGINA["token"]
+
 
 def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str = ""):
     """Private reply: DM pra quem comentou. Com botão quando há link.
@@ -351,23 +391,34 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
     """
     erros: list[str] = []
 
+    page_id, page_token = _pagina()
+
+    def _tentativas() -> list[tuple[str, str, str]]:
+        """(rótulo, url, token), na ordem que vale a pena tentar."""
+        t = []
+        if page_id:
+            t.append(("pagina", f"{config.GRAPH}/{page_id}/messages", page_token))
+        for host in HOSTS_DM:
+            t.append((host.split("//")[1].split("/")[0],
+                      f"{host}/{config.INSTAGRAM_BUSINESS_ID}/messages", get_token()))
+        if _HOST_BOM["url"]:
+            t.sort(key=lambda x: x[1] != _HOST_BOM["url"])
+        return t
+
     def _enviar(payload: dict) -> requests.Response | None:
-        """Primeira resposta boa. Devolve None quando nenhum host aceitou."""
-        hosts = ([_HOST_BOM["url"]] if _HOST_BOM["url"] else []) + [h for h in HOSTS_DM if h != _HOST_BOM["url"]]
-        ultima = None
-        for host in hosts:
-            ultima = requests.post(
-                f"{host}/{config.INSTAGRAM_BUSINESS_ID}/messages",
-                params={"access_token": get_token()},
+        """Primeira resposta boa. Devolve None quando nenhum caminho aceitou."""
+        for rotulo, url, token in _tentativas():
+            r = requests.post(
+                url, params={"access_token": token},
                 json={"recipient": {"comment_id": comment_id}, "message": payload},
                 timeout=30,
             )
-            if ultima.status_code < 400:
-                if _HOST_BOM["url"] != host:
-                    _HOST_BOM["url"] = host
-                    print(f"[automacoes] direct sai pelo {host}.")
-                return ultima
-            erros.append(f"{host.split('//')[1].split('/')[0]}: {_erro_graph(ultima)}")
+            if r.status_code < 400:
+                if _HOST_BOM["url"] != url:
+                    _HOST_BOM["url"] = url
+                    print(f"[automacoes] direct sai por {rotulo} ({url}).")
+                return r
+            erros.append(f"{rotulo}: {_erro_graph(r)}")
         return None
 
     if botao_url and botao_texto:
