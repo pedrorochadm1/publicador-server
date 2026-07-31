@@ -166,7 +166,7 @@ def api_fila(enviar: int = 0, insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
     pode, motivo = automacoes._pode_enviar_dm()
     out = {"na_fila": automacoes.pendentes_na_fila(), "pode_enviar": pode, "motivo": motivo,
-           "intervalo_s": automacoes.INTERVALO_DM_S, "teto_hora": automacoes.LIMITE_DM_HORA,
+           "intervalo_s": automacoes.INTERVALO_DM_S(), "teto_hora": automacoes.LIMITE_DM_HORA,
            "enviados_na_hora": automacoes.enviados_na_hora()}
     if enviar:
         try:

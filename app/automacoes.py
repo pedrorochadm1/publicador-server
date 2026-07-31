@@ -26,6 +26,7 @@ Limites da API do Instagram que o código respeita:
 import json
 import random
 import sqlite3
+import threading
 import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
@@ -327,10 +328,31 @@ LIMITE_TITULO_BOTAO = 20
 # Ritmo do direct. A Meta aceita 750 private replies por hora; mandamos 1 a cada 6s, que
 # dá 600/h com folga e, principalmente, sem rajada — rajada é o que dispara o (#613).
 # O teto por hora fica como segunda trava, caso o intervalo escorregue.
-INTERVALO_DM_S = 6
-LIMITE_DM_HORA = 600
+INTERVALO_BASE_S = 5.2          # 5,2s => ~690/h, logo abaixo do teto de 750 da Meta
+INTERVALO_TETO_S = 15.0
+LIMITE_DM_HORA = 690
 DESCANSO_APOS_613 = timedelta(minutes=3)
 _DESCANSO_ATE: dict = {"quando": None}
+# o ritmo cede quando a Meta reclama e volta a acelerar sozinho depois de uma sequência limpa
+_RITMO: dict = {"s": INTERVALO_BASE_S, "limpos": 0}
+
+
+def INTERVALO_DM_S() -> float:  # noqa: N802 - lido pelo painel e pelo laço
+    return _RITMO["s"]
+
+
+def _acelerar():
+    _RITMO["limpos"] += 1
+    if _RITMO["limpos"] >= 120 and _RITMO["s"] > INTERVALO_BASE_S:
+        _RITMO["s"] = max(INTERVALO_BASE_S, _RITMO["s"] - 1)
+        _RITMO["limpos"] = 0
+        print(f"[automacoes] ritmo de volta pra {_RITMO['s']:.1f}s entre directs.")
+
+
+def _frear():
+    _RITMO["s"] = min(INTERVALO_TETO_S, _RITMO["s"] + 2)
+    _RITMO["limpos"] = 0
+    print(f"[automacoes] ritmo reduzido pra {_RITMO['s']:.1f}s entre directs.")
 
 
 def _registrar_envio():
@@ -352,7 +374,7 @@ def _pode_enviar_dm() -> tuple[bool, str]:
     c = db.conn()
     ultimo = c.execute("SELECT MAX(quando) FROM dm_envios").fetchone()[0]
     if ultimo:
-        faltam = INTERVALO_DM_S - (agora - datetime.fromisoformat(ultimo)).total_seconds()
+        faltam = _RITMO["s"] - (agora - datetime.fromisoformat(ultimo)).total_seconds()
         if faltam > 0:
             return False, "intervalo"
     corte = (agora - timedelta(hours=1)).isoformat()
@@ -369,6 +391,7 @@ def enviados_na_hora() -> int:
 
 
 def _tomar_folego():
+    _frear()
     _DESCANSO_ATE["quando"] = datetime.now(timezone.utc) + DESCANSO_APOS_613
     print(f"[automacoes] (#613) limite da Meta. Direct pausado até {_DESCANSO_ATE['quando']:%H:%M:%S}.")
 
@@ -471,6 +494,7 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
                     _HOST_BOM["url"] = url
                     print(f"[automacoes] direct sai por {rotulo} ({url}).")
                 _registrar_envio()
+                _acelerar()
                 return r
             motivo = _erro_graph(r)
             if "613" in motivo:
@@ -765,6 +789,24 @@ def enviar_fila() -> int:
     _atualizar_dm(e["comment_id"], status)
     print(f"[automacoes] direct pra @{e['usuario']} ({status}).")
     return 1
+
+
+def iniciar_marca_passo():
+    """Thread dedicada ao direct. Não depende do APScheduler: tick curto lá é descartado
+    como misfire quando o worker está ocupado varrendo comentário, e a fila não anda."""
+    def laco():
+        print(f"[automacoes] marca-passo do direct ligado ({_RITMO['s']:.1f}s entre envios).")
+        while True:
+            try:
+                pode, motivo = _pode_enviar_dm()
+                if pode and not enviar_fila():
+                    time.sleep(3)          # fila vazia: não martelar o banco
+                elif not pode:
+                    time.sleep(5 if motivo in ("teto-da-hora", "descansando") else 0.5)
+            except Exception as e:  # noqa: BLE001
+                print(f"[automacoes] marca-passo tropeçou: {e}")
+                time.sleep(5)
+    threading.Thread(target=laco, name="direct", daemon=True).start()
 
 
 def drenar_fila(segundos: int = 55) -> int:
