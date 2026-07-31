@@ -238,22 +238,66 @@ function pintarEditor(){
     </div>
 
     <div class="acoes">
-      <button id="salvar">Salvar</button>
-      ${a.id ? `<button class="sec" id="rodar">Verificar comentários agora</button>
-                <button class="perigo" id="excluir">Excluir</button>` : `<button class="sec" id="cancelar">Cancelar</button>`}
+      ${a.id ? `<span class="chip" id="estado">salvo</span>
+                <button class="sec" id="rodar">Verificar comentários agora</button>
+                <button class="perigo" id="excluir">Excluir</button>`
+             : `<button id="criar">Criar automação</button>
+                <button class="sec" id="cancelar">Cancelar</button>`}
     </div>`;
 
-  $("#f_escopo").onchange = pintarEscolhaPost;
+  $("#f_escopo").onchange = () => { pintarEscolhaPost(); revisar(); };
   $("#f_teste").oninput = testar;
-  $("#salvar").onclick = salvar;
   if (a.id){ $("#rodar").onclick = rodar; $("#excluir").onclick = excluir; }
-  else $("#cancelar").onclick = () => { atual = null; pintarEditor(); pintarLista(); };
+  else {
+    $("#criar").onclick = salvar;
+    $("#cancelar").onclick = () => { atual = null; pintarEditor(); pintarLista(); };
+  }
   pintarEscolhaPost();
 
-  ["f_respostas","f_dm_texto","f_botao","f_url","f_palavras","f_pub","f_dm"]
-    .forEach(id => { const el = $("#"+id); if (el) el.addEventListener("input", revisar); });
-  ["f_pub","f_dm"].forEach(id => $("#"+id).addEventListener("change", revisar));
+  // tudo que o Pedro mexe salva sozinho: texto com folga pra ele terminar de digitar,
+  // liga/desliga na hora. Não existe botão de salvar em automação já criada.
+  const campos = ["f_nome","f_palavras","f_modo","f_escopo","f_respostas","f_dm_texto","f_botao","f_url"];
+  const chaves = ["f_ativa","f_pub","f_dm","f_uma"];
+  campos.forEach(id => { const el = $("#"+id); if (el) el.addEventListener("input", () => { revisar(); agendar(700); }); });
+  chaves.forEach(id => { const el = $("#"+id); if (el) el.addEventListener("change", () => { revisar(); agendar(0); }); });
+  ["f_modo","f_escopo"].forEach(id => $("#"+id).addEventListener("change", () => agendar(0)));
   revisar();
+}
+
+/* ─────────── salvamento automático ─────────── */
+
+let timerSalvar = null, salvando = false;
+
+function estado(txt, cls){
+  const el = $("#estado"); if (!el) return;
+  el.textContent = txt; el.className = "chip" + (cls ? " " + cls : "");
+}
+
+function agendar(atraso){
+  if (!atual || !atual.id) return;         // automação nova só nasce pelo botão Criar
+  clearTimeout(timerSalvar);
+  estado("editando…");
+  timerSalvar = setTimeout(salvarAuto, atraso);
+}
+
+async function salvarAuto(){
+  if (!atual || !atual.id || salvando) return;
+  const dados = coletar();
+  if (!dados.palavras.length) return estado("falta a palavra-chave", "erro");
+  if (!revisar()) return estado("campo passando do limite", "erro");
+  if (dados.respostas.some(r => /https?:\/\//i.test(r)))
+    return estado("link não vai no comentário", "erro");
+  salvando = true; estado("salvando…");
+  try {
+    const salva = await api("/insta/api/automacoes/"+atual.id, {method:"PUT", body: JSON.stringify(dados)});
+    Object.assign(atual, salva);
+    const i = automacoes.findIndex(a => a.id === salva.id);
+    if (i >= 0) automacoes[i] = {...automacoes[i], ...salva};
+    pintarLista();                          // só a lista: repintar o editor tiraria o foco
+    estado("salvo", "on");
+  } catch (e) {
+    estado("não salvou", "erro");
+  } finally { salvando = false; }
 }
 
 /* ─────────── limites, contadores e prévia ─────────── */
