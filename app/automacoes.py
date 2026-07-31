@@ -641,14 +641,20 @@ def rodar():
             print(f"[automacoes] #{a['id']} falhou na rodada: {e}")
 
 
-def retentar_dms(limite: int = 20) -> int:
-    """Direct que falhou fica na fila e sai sozinho quando o Instagram voltar a aceitar
-    (ex.: capability de mensagens ligada no app depois do comentário). A janela de
-    private reply é de 7 dias; passou disso, marca como perdido e para de tentar."""
+def retentar_dms(limite: int = 40) -> int:
+    """Repassa quem comentou e não recebeu o direct, seja porque falhou, seja porque a
+    tentativa nem chegou a acontecer (evento reservado e o processo caiu no meio).
+
+    A janela de private reply é de 7 dias; passou disso, marca como perdido e para.
+    Se a resposta pública também ficou faltando, ela sai junto — quem comentou não pode
+    terminar sem nada.
+    """
     _init()
     corte = (datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)).isoformat()
     pendentes = db.conn().execute(
-        "SELECT * FROM automacao_eventos WHERE dm_status = 'erro' ORDER BY id DESC LIMIT ?",
+        """SELECT * FROM automacao_eventos
+           WHERE dm_status = 'erro' OR dm_status IS NULL OR dm_status = ''
+           ORDER BY id DESC LIMIT ?""",
         (limite,),
     ).fetchall()
     enviados = 0
@@ -666,6 +672,17 @@ def retentar_dms(limite: int = 20) -> int:
             continue
         _atualizar_dm(e["comment_id"], status)
         enviados += 1
+
+        if a["responder_publico"] and a["respostas"] and not (e["resposta"] or ""):
+            resposta = random.choice(a["respostas"])
+            try:
+                responder_comentario(e["comment_id"], resposta)
+                c = db.conn()
+                c.execute("UPDATE automacao_eventos SET resposta = ? WHERE comment_id = ?",
+                          (resposta, e["comment_id"]))
+                c.commit()
+            except Exception as err:  # noqa: BLE001
+                print(f"[automacoes] resposta pública atrasada de @{e['usuario']} falhou: {err}")
         print(f"[automacoes] direct pendente de @{e['usuario']} saiu ({status}).")
     return enviados
 
