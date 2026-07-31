@@ -599,15 +599,11 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
                 dm_status = "erro"
                 erros.append(str(e))
 
-    # 2º a resposta pública. Se o direct não saiu, não prometer direct: usa a lista
-    # alternativa (o direct continua na fila e sai sozinho — ver retentar_dms).
-    opcoes = a["respostas"]
-    if dm_status in ("erro", "fora-da-janela") and a["respostas_sem_dm"]:
-        opcoes = a["respostas_sem_dm"]
-
+    # 2º a resposta pública. Direct que falhou fica na fila e sai sozinho (retentar_dms),
+    # então a resposta é sempre a mesma: não existe versão "sem direct".
     resposta = ""
-    if a["responder_publico"] and opcoes:
-        resposta = random.choice(opcoes)
+    if a["responder_publico"] and a["respostas"]:
+        resposta = random.choice(a["respostas"])
         try:
             responder_comentario(comentario["id"], resposta)
         except Exception as e:  # noqa: BLE001
@@ -641,6 +637,19 @@ def rodar():
             print(f"[automacoes] #{a['id']} falhou na rodada: {e}")
 
 
+def _definitivo(erro: str) -> str:
+    """Status final quando o direct nunca mais vai sair pra aquele comentário.
+
+    Sem isso a fila fica batendo pra sempre num comentário que a Meta já fechou. O 2534023
+    é "esse comentário já recebeu resposta privada" (a cota é de uma por comentário)."""
+    e = erro.lower()
+    if "2534023" in e or "já tem uma resposta" in e:
+        return "ja-respondido"
+    if "inválido" in e and "comment_id" in e:
+        return "comentario-sumiu"
+    return ""
+
+
 def retentar_dms(limite: int = 40) -> int:
     """Repassa quem comentou e não recebeu o direct, seja porque falhou, seja porque a
     tentativa nem chegou a acontecer (evento reservado e o processo caiu no meio).
@@ -668,7 +677,7 @@ def retentar_dms(limite: int = 40) -> int:
         try:
             status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
         except Exception as err:  # noqa: BLE001
-            _atualizar_dm(e["comment_id"], "erro", str(err))
+            _atualizar_dm(e["comment_id"], _definitivo(str(err)) or "erro", str(err))
             continue
         _atualizar_dm(e["comment_id"], status)
         enviados += 1

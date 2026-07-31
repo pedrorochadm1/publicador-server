@@ -7,13 +7,13 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <style>
-  :root { --fg:#161823; --muted:#5b6068; --line:#e7e9ec; --accent:#d62976; --soft:#f7f8fa;
+  :root { --fg:#161823; --muted:#5b6068; --line:#e7e9ec; --accent:#0095f6; --soft:#f7f8fa;
           --ok:#0a8f5b; --off:#98a0a8; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
          color:var(--fg); background:var(--soft); line-height:1.5; }
   header { background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:10; }
-  header .wrap { max-width:1100px; margin:0 auto; padding:12px 20px; display:flex; align-items:center;
+  header .wrap { max-width:1360px; margin:0 auto; padding:12px 20px; display:flex; align-items:center;
                  justify-content:space-between; gap:12px; }
   .marca { font-weight:800; font-size:17px; display:flex; align-items:center; gap:9px; }
   .marca img { width:28px; height:28px; border-radius:7px; }
@@ -25,12 +25,12 @@
          align-items:start; }
   .col { display:grid; gap:14px; }
   .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px; }
-  .card.sel { border-color:var(--accent); box-shadow:0 0 0 3px rgba(214,41,118,.08); }
+  .card.sel { border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,149,246,.10); }
   .lista .card { cursor:pointer; }
   .lista .card h3 { margin:0 0 6px; font-size:15px; display:flex; align-items:center; gap:8px; }
   .ponto { width:8px; height:8px; border-radius:50%; background:var(--off); flex:none; }
   .ponto.on { background:var(--ok); }
-  .kw { display:inline-block; font-size:12px; background:#fdeaf3; color:var(--accent); border-radius:6px;
+  .kw { display:inline-block; font-size:12px; background:#e7f4fe; color:#0064d2; border-radius:6px;
         padding:2px 8px; margin:2px 4px 2px 0; font-weight:600; }
   .meta { font-size:12px; color:var(--muted); margin-top:8px; }
   h2 { font-size:16px; margin:0 0 14px; }
@@ -83,7 +83,7 @@
   .fone .topo { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line);
                 font-size:13px; font-weight:700; }
   .ava { width:26px; height:26px; border-radius:50%; flex:none;
-         background:linear-gradient(45deg,#f9ce34,#ee2a7b,#6228d7); }
+         background:linear-gradient(135deg,#0095f6,#0064d2); }
   .ava.cinza { background:#dfe3e8; }
   .fone .corpo { padding:12px; display:grid; gap:8px; background:#fff; }
   .bolha { max-width:88%; padding:9px 13px; border-radius:18px; font-size:14px; background:#efefef;
@@ -219,9 +219,6 @@ function pintarEditor(){
       <label>Respostas <span class="dica">uma por linha; sorteia uma a cada comentário</span></label>
       <textarea id="f_respostas">${esc(a.respostas.join("\n"))}</textarea>
       <div class="conta" id="c_respostas"></div>
-      <label>Respostas quando o direct não sai <span class="dica">vazio = não responde nesse caso. Nunca coloque link aqui</span></label>
-      <textarea id="f_respostas_sem_dm" style="min-height:64px">${esc((a.respostas_sem_dm||[]).join("\n"))}</textarea>
-      <div class="conta" id="c_respostas_sem_dm"></div>
     </div>
 
     <div class="bloco">
@@ -253,7 +250,7 @@ function pintarEditor(){
   else $("#cancelar").onclick = () => { atual = null; pintarEditor(); pintarLista(); };
   pintarEscolhaPost();
 
-  ["f_respostas","f_respostas_sem_dm","f_dm_texto","f_botao","f_url","f_palavras","f_pub","f_dm"]
+  ["f_respostas","f_dm_texto","f_botao","f_url","f_palavras","f_pub","f_dm"]
     .forEach(id => { const el = $("#"+id); if (el) el.addEventListener("input", revisar); });
   ["f_pub","f_dm"].forEach(id => $("#"+id).addEventListener("change", revisar));
   revisar();
@@ -294,7 +291,6 @@ function revisar(){
   $("#f_dm_texto").maxLength = limDm;
   const ok = [
     contarLinhas("f_respostas", "c_respostas", LIM.comentario),
-    contarLinhas("f_respostas_sem_dm", "c_respostas_sem_dm", LIM.comentario),
     contar("f_dm_texto", "c_dm_texto", limDm, temBotao() ? "(com botão)" : "(sem botão)"),
     contar("f_botao", "c_botao", LIM.botao),
   ].every(Boolean);
@@ -382,7 +378,7 @@ function coletar(){
     escopo: $("#f_escopo").value,
     midia_id: $("#f_escopo").value === "todos" ? null : atual.midia_id,
     respostas: $("#f_respostas").value.split("\n").map(s=>s.trim()).filter(Boolean),
-    respostas_sem_dm: $("#f_respostas_sem_dm").value.split("\n").map(s=>s.trim()).filter(Boolean),
+    respostas_sem_dm: [],
     dm_texto: $("#f_dm_texto").value.trim(),
     botao_texto: $("#f_botao").value.trim(),
     botao_url: $("#f_url").value.trim(),
@@ -397,7 +393,7 @@ async function salvar(){
   if (!dados.palavras.length) return aviso("Falta a palavra-chave.");
   if (dados.escopo === "midia" && !dados.midia_id) return aviso("Escolha o post.");
   if (!revisar()) return aviso("Tem campo passando do limite. Corrija o que está em vermelho.");
-  if (dados.respostas_sem_dm.some(r => /https?:\/\//i.test(r)))
+  if (dados.respostas.some(r => /https?:\/\//i.test(r)))
     return aviso("Link em resposta de comentário não é permitido. Link só vai no direct.");
   const salva = atual.id
     ? await api("/insta/api/automacoes/"+atual.id, {method:"PUT", body: JSON.stringify(dados)})
