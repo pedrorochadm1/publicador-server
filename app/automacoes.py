@@ -397,6 +397,59 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
     raise RuntimeError("DM falhou: " + " | ".join(erros))
 
 
+def diagnostico_dm() -> dict:
+    """Por que o direct sai ou não sai. Roda com o token vivo do servidor.
+
+    Existe porque a mensagem de erro da Meta ("(#3) capability") não distingue token
+    errado de Página ausente de permissão faltando. Aqui dá pra ver os três.
+    """
+    token = get_token()
+    out: dict = {}
+
+    r = requests.get(
+        f"{config.GRAPH_BASE}/debug_token",
+        params={"input_token": token, "access_token": f"{config.FACEBOOK_APP_ID}|{config.FACEBOOK_APP_SECRET}"},
+        timeout=30,
+    )
+    d = r.json().get("data", {}) if r.status_code < 400 else {}
+    out["token"] = {
+        "tipo": d.get("type"), "valido": d.get("is_valid"), "app": d.get("application"),
+        "expira_em": d.get("expires_at"),
+        "tem_manage_messages": "instagram_manage_messages" in (d.get("scopes") or []),
+        "granular": {g.get("scope"): g.get("target_ids") for g in d.get("granular_scopes") or []},
+        "erro": None if r.status_code < 400 else _erro_graph(r),
+    }
+
+    r = requests.get(
+        f"{config.GRAPH}/me/accounts",
+        params={"fields": "id,name,access_token,instagram_business_account", "access_token": token},
+        timeout=30,
+    )
+    if r.status_code >= 400:
+        out["paginas"] = {"erro": _erro_graph(r)}
+    else:
+        out["paginas"] = [{
+            "id": p.get("id"), "nome": p.get("name"),
+            "tem_token": bool(p.get("access_token")),
+            "ig": (p.get("instagram_business_account") or {}).get("id"),
+        } for p in r.json().get("data", [])]
+
+    r = requests.get(
+        f"{config.GRAPH}/{config.INSTAGRAM_BUSINESS_ID}",
+        params={"fields": "id,username", "access_token": token}, timeout=30,
+    )
+    out["conta_ig"] = r.json() if r.status_code < 400 else {"erro": _erro_graph(r)}
+
+    # o host do Instagram Login só aceita token Instagram-scoped; serve pra saber qual é o caso
+    r = requests.get(
+        f"https://graph.instagram.com/{_VERSAO}/me",
+        params={"fields": "id,username", "access_token": token}, timeout=30,
+    )
+    out["graph_instagram"] = r.json() if r.status_code < 400 else {"erro": _erro_graph(r)}
+
+    return out
+
+
 def buscar_midias(limite: int = 10) -> list[dict]:
     r = requests.get(
         f"{config.GRAPH}/{config.INSTAGRAM_BUSINESS_ID}/media",

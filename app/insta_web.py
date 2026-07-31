@@ -159,6 +159,12 @@ def api_rodar(insta_sess: str | None = Cookie(default=None)):
     return {"ok": True, "dms_pendentes_enviados": automacoes.retentar_dms()}
 
 
+@router.get("/insta/api/diagnostico")
+def api_diagnostico(insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    return automacoes.diagnostico_dm()
+
+
 @router.get("/insta/api/status")
 def api_status(insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
