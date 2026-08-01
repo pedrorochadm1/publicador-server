@@ -1106,6 +1106,16 @@ def diagnostico_facebook() -> dict:
         f"{config.GRAPH}/{page_id}/subscribed_apps",
         params={"access_token": page_token}, timeout=30,
     )
+    # amostra crua de um comentário: é onde dá pra ver quais campos a Meta entrega mesmo
+    if isinstance(out.get("posts"), list) and out["posts"]:
+        r = requests.get(
+            f"{config.GRAPH}/{out['posts'][0]['id']}/comments",
+            params={"fields": "id,message,created_time,from{id,name},username",
+                    "limit": 2, "access_token": page_token}, timeout=30,
+        )
+        out["amostra_comentario"] = (r.json().get("data", []) if r.status_code < 400
+                                     else {"erro": _erro_graph(r)})
+
     out["app_inscrito_na_pagina"] = (
         [s.get("subscribed_fields") for s in r.json().get("data", [])]
         if r.status_code < 400 else _erro_graph(r))
