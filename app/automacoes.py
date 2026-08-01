@@ -82,7 +82,8 @@ def _init():
             resposta     TEXT,
             dm_status    TEXT,
             erro         TEXT,
-            quando       TEXT NOT NULL
+            quando       TEXT NOT NULL,
+            plataforma   TEXT NOT NULL DEFAULT 'ig'   -- 'ig' | 'fb'
         )
         """
     )
@@ -92,6 +93,11 @@ def _init():
     cols = {r[1] for r in c.execute("PRAGMA table_info(automacoes)").fetchall()}
     if "respostas_sem_dm" not in cols:
         c.execute("ALTER TABLE automacoes ADD COLUMN respostas_sem_dm TEXT NOT NULL DEFAULT '[]'")
+    if "facebook" not in cols:
+        c.execute("ALTER TABLE automacoes ADD COLUMN facebook INTEGER NOT NULL DEFAULT 1")
+    ev = {r[1] for r in c.execute("PRAGMA table_info(automacao_eventos)").fetchall()}
+    if "plataforma" not in ev:
+        c.execute("ALTER TABLE automacao_eventos ADD COLUMN plataforma TEXT NOT NULL DEFAULT 'ig'")
     c.commit()
 
 
@@ -100,8 +106,8 @@ def _row(r) -> dict:
     d["palavras"] = json.loads(d["palavras"])
     d["respostas"] = json.loads(d["respostas"])
     d["respostas_sem_dm"] = json.loads(d.get("respostas_sem_dm") or "[]")
-    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa"):
-        d[b] = bool(d[b])
+    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa", "facebook"):
+        d[b] = bool(d.get(b, 1))
     return d
 
 
@@ -123,6 +129,7 @@ def get(aid: int) -> dict | None:
 _CAMPOS = (
     "nome", "ativa", "palavras", "modo", "escopo", "midia_id", "respostas", "respostas_sem_dm",
     "dm_texto", "botao_texto", "botao_url", "responder_publico", "enviar_dm", "uma_vez_por_pessoa",
+    "facebook",
 )
 
 
@@ -134,7 +141,7 @@ def _serializar(dados: dict) -> dict:
             if isinstance(itens, str):
                 itens = [x.strip() for x in itens.splitlines()]
             v[lista] = json.dumps([x for x in itens if str(x).strip()])
-    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa"):
+    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa", "facebook"):
         if b in v:
             v[b] = 1 if v[b] else 0
     if v.get("escopo") != "midia" and "escopo" in v:
@@ -204,17 +211,18 @@ def contadores(automacao_id: int) -> dict:
     }
 
 
-def _reservar_comentario(automacao_id: int, comentario: dict, midia_id: str) -> bool:
+def _reservar_comentario(automacao_id: int, comentario: dict, midia_id: str,
+                         plataforma: str = "ig") -> bool:
     """Grava o comentário ANTES de responder. False = já foi tratado (não repetir)."""
     _init()
     c = db.conn()
     try:
         c.execute(
-            "INSERT INTO automacao_eventos (automacao_id, comment_id, midia_id, usuario, texto, quando) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO automacao_eventos (automacao_id, comment_id, midia_id, usuario, texto, quando, plataforma) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 automacao_id, comentario["id"], midia_id, comentario.get("username", ""),
-                comentario.get("text", ""), datetime.now(timezone.utc).isoformat(),
+                comentario.get("text", ""), datetime.now(timezone.utc).isoformat(), plataforma,
             ),
         )
         c.commit()
@@ -312,11 +320,15 @@ def _erro_graph(r: requests.Response) -> str:
     return " | ".join(p for p in partes if p)
 
 
-def responder_comentario(comment_id: str, mensagem: str):
-    r = requests.post(
-        f"{config.GRAPH}/{comment_id}/replies",
-        params={"message": mensagem, "access_token": get_token()}, timeout=30,
-    )
+def responder_comentario(comment_id: str, mensagem: str, plataforma: str = "ig"):
+    """Resposta pública. Os dois lados divergem: no Instagram é /replies com token de
+    usuário; no Facebook é /comments com token da Página."""
+    if plataforma == "fb":
+        _, page_token = _pagina()
+        alvo, token = f"{config.GRAPH}/{comment_id}/comments", page_token
+    else:
+        alvo, token = f"{config.GRAPH}/{comment_id}/replies", get_token()
+    r = requests.post(alvo, params={"message": mensagem, "access_token": token}, timeout=30)
     if r.status_code >= 400:
         raise RuntimeError(f"resposta pública falhou: {_erro_graph(r)}")
 
@@ -468,7 +480,8 @@ def _pagina() -> tuple[str, str]:
     return _PAGINA["id"], _PAGINA["token"]
 
 
-def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str = ""):
+def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str = "",
+              plataforma: str = "ig"):
     """Private reply: DM pra quem comentou. Com botão quando há link.
 
     Duas regras da Meta mandam no formato deste envio:
@@ -496,6 +509,8 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
         polui o erro gravado."""
         if page_id:
             return [("pagina", f"{config.GRAPH}/{page_id}/messages", page_token)]
+        if plataforma == "fb":
+            return []            # sem Página não existe direct no Facebook
         t = [(h.split("//")[1].split("/")[0],
               f"{h}/{config.INSTAGRAM_BUSINESS_ID}/messages", get_token()) for h in HOSTS_DM]
         if _HOST_BOM["url"]:
@@ -694,7 +709,7 @@ def _midias_alvo(a: dict) -> list[str]:
     return [a["midia_id"]] if a.get("midia_id") else []
 
 
-def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
+def tratar_comentario(a: dict, midia_id: str, comentario: dict, plataforma: str = "ig") -> bool:
     """Responde um comentário. Devolve True se acionou a automação."""
     texto = comentario.get("text", "")
     usuario = comentario.get("username", "")
@@ -704,7 +719,7 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict) -> bool:
         return False
     if a["uma_vez_por_pessoa"] and _ja_atendeu(a["id"], usuario):
         return False
-    if not _reservar_comentario(a["id"], comentario, midia_id):
+    if not _reservar_comentario(a["id"], comentario, midia_id, plataforma):
         return False
 
     # NADA sai daqui: o comentário entra na fila e o marca-passo trata a pessoa inteira.
@@ -725,16 +740,19 @@ def rodar():
             if a["escopo"] == "proximo" and not a.get("midia_id"):
                 a = engatar_proximo(a)
             desde = _desde(a)
-            for midia_id in _midias_alvo(a):
+            alvos = [("ig", m, _buscar_comentarios) for m in _midias_alvo(a)]
+            if a.get("facebook") and config.AUTOMACOES_FACEBOOK:
+                alvos += [("fb", p, _comentarios_facebook) for p in _posts_facebook(a)]
+            for plataforma, alvo_id, buscar in alvos:
                 tratados = 0
-                for c in _buscar_comentarios(midia_id, desde):
+                for c in buscar(alvo_id, desde):
                     quando = _parse_ts(c.get("timestamp"))
                     if quando and quando < desde:
                         continue
-                    if tratar_comentario(a, midia_id, c):
+                    if tratar_comentario(a, alvo_id, c, plataforma):
                         tratados += 1
                         if tratados >= MAX_POR_RODADA:
-                            print(f"[automacoes] #{a['id']} atingiu o teto da rodada ({MAX_POR_RODADA}).")
+                            print(f"[automacoes] #{a['id']} atingiu o teto da rodada em {plataforma}.")
                             break
         except Exception as e:  # noqa: BLE001
             print(f"[automacoes] #{a['id']} falhou na rodada: {e}")
@@ -790,7 +808,8 @@ def enviar_fila() -> int:
         return 0
     # 1º o direct. Só depois a resposta pública: invertido, a Meta recusa a private reply.
     try:
-        status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"])
+        plataforma = e["plataforma"] if "plataforma" in e.keys() else "ig"
+        status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"], plataforma)
     except Exception as err:  # noqa: BLE001
         _atualizar_dm(e["comment_id"], _definitivo(str(err)) or "erro", str(err))
         return 0
@@ -799,14 +818,14 @@ def enviar_fila() -> int:
     if a["responder_publico"] and a["respostas"] and not (e["resposta"] or ""):
         resposta = random.choice(a["respostas"])
         try:
-            responder_comentario(e["comment_id"], resposta)
+            responder_comentario(e["comment_id"], resposta, plataforma)
             c = db.conn()
             c.execute("UPDATE automacao_eventos SET resposta = ? WHERE comment_id = ?",
                       (resposta, e["comment_id"]))
             c.commit()
         except Exception as err:  # noqa: BLE001
             print(f"[automacoes] resposta pública de @{e['usuario']} falhou: {err}")
-    print(f"[automacoes] @{e['usuario']}: direct {status} + resposta pública.")
+    print(f"[automacoes] [{plataforma}] @{e['usuario']}: direct {status} + resposta pública.")
     return 1
 
 
@@ -835,6 +854,18 @@ def garantir_webhook() -> dict:
         timeout=30,
     )
     out["assinatura_app"] = "ok" if r.status_code < 400 else _erro_graph(r)
+
+    # o Facebook entrega comentário pelo objeto 'page', campo 'feed'
+    r = requests.post(
+        f"{config.GRAPH}/{config.FACEBOOK_APP_ID}/subscriptions",
+        params={
+            "object": "page", "callback_url": callback, "fields": "feed",
+            "verify_token": config.IG_WEBHOOK_VERIFY_TOKEN, "include_values": "true",
+            "access_token": app_token,
+        },
+        timeout=30,
+    )
+    out["assinatura_app_facebook"] = "ok" if r.status_code < 400 else _erro_graph(r)
 
     # a Página também precisa ter o app inscrito, senão a Meta não entrega o evento
     page_id, page_token = _pagina()
@@ -918,6 +949,68 @@ def testar_direct_facebook() -> dict:
     return {"ok": r.status_code < 400, "post": post_id, "comentario": alvo["id"],
             "de": (alvo.get("from") or {}).get("name", "?"), "texto": alvo.get("message", "")[:40],
             "resposta": r.json() if r.status_code < 400 else _erro_graph(r)}
+
+
+# O crosspost do Instagram nasce no Facebook em segundos; essa é a folga pra casar os dois
+JANELA_CROSSPOST_MIN = 20
+
+
+def _posts_facebook(a: dict) -> list[str]:
+    """Posts da Página que correspondem ao alvo da automação.
+
+    O post do Facebook é outro objeto, com outro id. Como o Pedro publica nos dois ao
+    mesmo tempo, o pareamento é por horário: o post do Facebook publicado junto do post
+    do Instagram que a automação engatou. Escopo 'todos' pega tudo desde a criação.
+    """
+    page_id, page_token = _pagina()
+    if not page_id:
+        return []
+    r = requests.get(
+        f"{config.GRAPH}/{page_id}/posts",
+        params={"fields": "id,created_time", "limit": 25, "access_token": page_token}, timeout=30,
+    )
+    if r.status_code >= 400:
+        print(f"[automacoes] não li os posts da Página: {_erro_graph(r)}")
+        return []
+    posts = r.json().get("data", [])
+
+    if a["escopo"] == "todos":
+        desde = _desde(a)
+        return [p["id"] for p in posts if (_parse_ts(p.get("created_time")) or desde) >= desde]
+
+    if not a.get("midia_id"):
+        return []
+    alvo = _parse_ts(a.get("engatada_em")) or _desde(a)
+    folga = timedelta(minutes=JANELA_CROSSPOST_MIN)
+    return [p["id"] for p in posts
+            if (q := _parse_ts(p.get("created_time"))) and abs(q - alvo) <= folga]
+
+
+def _comentarios_facebook(post_id: str, desde: datetime | None = None) -> list[dict]:
+    """Comentários de um post da Página, no mesmo formato do lado do Instagram."""
+    _, page_token = _pagina()
+    url = f"{config.GRAPH}/{post_id}/comments"
+    params: dict | None = {"fields": "id,message,created_time,from{id,name}",
+                           "filter": "stream", "limit": 50, "access_token": page_token}
+    achatado: list[dict] = []
+    for _ in range(MAX_PAGINAS):
+        r = requests.get(url, params=params, timeout=30)
+        if r.status_code >= 400:
+            raise RuntimeError(_erro_graph(r))
+        corpo = r.json()
+        pagina = corpo.get("data", [])
+        for c in pagina:
+            quem = c.get("from") or {}
+            achatado.append({"id": c["id"], "text": c.get("message", ""),
+                             "username": quem.get("name") or quem.get("id", ""),
+                             "timestamp": c.get("created_time")})
+        proxima = (corpo.get("paging") or {}).get("next")
+        if not pagina or not proxima:
+            break
+        if desde and all((_parse_ts(c.get("created_time")) or desde) < desde for c in pagina):
+            break
+        url, params = proxima, None
+    return achatado
 
 
 def diagnostico_facebook() -> dict:
@@ -1060,29 +1153,50 @@ def pendentes_na_fila() -> int:
 
 
 def tratar_webhook(payload: dict) -> int:
-    """Comentário chegando pelo webhook da Meta (caminho instantâneo)."""
+    """Comentário chegando pelo webhook da Meta (caminho instantâneo).
+
+    Dois formatos no mesmo endereço: Instagram manda `field: comments`; Facebook manda
+    `field: feed` com `item: comment` e `verb: add` (o mesmo feed traz curtida, share e
+    edição, que aqui não interessam).
+    """
     tratados = 0
     for entry in payload.get("entry", []):
         for ch in entry.get("changes", []):
-            if ch.get("field") != "comments":
-                continue
+            campo = ch.get("field")
             v = ch.get("value", {})
-            comentario = {
-                "id": v.get("id"),
-                "text": v.get("text", ""),
-                "username": (v.get("from") or {}).get("username", ""),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-            midia_id = (v.get("media") or {}).get("id", "")
+            if campo == "feed":
+                if v.get("item") != "comment" or v.get("verb") != "add":
+                    continue
+                plataforma = "fb"
+                comentario = {
+                    "id": v.get("comment_id"),
+                    "text": v.get("message", ""),
+                    "username": (v.get("from") or {}).get("name", ""),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+                midia_id = v.get("post_id", "")
+            elif campo == "comments":
+                plataforma = "ig"
+                comentario = {
+                    "id": v.get("id"),
+                    "text": v.get("text", ""),
+                    "username": (v.get("from") or {}).get("username", ""),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+                midia_id = (v.get("media") or {}).get("id", "")
+            else:
+                continue
             if not comentario["id"]:
                 continue
             for a in listar(so_ativas=True):
+                if plataforma == "fb" and not (a.get("facebook") and config.AUTOMACOES_FACEBOOK):
+                    continue
                 if a["escopo"] == "proximo" and not a.get("midia_id"):
                     a = engatar_proximo(a)
-                alvos = _midias_alvo(a)
+                alvos = _posts_facebook(a) if plataforma == "fb" else _midias_alvo(a)
                 if a["escopo"] != "todos" and midia_id not in alvos:
                     continue
-                if tratar_comentario(a, midia_id, comentario):
+                if tratar_comentario(a, midia_id, comentario, plataforma):
                     tratados += 1
                     break
     return tratados

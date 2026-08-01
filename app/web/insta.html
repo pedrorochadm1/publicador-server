@@ -235,6 +235,7 @@ function pintarEditor(){
           <div class="conta" id="c_url"></div></div>
       </div>
       <label class="sw"><input type="checkbox" id="f_uma" ${a.uma_vez_por_pessoa?"checked":""}>Só uma vez por pessoa</label>
+      <label class="sw"><input type="checkbox" id="f_fb" ${a.facebook!==false?"checked":""}>Valer também no Facebook <span class="dica">mesmo reel, post cruzado da Página</span></label>
     </div>
 
     <div class="acoes">
@@ -257,7 +258,7 @@ function pintarEditor(){
   // tudo que o Pedro mexe salva sozinho: texto com folga pra ele terminar de digitar,
   // liga/desliga na hora. Não existe botão de salvar em automação já criada.
   const campos = ["f_nome","f_palavras","f_modo","f_escopo","f_respostas","f_dm_texto","f_botao","f_url"];
-  const chaves = ["f_ativa","f_pub","f_dm","f_uma"];
+  const chaves = ["f_ativa","f_pub","f_dm","f_uma","f_fb"];
   campos.forEach(id => { const el = $("#"+id); if (el) el.addEventListener("input", () => { revisar(); agendar(700); }); });
   chaves.forEach(id => { const el = $("#"+id); if (el) el.addEventListener("change", () => { revisar(); agendar(0); }); });
   ["f_modo","f_escopo"].forEach(id => $("#"+id).addEventListener("change", () => agendar(0)));
@@ -428,7 +429,8 @@ function coletar(){
     botao_url: $("#f_url").value.trim(),
     responder_publico: $("#f_pub").checked,
     enviar_dm: $("#f_dm").checked,
-    uma_vez_por_pessoa: $("#f_uma").checked
+    uma_vez_por_pessoa: $("#f_uma").checked,
+    facebook: $("#f_fb").checked
   };
 }
 
@@ -466,12 +468,13 @@ async function pintarHistorico(){
   const ev = await api("/insta/api/eventos" + (atual && atual.id ? "?automacao_id="+atual.id : ""));
   $("#historico").className = ev.length ? "" : "vazio";
   $("#historico").innerHTML = ev.length ? `<table>
-    <tr><th>Quando</th><th>Quem</th><th>Comentário</th><th>Resposta</th><th>Direct</th></tr>
+    <tr><th>Quando</th><th>Quem</th><th>Comentário</th><th>Resposta</th><th>Onde</th><th>Direct</th></tr>
     ${ev.map(e => `<tr>
       <td>${data(e.quando)}</td>
       <td>@${esc(e.usuario)}</td>
       <td>${esc((e.texto||"").slice(0,60))}</td>
       <td>${esc((e.resposta||"").slice(0,60)) || "—"}</td>
+      <td><span class="badge">${e.plataforma === "fb" ? "Facebook" : "Instagram"}</span></td>
       <td><span class="badge ${e.dm_status && e.dm_status.startsWith("ok") ? "ok" : (e.dm_status ? "erro":"")}"
           title="${esc(e.erro||"")}">${esc(e.dm_status||"—")}</span></td>
     </tr>`).join("")}</table>` : "Nada ainda.";

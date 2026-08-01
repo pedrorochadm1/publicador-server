@@ -54,6 +54,7 @@ INSTA_UI_PASSWORD = os.environ.get("INSTA_UI_PASSWORD", "")
 IG_WEBHOOK_VERIFY_TOKEN = os.environ.get("IG_WEBHOOK_VERIFY_TOKEN", "")
 # O motor varre os comentários do post alvo neste intervalo. O webhook, quando
 # configurado no app do Facebook, responde na hora; o polling é a rede de segurança.
+AUTOMACOES_FACEBOOK = os.environ.get("AUTOMACOES_FACEBOOK", "true").lower() in ("1", "true", "sim", "yes")
 AUTOMACOES_ATIVAS = os.environ.get("AUTOMACOES_ATIVAS", "true").lower() in ("1", "true", "sim", "yes")
 AUTOMACOES_POLL_SEGUNDOS = int(os.environ.get("AUTOMACOES_POLL_SEGUNDOS", "60"))
 
