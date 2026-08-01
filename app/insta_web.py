@@ -165,7 +165,8 @@ def api_fila(enviar: int = 0, insta_sess: str | None = Cookie(default=None)):
     crua se houver — sem isso, erro dentro do job do scheduler morre no log do container."""
     _exige(insta_sess)
     pode, motivo = automacoes._pode_enviar_dm()
-    out = {"na_fila": automacoes.pendentes_na_fila(), "pode_enviar": pode, "motivo": motivo,
+    out = {"nome_indisponivel": automacoes._NOME_ULTIMO_ERRO["motivo"],
+           "na_fila": automacoes.pendentes_na_fila(), "pode_enviar": pode, "motivo": motivo,
            "ritmo": automacoes.ritmo_atual(), "marca_passo": automacoes.marca_passo_vivo(),
            "enviados_na_hora": automacoes.enviados_na_hora(),
            "descanso_ate": (automacoes._DESCANSO_ATE["quando"].isoformat()

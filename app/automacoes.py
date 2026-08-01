@@ -832,7 +832,7 @@ def enviar_fila() -> int:
     # no Facebook o nome só aparece depois do direct: aproveita o recipient_id da resposta
     if plataforma == "fb" and not (e["usuario"] or ""):
         psid = ((_ULTIMA_RESPOSTA["corpo"] or {}).get("recipient_id") or "")
-        nome = nome_por_psid(psid)
+        nome = nome_por_psid(psid) or (f"fb:{psid[-8:]}" if psid else "")
         if nome:
             c = db.conn()
             c.execute("UPDATE automacao_eventos SET usuario = ? WHERE comment_id = ?",
