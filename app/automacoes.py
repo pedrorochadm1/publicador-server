@@ -778,6 +778,8 @@ def _definitivo(erro: str) -> str:
     e = erro.lower()
     if "2534023" in e or "já tem uma resposta" in e:
         return "ja-respondido"
+    if "10900" in e or "already replied" in e:
+        return "ja-respondido"          # mesmo caso, do lado do Facebook
     if "2534001" in e or "arquivou ou excluiu esta conversa" in e:
         return "conversa-indisponivel"
     if "inválido" in e and "comment_id" in e:
