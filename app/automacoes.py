@@ -876,6 +876,48 @@ def webhook_status(forcar: bool = False) -> dict:
     return dados
 
 
+def diagnostico_facebook() -> dict:
+    """Só leitura: o que dá pra fazer na Página do Facebook com o token que já temos.
+
+    Existe pra decidir a perna do Facebook com dado, não com suposição: se dá pra ler
+    post e comentário, e se o app enxerga a caixa de mensagens da Página.
+    """
+    page_id, page_token = _pagina()
+    if not page_id:
+        return {"ok": False, "motivo": "sem Página resolvida no token"}
+    out: dict = {"page_id": page_id}
+
+    r = requests.get(
+        f"{config.GRAPH}/{page_id}/posts",
+        params={"fields": "id,created_time,permalink_url,comments.limit(1).summary(true)",
+                "limit": 5, "access_token": page_token},
+        timeout=30,
+    )
+    if r.status_code >= 400:
+        out["posts"] = {"erro": _erro_graph(r)}
+    else:
+        out["posts"] = [{
+            "id": p.get("id"), "quando": (p.get("created_time") or "")[:19],
+            "comentarios": ((p.get("comments") or {}).get("summary") or {}).get("total_count", 0),
+        } for p in r.json().get("data", [])]
+
+    # a caixa de mensagens da Página: se isso responde, o produto de mensagem está liberado
+    r = requests.get(
+        f"{config.GRAPH}/{page_id}/conversations",
+        params={"fields": "id", "limit": 1, "access_token": page_token}, timeout=30,
+    )
+    out["mensagens_da_pagina"] = "ok" if r.status_code < 400 else _erro_graph(r)
+
+    r = requests.get(
+        f"{config.GRAPH}/{page_id}/subscribed_apps",
+        params={"access_token": page_token}, timeout=30,
+    )
+    out["app_inscrito_na_pagina"] = (
+        [s.get("subscribed_fields") for s in r.json().get("data", [])]
+        if r.status_code < 400 else _erro_graph(r))
+    return out
+
+
 def limpar_envenenados() -> int:
     """Tira da fila quem já recebeu resposta pública sem ter recebido o direct.
 
