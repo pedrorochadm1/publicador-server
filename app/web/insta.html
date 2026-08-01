@@ -491,7 +491,7 @@ async function inicio(){
   else if (st.webhook && st.webhook.ativo) partes.push("tempo real");
   else partes.push(`sem webhook · varrendo a cada ${st.polling_segundos}s`);
   if (st.ligado && st.marca_passo && !st.marca_passo.vivo) partes.push("envio parado");
-  if (st.token_dias != null) partes.push(`token ${st.token_dias}d`);
+  partes.push(st.token_dias != null ? `token ${st.token_dias}d` : "token sem prazo");
   $("#status").textContent = partes.join(" · ");
   const saudavel = st.ligado && st.webhook && st.webhook.ativo && st.marca_passo && st.marca_passo.vivo;
   $("#status").className = "chip" + (saudavel ? " on" : "");
