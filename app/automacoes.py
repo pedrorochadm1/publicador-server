@@ -222,7 +222,11 @@ def _reservar_comentario(automacao_id: int, comentario: dict, midia_id: str,
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 automacao_id, comentario["id"], midia_id, comentario.get("username", ""),
-                comentario.get("text", ""), datetime.now(timezone.utc).isoformat(), plataforma,
+                comentario.get("text", ""),
+                # a hora do comentário, não a da inserção: é ela que manda na prioridade da
+                # fila e na janela de 7 dias do private reply
+                (_parse_ts(comentario.get("timestamp")) or datetime.now(timezone.utc)).isoformat(),
+                plataforma,
             ),
         )
         c.commit()
@@ -797,7 +801,7 @@ def enviar_fila() -> int:
         f"""SELECT * FROM automacao_eventos
             WHERE (dm_status IN ({marcas}) OR dm_status IS NULL OR dm_status = '')
               AND quando >= ?
-            ORDER BY id DESC LIMIT 1""",
+            ORDER BY quando DESC, id DESC LIMIT 1""",
         (*PENDENTES, corte),
     ).fetchone()
     if not e:
@@ -910,6 +914,40 @@ def webhook_status(forcar: bool = False) -> dict:
         dados["erro"] = str(e)
     _WEBHOOK_CACHE.update({"quando": agora, "dados": dados})
     return dados
+
+
+def recuperar_facebook(limite: int = 500) -> dict:
+    """Coloca na fila quem comentou no Facebook antes da perna existir.
+
+    Não manda nada aqui: só enfileira. Quem entrega é o marca-passo, no mesmo ritmo de
+    sempre, e como a fila é ordenada por recência do comentário, quem comentar agora
+    continua passando na frente da recuperação.
+    """
+    a = next((x for x in listar(so_ativas=True) if x.get("facebook") and x["dm_texto"]), None)
+    if not a:
+        return {"ok": False, "motivo": "nenhuma automação ativa com Facebook e texto de direct"}
+    corte = datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)
+
+    enfileirados = ja_tinha = fora = nao_casa = 0
+    for post_id in _posts_facebook(a):
+        for c in _comentarios_facebook(post_id):
+            if enfileirados >= limite:
+                break
+            if not casa(c.get("text", ""), a["palavras"], a["modo"]):
+                nao_casa += 1
+                continue
+            quando = _parse_ts(c.get("timestamp"))
+            if quando and quando < corte:
+                fora += 1                     # passou dos 7 dias: a Meta não aceita mais
+                continue
+            if _reservar_comentario(a["id"], c, post_id, "fb"):
+                _fechar_evento(c["id"], "", "na-fila", "")
+                enfileirados += 1
+            else:
+                ja_tinha += 1
+    return {"ok": True, "enfileirados": enfileirados, "ja_estavam": ja_tinha,
+            "fora_da_janela_7d": fora, "sem_palavra_chave": nao_casa,
+            "na_fila_agora": pendentes_na_fila()}
 
 
 def testar_direct_facebook() -> dict:
