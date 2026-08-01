@@ -912,12 +912,17 @@ _WEBHOOK_CACHE: dict = {"quando": None, "dados": None}
 
 
 def webhook_status(forcar: bool = False) -> dict:
-    """Se a Meta está mesmo entregando comentário na hora. Pergunta pra ela, não pro .env:
-    ter verify_token configurado não significa assinatura ativa (foi o caso até hoje)."""
+    """Se a Meta está mesmo entregando comentário na hora, nas DUAS redes.
+
+    Pergunta pra Meta, não pro .env: ter verify_token configurado nunca significou
+    assinatura ativa. E olha os dois objetos — checar só o Instagram deixaria a queda do
+    Facebook invisível, que é exatamente como o webhook ficou desligado sem ninguém ver.
+    """
     agora = datetime.now(timezone.utc)
     if not forcar and _WEBHOOK_CACHE["quando"] and agora - _WEBHOOK_CACHE["quando"] < timedelta(minutes=10):
         return _WEBHOOK_CACHE["dados"]
-    dados = {"ativo": False, "campos": [], "callback": ""}
+    esperado = {"instagram": "comments", "page": "feed"}
+    dados: dict = {"instagram": False, "facebook": False, "callback": ""}
     try:
         r = requests.get(
             f"{config.GRAPH}/{config.FACEBOOK_APP_ID}/subscriptions",
@@ -925,15 +930,19 @@ def webhook_status(forcar: bool = False) -> dict:
             timeout=20,
         )
         for s in (r.json().get("data", []) if r.status_code < 400 else []):
-            if s.get("object") != "instagram":
+            obj = s.get("object")
+            if obj not in esperado:
                 continue
             campos = [f.get("name") for f in s.get("fields", [])]
-            dados = {"ativo": bool(s.get("active")) and "comments" in campos,
-                     "campos": campos, "callback": s.get("callback_url", "")}
+            vivo = bool(s.get("active")) and esperado[obj] in campos
+            dados["instagram" if obj == "instagram" else "facebook"] = vivo
+            dados["callback"] = s.get("callback_url", "") or dados["callback"]
     except Exception as e:  # noqa: BLE001
         dados["erro"] = str(e)
+    dados["ativo"] = dados["instagram"] and dados["facebook"]
     _WEBHOOK_CACHE.update({"quando": agora, "dados": dados})
     return dados
+
 
 
 def _inicio_facebook() -> datetime:
