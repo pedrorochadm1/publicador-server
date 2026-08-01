@@ -936,6 +936,106 @@ def webhook_status(forcar: bool = False) -> dict:
     return dados
 
 
+def _inicio_facebook() -> datetime:
+    """Marco zero da perna do Facebook: o instante em que ela entrou no ar.
+
+    Sem isso, ligar o Facebook faria a automação tratar todo comentário antigo do post
+    cruzado de uma vez — 449 pessoas de dois dias atrás recebendo direct sem contexto.
+    A regra combinada é daqui pra frente, então o marco é gravado uma vez e não muda.
+    """
+    valor = db.get_meta(CHAVE_INICIO_FB)
+    if not valor:
+        valor = datetime.now(timezone.utc).isoformat()
+        db.set_meta(CHAVE_INICIO_FB, valor)
+        print(f"[automacoes] perna do Facebook começa a valer em {valor} (comentário antigo fica de fora).")
+    return datetime.fromisoformat(valor)
+
+
+def _posts_facebook(a: dict) -> list[str]:
+    """Posts da Página que correspondem ao alvo da automação.
+
+    O post do Facebook é outro objeto, com outro id. Como o Pedro publica nos dois ao
+    mesmo tempo, o pareamento é por horário: o post do Facebook publicado junto do post
+    do Instagram que a automação engatou. Escopo 'todos' pega tudo desde a criação.
+    """
+    page_id, page_token = _pagina()
+    if not page_id:
+        return []
+    r = requests.get(
+        f"{config.GRAPH}/{page_id}/posts",
+        params={"fields": "id,created_time", "limit": 25, "access_token": page_token}, timeout=30,
+    )
+    if r.status_code >= 400:
+        print(f"[automacoes] não li os posts da Página: {_erro_graph(r)}")
+        return []
+    posts = r.json().get("data", [])
+
+    if a["escopo"] == "todos":
+        desde = _desde(a)
+        return [p["id"] for p in posts if (_parse_ts(p.get("created_time")) or desde) >= desde]
+
+    if not a.get("midia_id"):
+        return []
+    alvo = _parse_ts(a.get("engatada_em")) or _desde(a)
+    folga = timedelta(minutes=JANELA_CROSSPOST_MIN)
+    return [p["id"] for p in posts
+            if (q := _parse_ts(p.get("created_time"))) and abs(q - alvo) <= folga]
+
+
+_NOME_ULTIMO_ERRO: dict = {"motivo": ""}
+
+
+def nome_por_psid(psid: str) -> str:
+    """Nome de quem recebeu o direct no Facebook.
+
+    A Meta não devolve `from` nos comentários de post de Página, então o nome não vem
+    pela leitura do comentário. Depois do direct entregue, porém, a pessoa é um contato
+    da Página e o id dela (recipient_id) resolve o nome normalmente.
+    """
+    _, page_token = _pagina()
+    if not (psid and page_token):
+        return ""
+    try:
+        r = requests.get(f"{config.GRAPH}/{psid}",
+                         params={"fields": "name", "access_token": page_token}, timeout=20)
+        if r.status_code < 400:
+            return r.json().get("name", "")
+        motivo = _erro_graph(r)
+        if motivo != _NOME_ULTIMO_ERRO["motivo"]:      # cada motivo novo loga uma vez só
+            _NOME_ULTIMO_ERRO["motivo"] = motivo
+            print(f"[automacoes] nome do Facebook indisponível: {motivo}")
+    except Exception as e:  # noqa: BLE001
+        _NOME_ULTIMO_ERRO["motivo"] = str(e)
+    return ""
+
+
+def _comentarios_facebook(post_id: str, desde: datetime | None = None) -> list[dict]:
+    """Comentários de um post da Página, no mesmo formato do lado do Instagram."""
+    _, page_token = _pagina()
+    url = f"{config.GRAPH}/{post_id}/comments"
+    params: dict | None = {"fields": "id,message,created_time,from{id,name}",
+                           "filter": "stream", "limit": 50, "access_token": page_token}
+    achatado: list[dict] = []
+    for _ in range(MAX_PAGINAS):
+        r = requests.get(url, params=params, timeout=30)
+        if r.status_code >= 400:
+            raise RuntimeError(_erro_graph(r))
+        corpo = r.json()
+        pagina = corpo.get("data", [])
+        for c in pagina:
+            quem = c.get("from") or {}
+            achatado.append({"id": c["id"], "text": c.get("message", ""),
+                             "username": quem.get("name") or quem.get("id", ""),
+                             "timestamp": c.get("created_time")})
+        proxima = (corpo.get("paging") or {}).get("next")
+        if not pagina or not proxima:
+            break
+        if desde and all((_parse_ts(c.get("created_time")) or desde) < desde for c in pagina):
+            break
+        url, params = proxima, None
+    return achatado
+
+
 def diagnostico_facebook() -> dict:
     """Só leitura: o que dá pra fazer na Página do Facebook com o token que já temos.
 
