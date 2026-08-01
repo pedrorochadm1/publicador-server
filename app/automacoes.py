@@ -740,14 +740,15 @@ def rodar():
             if a["escopo"] == "proximo" and not a.get("midia_id"):
                 a = engatar_proximo(a)
             desde = _desde(a)
-            alvos = [("ig", m, _buscar_comentarios) for m in _midias_alvo(a)]
+            alvos = [("ig", m, _buscar_comentarios, desde) for m in _midias_alvo(a)]
             if a.get("facebook") and config.AUTOMACOES_FACEBOOK:
-                alvos += [("fb", p, _comentarios_facebook) for p in _posts_facebook(a)]
-            for plataforma, alvo_id, buscar in alvos:
+                desde_fb = max(desde, _inicio_facebook())
+                alvos += [("fb", p, _comentarios_facebook, desde_fb) for p in _posts_facebook(a)]
+            for plataforma, alvo_id, buscar, corte in alvos:
                 tratados = 0
-                for c in buscar(alvo_id, desde):
+                for c in buscar(alvo_id, corte):
                     quando = _parse_ts(c.get("timestamp"))
-                    if quando and quando < desde:
+                    if quando and quando < corte:
                         continue
                     if tratar_comentario(a, alvo_id, c, plataforma):
                         tratados += 1
@@ -953,6 +954,24 @@ def testar_direct_facebook() -> dict:
 
 # O crosspost do Instagram nasce no Facebook em segundos; essa é a folga pra casar os dois
 JANELA_CROSSPOST_MIN = 20
+
+
+CHAVE_INICIO_FB = "automacoes_facebook_desde"
+
+
+def _inicio_facebook() -> datetime:
+    """Marco zero da perna do Facebook: o instante em que ela entrou no ar.
+
+    Sem isso, ligar o Facebook faria a automação tratar todo comentário antigo do post
+    cruzado de uma vez — 449 pessoas de dois dias atrás recebendo direct sem contexto.
+    A regra combinada é daqui pra frente, então o marco é gravado uma vez e não muda.
+    """
+    valor = db.get_meta(CHAVE_INICIO_FB)
+    if not valor:
+        valor = datetime.now(timezone.utc).isoformat()
+        db.set_meta(CHAVE_INICIO_FB, valor)
+        print(f"[automacoes] perna do Facebook começa a valer em {valor} (comentário antigo fica de fora).")
+    return datetime.fromisoformat(valor)
 
 
 def _posts_facebook(a: dict) -> list[str]:
@@ -1195,6 +1214,8 @@ def tratar_webhook(payload: dict) -> int:
                     a = engatar_proximo(a)
                 alvos = _posts_facebook(a) if plataforma == "fb" else _midias_alvo(a)
                 if a["escopo"] != "todos" and midia_id not in alvos:
+                    continue
+                if plataforma == "fb" and datetime.now(timezone.utc) < _inicio_facebook():
                     continue
                 if tratar_comentario(a, midia_id, comentario, plataforma):
                     tratados += 1
