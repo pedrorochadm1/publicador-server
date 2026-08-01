@@ -936,178 +936,6 @@ def webhook_status(forcar: bool = False) -> dict:
     return dados
 
 
-def recuperar_facebook(limite: int = 500) -> dict:
-    """Coloca na fila quem comentou no Facebook antes da perna existir.
-
-    Não manda nada aqui: só enfileira. Quem entrega é o marca-passo, no mesmo ritmo de
-    sempre, e como a fila é ordenada por recência do comentário, quem comentar agora
-    continua passando na frente da recuperação.
-    """
-    a = next((x for x in listar(so_ativas=True) if x.get("facebook") and x["dm_texto"]), None)
-    if not a:
-        return {"ok": False, "motivo": "nenhuma automação ativa com Facebook e texto de direct"}
-    corte = datetime.now(timezone.utc) - timedelta(days=JANELA_DM_DIAS)
-
-    enfileirados = ja_tinha = fora = nao_casa = 0
-    for post_id in _posts_facebook(a):
-        for c in _comentarios_facebook(post_id):
-            if enfileirados >= limite:
-                break
-            if not casa(c.get("text", ""), a["palavras"], a["modo"]):
-                nao_casa += 1
-                continue
-            quando = _parse_ts(c.get("timestamp"))
-            if quando and quando < corte:
-                fora += 1                     # passou dos 7 dias: a Meta não aceita mais
-                continue
-            if _reservar_comentario(a["id"], c, post_id, "fb"):
-                _fechar_evento(c["id"], "", "na-fila", "")
-                enfileirados += 1
-            else:
-                ja_tinha += 1
-    return {"ok": True, "enfileirados": enfileirados, "ja_estavam": ja_tinha,
-            "fora_da_janela_7d": fora, "sem_palavra_chave": nao_casa,
-            "na_fila_agora": pendentes_na_fila()}
-
-
-def testar_direct_facebook() -> dict:
-    """Manda UM private reply de verdade no Facebook, pro comentário mais recente do post
-    mais recente da Página. É o único jeito de saber se a Meta aceita: nenhum endereço de
-    leitura responde por isso. Devolve o que a Graph respondeu, cru."""
-    page_id, page_token = _pagina()
-    if not page_id:
-        return {"ok": False, "motivo": "sem Página resolvida"}
-    a = next((x for x in listar(so_ativas=True) if x["dm_texto"]), None)
-    if not a:
-        return {"ok": False, "motivo": "nenhuma automação ativa com texto de direct"}
-
-    r = requests.get(f"{config.GRAPH}/{page_id}/posts",
-                     params={"fields": "id", "limit": 1, "access_token": page_token}, timeout=30)
-    posts = r.json().get("data", []) if r.status_code < 400 else []
-    if not posts:
-        return {"ok": False, "motivo": f"sem posts: {_erro_graph(r)}"}
-    post_id = posts[0]["id"]
-
-    r = requests.get(f"{config.GRAPH}/{post_id}/comments",
-                     params={"fields": "id,message,from", "limit": 25, "order": "reverse_chronological",
-                             "access_token": page_token}, timeout=30)
-    if r.status_code >= 400:
-        return {"ok": False, "motivo": f"não li os comentários: {_erro_graph(r)}"}
-    alvo = next((c for c in r.json().get("data", [])
-                 if casa(c.get("message", ""), a["palavras"], a["modo"])), None)
-    if not alvo:
-        return {"ok": False, "motivo": "nenhum comentário recente casa com a palavra-chave"}
-
-    corpo = {"recipient": {"comment_id": alvo["id"]},
-             "message": {"attachment": {"type": "template", "payload": {
-                 "template_type": "button", "text": a["dm_texto"][:LIMITE_TEXTO_BOTAO],
-                 "buttons": [{"type": "web_url", "url": a["botao_url"],
-                              "title": a["botao_texto"][:LIMITE_TITULO_BOTAO]}]}}}}
-    r = requests.post(f"{config.GRAPH}/{page_id}/messages",
-                      params={"access_token": page_token}, json=corpo, timeout=30)
-    return {"ok": r.status_code < 400, "post": post_id, "comentario": alvo["id"],
-            "de": (alvo.get("from") or {}).get("name", "?"), "texto": alvo.get("message", "")[:40],
-            "resposta": r.json() if r.status_code < 400 else _erro_graph(r)}
-
-
-# O crosspost do Instagram nasce no Facebook em segundos; essa é a folga pra casar os dois
-JANELA_CROSSPOST_MIN = 20
-
-
-CHAVE_INICIO_FB = "automacoes_facebook_desde"
-
-
-def _inicio_facebook() -> datetime:
-    """Marco zero da perna do Facebook: o instante em que ela entrou no ar.
-
-    Sem isso, ligar o Facebook faria a automação tratar todo comentário antigo do post
-    cruzado de uma vez — 449 pessoas de dois dias atrás recebendo direct sem contexto.
-    A regra combinada é daqui pra frente, então o marco é gravado uma vez e não muda.
-    """
-    valor = db.get_meta(CHAVE_INICIO_FB)
-    if not valor:
-        valor = datetime.now(timezone.utc).isoformat()
-        db.set_meta(CHAVE_INICIO_FB, valor)
-        print(f"[automacoes] perna do Facebook começa a valer em {valor} (comentário antigo fica de fora).")
-    return datetime.fromisoformat(valor)
-
-
-def _posts_facebook(a: dict) -> list[str]:
-    """Posts da Página que correspondem ao alvo da automação.
-
-    O post do Facebook é outro objeto, com outro id. Como o Pedro publica nos dois ao
-    mesmo tempo, o pareamento é por horário: o post do Facebook publicado junto do post
-    do Instagram que a automação engatou. Escopo 'todos' pega tudo desde a criação.
-    """
-    page_id, page_token = _pagina()
-    if not page_id:
-        return []
-    r = requests.get(
-        f"{config.GRAPH}/{page_id}/posts",
-        params={"fields": "id,created_time", "limit": 25, "access_token": page_token}, timeout=30,
-    )
-    if r.status_code >= 400:
-        print(f"[automacoes] não li os posts da Página: {_erro_graph(r)}")
-        return []
-    posts = r.json().get("data", [])
-
-    if a["escopo"] == "todos":
-        desde = _desde(a)
-        return [p["id"] for p in posts if (_parse_ts(p.get("created_time")) or desde) >= desde]
-
-    if not a.get("midia_id"):
-        return []
-    alvo = _parse_ts(a.get("engatada_em")) or _desde(a)
-    folga = timedelta(minutes=JANELA_CROSSPOST_MIN)
-    return [p["id"] for p in posts
-            if (q := _parse_ts(p.get("created_time"))) and abs(q - alvo) <= folga]
-
-
-def nome_por_psid(psid: str) -> str:
-    """Nome de quem recebeu o direct no Facebook.
-
-    A Meta não devolve `from` nos comentários de post de Página, então o nome não vem
-    pela leitura do comentário. Depois do direct entregue, porém, a pessoa é um contato
-    da Página e o id dela (recipient_id) resolve o nome normalmente.
-    """
-    _, page_token = _pagina()
-    if not (psid and page_token):
-        return ""
-    try:
-        r = requests.get(f"{config.GRAPH}/{psid}",
-                         params={"fields": "name", "access_token": page_token}, timeout=20)
-        return r.json().get("name", "") if r.status_code < 400 else ""
-    except Exception:  # noqa: BLE001
-        return ""
-
-
-def _comentarios_facebook(post_id: str, desde: datetime | None = None) -> list[dict]:
-    """Comentários de um post da Página, no mesmo formato do lado do Instagram."""
-    _, page_token = _pagina()
-    url = f"{config.GRAPH}/{post_id}/comments"
-    params: dict | None = {"fields": "id,message,created_time,from{id,name}",
-                           "filter": "stream", "limit": 50, "access_token": page_token}
-    achatado: list[dict] = []
-    for _ in range(MAX_PAGINAS):
-        r = requests.get(url, params=params, timeout=30)
-        if r.status_code >= 400:
-            raise RuntimeError(_erro_graph(r))
-        corpo = r.json()
-        pagina = corpo.get("data", [])
-        for c in pagina:
-            quem = c.get("from") or {}
-            achatado.append({"id": c["id"], "text": c.get("message", ""),
-                             "username": quem.get("name") or quem.get("id", ""),
-                             "timestamp": c.get("created_time")})
-        proxima = (corpo.get("paging") or {}).get("next")
-        if not pagina or not proxima:
-            break
-        if desde and all((_parse_ts(c.get("created_time")) or desde) < desde for c in pagina):
-            break
-        url, params = proxima, None
-    return achatado
-
-
 def diagnostico_facebook() -> dict:
     """Só leitura: o que dá pra fazer na Página do Facebook com o token que já temos.
 
@@ -1160,29 +988,6 @@ def diagnostico_facebook() -> dict:
     return out
 
 
-def limpar_envenenados() -> int:
-    """Tira da fila quem já recebeu resposta pública sem ter recebido o direct.
-
-    Esses são da fase em que a resposta pública saía primeiro. A Meta recusa a private
-    reply desses comentários pra sempre, e cada tentativa é uma chamada que conta no
-    limite da conta — ou seja, fila envenenada mantém o (#613) vivo sem entregar nada.
-    """
-    _init()
-    marcas = ", ".join("?" for _ in PENDENTES)
-    c = db.conn()
-    cur = c.execute(
-        f"""UPDATE automacao_eventos SET dm_status = 'ja-respondido',
-                   erro = COALESCE(NULLIF(erro, ''), 'resposta pública saiu antes do direct')
-            WHERE (dm_status IN ({marcas}) OR dm_status IS NULL OR dm_status = '')
-              AND resposta IS NOT NULL AND resposta != ''""",
-        PENDENTES,
-    )
-    c.commit()
-    if cur.rowcount:
-        print(f"[automacoes] {cur.rowcount} comentários saíram da fila: já tinham resposta pública.")
-    return cur.rowcount
-
-
 def marca_passo_vivo() -> dict:
     t = _THREAD["t"]
     return {"vivo": bool(t and t.is_alive()),
@@ -1202,7 +1007,7 @@ def iniciar_marca_passo():
         return
 
     def laco():
-        for tarefa in (limpar_envenenados, garantir_webhook):
+        for tarefa in (garantir_webhook,):
             try:
                 tarefa()
             except Exception as e:  # noqa: BLE001
