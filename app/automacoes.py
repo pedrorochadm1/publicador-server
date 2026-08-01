@@ -437,8 +437,12 @@ def _pagina() -> tuple[str, str]:
     vazio), isso devolve vazio e o envio cai nos hosts de HOSTS_DM.
     """
     agora = datetime.now(timezone.utc)
-    if _PAGINA["quando"] and agora - _PAGINA["quando"] < timedelta(hours=_PAGINA_VALIDA_H):
-        return _PAGINA["id"], _PAGINA["token"]
+    # sucesso vale horas; falha vale 1 minuto. Guardar falha por 6h derrubaria o direct
+    # a tarde inteira por causa de um tropeço de rede na subida.
+    if _PAGINA["quando"]:
+        validade = timedelta(hours=_PAGINA_VALIDA_H) if _PAGINA["id"] else timedelta(minutes=1)
+        if agora - _PAGINA["quando"] < validade:
+            return _PAGINA["id"], _PAGINA["token"]
     _PAGINA["quando"] = agora
     try:
         r = requests.get(
