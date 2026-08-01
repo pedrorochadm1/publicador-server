@@ -880,6 +880,46 @@ def webhook_status(forcar: bool = False) -> dict:
     return dados
 
 
+def testar_direct_facebook() -> dict:
+    """Manda UM private reply de verdade no Facebook, pro comentário mais recente do post
+    mais recente da Página. É o único jeito de saber se a Meta aceita: nenhum endereço de
+    leitura responde por isso. Devolve o que a Graph respondeu, cru."""
+    page_id, page_token = _pagina()
+    if not page_id:
+        return {"ok": False, "motivo": "sem Página resolvida"}
+    a = next((x for x in listar(so_ativas=True) if x["dm_texto"]), None)
+    if not a:
+        return {"ok": False, "motivo": "nenhuma automação ativa com texto de direct"}
+
+    r = requests.get(f"{config.GRAPH}/{page_id}/posts",
+                     params={"fields": "id", "limit": 1, "access_token": page_token}, timeout=30)
+    posts = r.json().get("data", []) if r.status_code < 400 else []
+    if not posts:
+        return {"ok": False, "motivo": f"sem posts: {_erro_graph(r)}"}
+    post_id = posts[0]["id"]
+
+    r = requests.get(f"{config.GRAPH}/{post_id}/comments",
+                     params={"fields": "id,message,from", "limit": 25, "order": "reverse_chronological",
+                             "access_token": page_token}, timeout=30)
+    if r.status_code >= 400:
+        return {"ok": False, "motivo": f"não li os comentários: {_erro_graph(r)}"}
+    alvo = next((c for c in r.json().get("data", [])
+                 if casa(c.get("message", ""), a["palavras"], a["modo"])), None)
+    if not alvo:
+        return {"ok": False, "motivo": "nenhum comentário recente casa com a palavra-chave"}
+
+    corpo = {"recipient": {"comment_id": alvo["id"]},
+             "message": {"attachment": {"type": "template", "payload": {
+                 "template_type": "button", "text": a["dm_texto"][:LIMITE_TEXTO_BOTAO],
+                 "buttons": [{"type": "web_url", "url": a["botao_url"],
+                              "title": a["botao_texto"][:LIMITE_TITULO_BOTAO]}]}}}}
+    r = requests.post(f"{config.GRAPH}/{page_id}/messages",
+                      params={"access_token": page_token}, json=corpo, timeout=30)
+    return {"ok": r.status_code < 400, "post": post_id, "comentario": alvo["id"],
+            "de": (alvo.get("from") or {}).get("name", "?"), "texto": alvo.get("message", "")[:40],
+            "resposta": r.json() if r.status_code < 400 else _erro_graph(r)}
+
+
 def diagnostico_facebook() -> dict:
     """Só leitura: o que dá pra fazer na Página do Facebook com o token que já temos.
 

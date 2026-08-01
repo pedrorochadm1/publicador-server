@@ -185,6 +185,12 @@ def api_assinar_webhook(insta_sess: str | None = Cookie(default=None)):
     return automacoes.garantir_webhook()
 
 
+@router.post("/insta/api/facebook/testar-direct")
+def api_testar_fb(insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    return automacoes.testar_direct_facebook()
+
+
 @router.get("/insta/api/diagnostico/facebook")
 def api_diagnostico_fb(insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
