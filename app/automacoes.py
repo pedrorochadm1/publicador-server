@@ -438,6 +438,9 @@ _VERSAO = config.GRAPH.rstrip("/").rsplit("/", 1)[-1]
 HOSTS_DM = (f"https://graph.instagram.com/{_VERSAO}", config.GRAPH)
 # Host que funcionou, pra não pagar a tentativa perdida em todo envio
 _HOST_BOM: dict = {"url": ""}
+# Última resposta de envio, pra quem chamou aproveitar o recipient_id. Só a thread do
+# marca-passo escreve aqui, e ela manda um direct por vez.
+_ULTIMA_RESPOSTA: dict = {"corpo": None}
 
 # Página ligada à conta, resolvida uma vez e reaproveitada
 _PAGINA: dict = {"id": "", "token": "", "quando": None}
@@ -533,6 +536,10 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
                 timeout=30,
             )
             if r.status_code < 400:
+                try:
+                    _ULTIMA_RESPOSTA["corpo"] = r.json()
+                except Exception:  # noqa: BLE001
+                    _ULTIMA_RESPOSTA["corpo"] = None
                 if _HOST_BOM["url"] != url:
                     _HOST_BOM["url"] = url
                     print(f"[automacoes] direct sai por {rotulo} ({url}).")
@@ -820,6 +827,17 @@ def enviar_fila() -> int:
         return 0
     _atualizar_dm(e["comment_id"], status)
 
+    # no Facebook o nome só aparece depois do direct: aproveita o recipient_id da resposta
+    if plataforma == "fb" and not (e["usuario"] or ""):
+        psid = ((_ULTIMA_RESPOSTA["corpo"] or {}).get("recipient_id") or "")
+        nome = nome_por_psid(psid)
+        if nome:
+            c = db.conn()
+            c.execute("UPDATE automacao_eventos SET usuario = ? WHERE comment_id = ?",
+                      (nome, e["comment_id"]))
+            c.commit()
+            e = dict(e) | {"usuario": nome}
+
     if a["responder_publico"] and a["respostas"] and not (e["resposta"] or ""):
         resposta = random.choice(a["respostas"])
         try:
@@ -1041,6 +1059,24 @@ def _posts_facebook(a: dict) -> list[str]:
     folga = timedelta(minutes=JANELA_CROSSPOST_MIN)
     return [p["id"] for p in posts
             if (q := _parse_ts(p.get("created_time"))) and abs(q - alvo) <= folga]
+
+
+def nome_por_psid(psid: str) -> str:
+    """Nome de quem recebeu o direct no Facebook.
+
+    A Meta não devolve `from` nos comentários de post de Página, então o nome não vem
+    pela leitura do comentário. Depois do direct entregue, porém, a pessoa é um contato
+    da Página e o id dela (recipient_id) resolve o nome normalmente.
+    """
+    _, page_token = _pagina()
+    if not (psid and page_token):
+        return ""
+    try:
+        r = requests.get(f"{config.GRAPH}/{psid}",
+                         params={"fields": "name", "access_token": page_token}, timeout=20)
+        return r.json().get("name", "") if r.status_code < 400 else ""
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def _comentarios_facebook(post_id: str, desde: datetime | None = None) -> list[dict]:
