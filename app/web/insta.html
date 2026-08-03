@@ -285,6 +285,7 @@ async function salvarAuto(){
   if (!atual || !atual.id || salvando) return;
   const dados = coletar();
   if (!dados.palavras.length) return estado("falta a palavra-chave", "erro");
+  if (dados.escopo === "midia" && !dados.midia_id) return estado("escolha o post", "erro");
   if (!revisar()) return estado("campo passando do limite", "erro");
   if (dados.respostas.some(r => /https?:\/\//i.test(r)))
     return estado("link não vai no comentário", "erro");
@@ -332,6 +333,7 @@ function contarLinhas(idCampo, idConta, limite){
 function temBotao(){ return !!($("#f_botao").value.trim() && $("#f_url").value.trim()); }
 
 function revisar(){
+  const semPost = $("#f_escopo") && $("#f_escopo").value === "midia" && !(atual && atual.midia_id);
   const limDm = temBotao() ? LIM.dmComBotao : LIM.dmSemBotao;
   $("#f_dm_texto").maxLength = limDm;
   const ok = [
@@ -345,9 +347,9 @@ function revisar(){
   $("#c_url").className = "conta" + (url && !urlOk ? " estourou" : "");
   $("#f_url").classList.toggle("campo-ruim", !!url && !urlOk);
   const bt = $("#criar");                  // só existe em automação nova
-  if (bt){ bt.disabled = !(ok && urlOk); bt.style.opacity = ok && urlOk ? "" : ".5"; }
+  if (bt){ bt.disabled = !(ok && urlOk && !semPost); bt.style.opacity = ok && urlOk && !semPost ? "" : ".5"; }
   pintarPrevia();
-  return ok && urlOk;
+  return ok && urlOk && !semPost;
 }
 
 function pintarPrevia(){
@@ -402,6 +404,8 @@ function pintarEscolhaPost(){
   alvo.querySelectorAll("figure").forEach(f => f.onclick = () => {
     atual.midia_id = f.dataset.id;
     alvo.querySelectorAll("figure").forEach(o => o.classList.toggle("sel", o === f));
+    revisar();
+    agendar(0);          // escolher o post É uma edição: grava na hora, como as chaves
   });
 }
 
