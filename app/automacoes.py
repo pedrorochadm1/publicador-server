@@ -95,6 +95,8 @@ def _init():
         c.execute("ALTER TABLE automacoes ADD COLUMN respostas_sem_dm TEXT NOT NULL DEFAULT '[]'")
     if "facebook" not in cols:
         c.execute("ALTER TABLE automacoes ADD COLUMN facebook INTEGER NOT NULL DEFAULT 1")
+    if "esperando_desde" not in cols:
+        c.execute("ALTER TABLE automacoes ADD COLUMN esperando_desde TEXT")
     ev = {r[1] for r in c.execute("PRAGMA table_info(automacao_eventos)").fetchall()}
     if "plataforma" not in ev:
         c.execute("ALTER TABLE automacao_eventos ADD COLUMN plataforma TEXT NOT NULL DEFAULT 'ig'")
@@ -129,7 +131,7 @@ def get(aid: int) -> dict | None:
 _CAMPOS = (
     "nome", "ativa", "palavras", "modo", "escopo", "midia_id", "respostas", "respostas_sem_dm",
     "dm_texto", "botao_texto", "botao_url", "responder_publico", "enviar_dm", "uma_vez_por_pessoa",
-    "facebook",
+    "facebook", "engatada_em", "esperando_desde",
 )
 
 
@@ -153,6 +155,8 @@ def criar(dados: dict) -> dict:
     _init()
     v = _serializar(dados)
     v.setdefault("criada_em", datetime.now(timezone.utc).isoformat())
+    if v.get("escopo") == "proximo":
+        v.setdefault("esperando_desde", v["criada_em"])
     colunas = ", ".join(v)
     marcas = ", ".join("?" for _ in v)
     c = db.conn()
@@ -162,9 +166,18 @@ def criar(dados: dict) -> dict:
 
 
 def atualizar(aid: int, dados: dict) -> dict | None:
-    if not get(aid):
+    antes = get(aid)
+    if not antes:
         return None
     v = _serializar(dados)
+    # Voltar pra "próxima publicação" REARMA: solta o post em que estava e passa a esperar
+    # a próxima de verdade. Sem isso, reselecionar reengatava no último post publicado,
+    # que é justamente o que não se quer quando já saiu publicação no meio.
+    if v.get("escopo") == "proximo" and (antes["escopo"] != "proximo" or antes.get("midia_id")):
+        v["midia_id"] = None
+        v["engatada_em"] = None
+        v["esperando_desde"] = datetime.now(timezone.utc).isoformat()
+        print(f"[automacoes] #{aid} rearmada: esperando a próxima publicação.")
     if v:
         sets = ", ".join(f"{k} = ?" for k in v)
         c = db.conn()
@@ -702,13 +715,18 @@ def engatar_proximo(a: dict) -> dict:
     """Escopo 'proximo': fixa a automação na primeira mídia publicada após a criação."""
     if a["escopo"] != "proximo" or a.get("midia_id"):
         return a
-    criada = _parse_ts(a.get("criada_em")) or datetime.now(timezone.utc)
-    candidatas = [m for m in buscar_midias() if (_parse_ts(m.get("timestamp")) or criada) > criada]
+    # o marco é quando a automação passou a esperar, não quando foi criada: se ela foi
+    # rearmada depois de uma publicação, a publicação anterior não conta
+    marco = (_parse_ts(a.get("esperando_desde")) or _parse_ts(a.get("criada_em"))
+             or datetime.now(timezone.utc))
+    candidatas = [m for m in buscar_midias() if (_parse_ts(m.get("timestamp")) or marco) > marco]
     if not candidatas:
         return a
     nova = min(candidatas, key=lambda m: _parse_ts(m["timestamp"]))
     print(f"[automacoes] #{a['id']} engatou no post {nova['id']} ({nova.get('permalink')})")
+    # deixa de ser "próxima" e vira o post concreto: o painel passa a mostrar qual é
     return atualizar(a["id"], {
+        "escopo": "midia",
         "midia_id": nova["id"],
         "engatada_em": _parse_ts(nova["timestamp"]).isoformat(),
     }) or a

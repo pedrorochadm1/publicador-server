@@ -391,8 +391,9 @@ function pintarPrevia(){
 function pintarEscolhaPost(){
   const escopo = $("#f_escopo").value, alvo = $("#escolha_post");
   if (escopo !== "midia"){
-    alvo.innerHTML = escopo === "proximo" && atual.midia_id
-      ? `<p class="meta">Já engatou no post publicado em ${data(atual.engatada_em)}.</p>` : "";
+    alvo.innerHTML = escopo === "proximo"
+      ? `<p class="meta">Aguardando a próxima publicação${atual.esperando_desde ? " desde " + data(atual.esperando_desde) : ""}. Quando ela sair, esta automação passa sozinha para <b>Post específico</b>, já apontando para ela.</p>`
+      : "";
     return;
   }
   alvo.innerHTML = `<label>Escolha o post</label><div class="posts">${
@@ -421,7 +422,7 @@ function coletar(){
     palavras: $("#f_palavras").value.split(",").map(s=>s.trim()).filter(Boolean),
     modo: $("#f_modo").value,
     escopo: $("#f_escopo").value,
-    midia_id: $("#f_escopo").value === "todos" ? null : atual.midia_id,
+    midia_id: $("#f_escopo").value === "midia" ? atual.midia_id : null,
     respostas: $("#f_respostas").value.split("\n").map(s=>s.trim()).filter(Boolean),
     respostas_sem_dm: [],
     dm_texto: $("#f_dm_texto").value.trim(),
