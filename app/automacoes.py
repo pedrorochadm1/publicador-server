@@ -739,6 +739,29 @@ def engatar_proximo(a: dict) -> dict:
     }, interno=True) or a
 
 
+def engatar_publicacao(media_id: str) -> int:
+    """Fixa na publicação que acabou de sair toda automação que estava esperando.
+
+    É o caminho instantâneo. O Instagram não tem webhook de publicação (só comments,
+    messages, mentions e story_insights), então os gatilhos possíveis são:
+      1. o próprio servidor publicando — chama isto na hora, latência zero;
+      2. o webhook `page/feed` do Facebook, que dispara no crosspost;
+      3. a varredura de 60s, que fica só de rede de segurança.
+    """
+    if not media_id:
+        return 0
+    agora = datetime.now(timezone.utc)
+    engatadas = 0
+    for a in listar(so_ativas=True):
+        if a["escopo"] != "proximo" or a.get("midia_id"):
+            continue
+        atualizar(a["id"], {"escopo": "midia", "midia_id": media_id,
+                            "engatada_em": agora.isoformat()}, interno=True)
+        engatadas += 1
+        print(f"[automacoes] #{a['id']} engatou na hora no post {media_id}.")
+    return engatadas
+
+
 def _midias_alvo(a: dict) -> list[str]:
     if a["escopo"] == "todos":
         return [m["id"] for m in buscar_midias(limite=5)]
@@ -1197,11 +1220,15 @@ def pendentes_na_fila() -> int:
 
 
 def tratar_webhook(payload: dict) -> int:
-    """Comentário chegando pelo webhook da Meta (caminho instantâneo).
+    """Eventos da Meta chegando pelo webhook (caminho instantâneo).
 
-    Dois formatos no mesmo endereço: Instagram manda `field: comments`; Facebook manda
-    `field: feed` com `item: comment` e `verb: add` (o mesmo feed traz curtida, share e
-    edição, que aqui não interessam).
+    Dois formatos no mesmo endereço:
+      - Instagram: `field: comments`.
+      - Facebook: `field: feed`, que traz de tudo da Página. Interessam dois casos:
+        `item: comment` + `verb: add` (comentário novo) e publicação nova
+        (`item: status|photo|video|reel|share` + `verb: add`), que é o gatilho de
+        "próxima publicação" — o Instagram não tem webhook de publicação, então o
+        crosspost do Facebook é o aviso mais rápido quando o post não sai daqui.
     """
     tratados = 0
     for entry in payload.get("entry", []):
@@ -1209,6 +1236,13 @@ def tratar_webhook(payload: dict) -> int:
             campo = ch.get("field")
             v = ch.get("value", {})
             if campo == "feed":
+                # publicação nova na Página (o crosspost do reel): engata na hora quem
+                # estava esperando, sem depender da varredura
+                if v.get("item") in ("status", "photo", "video", "reel", "share") and v.get("verb") == "add":
+                    for a in listar(so_ativas=True):
+                        if a["escopo"] == "proximo" and not a.get("midia_id"):
+                            engatar_proximo(a)
+                    continue
                 if v.get("item") != "comment" or v.get("verb") != "add":
                     continue
                 plataforma = "fb"

@@ -115,6 +115,11 @@ def _processar():
                 resultados.update(_fan_out_foto(post, arquivos))
 
             db.marcar(post["id"], "publicado", ig_post_id=ig_id, resultados=resultados)
+            # quem estava esperando "a próxima publicação" engata agora, não na varredura
+            try:
+                automacoes.engatar_publicacao(ig_id)
+            except Exception as e:  # noqa: BLE001
+                print(f"[scheduler] não consegui engatar automação no post {ig_id}: {e}")
             _limpar_arquivos(post["imagens"])
             print(f"[scheduler] Post {post['id']} publicado: {ig_id} | {resultados}")
         except Exception as e:  # noqa: BLE001
