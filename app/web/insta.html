@@ -487,6 +487,22 @@ async function carregar(){
   pintarLista();
 }
 
+// O servidor pode mudar a automação sozinho (é ele quem engata no post que saiu). Se a
+// tela ficar com a cópia velha, o próximo autosave desfaz isso. Então quando não há
+// edição pendente nem campo em foco, a tela se realinha com o servidor.
+async function realinhar(){
+  if (!atual || !atual.id || timerSalvar || salvando) return;
+  if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  try {
+    const lista = await api("/insta/api/automacoes");
+    const nova = lista.find(a => a.id === atual.id);
+    if (!nova) return;
+    automacoes = lista;
+    const mudou = JSON.stringify(nova) !== JSON.stringify(atual);
+    if (mudou){ selecionar(nova); aviso("Automação atualizada pelo servidor."); }
+  } catch(e){ /* rede instável: tenta de novo no próximo ciclo */ }
+}
+
 async function inicio(){
   const st = await api("/insta/api/status");
   // o que importa saber de relance: chega na hora ou depende da varredura?
@@ -508,6 +524,7 @@ async function inicio(){
   try { midias = await api("/insta/api/midias"); } catch(e){ midias = []; }
   if (automacoes.length) selecionar(automacoes[0]); else pintarEditor();
   await pintarHistorico();
+  setInterval(realinhar, 20000);
 }
 
 $("#nova").onclick = () => { atual = JSON.parse(JSON.stringify(VAZIA)); pintarLista(); pintarEditor(); };

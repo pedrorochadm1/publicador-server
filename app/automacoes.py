@@ -165,10 +165,17 @@ def criar(dados: dict) -> dict:
     return get(cur.lastrowid)
 
 
-def atualizar(aid: int, dados: dict) -> dict | None:
+# Quem escolhe o post alvo e os marcos é o servidor, nunca o painel: a tela pode estar
+# com uma cópia velha e desfazer o engate que acabou de acontecer.
+CAMPOS_DO_SERVIDOR = ("engatada_em", "esperando_desde")
+
+
+def atualizar(aid: int, dados: dict, interno: bool = False) -> dict | None:
     antes = get(aid)
     if not antes:
         return None
+    if not interno:
+        dados = {k: x for k, x in dados.items() if k not in CAMPOS_DO_SERVIDOR}
     v = _serializar(dados)
     # Voltar pra "próxima publicação" REARMA: solta o post em que estava e passa a esperar
     # a próxima de verdade. Sem isso, reselecionar reengatava no último post publicado,
@@ -729,7 +736,7 @@ def engatar_proximo(a: dict) -> dict:
         "escopo": "midia",
         "midia_id": nova["id"],
         "engatada_em": _parse_ts(nova["timestamp"]).isoformat(),
-    }) or a
+    }, interno=True) or a
 
 
 def _midias_alvo(a: dict) -> list[str]:
