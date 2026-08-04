@@ -1044,6 +1044,14 @@ def _inicio_facebook() -> datetime:
     return datetime.fromisoformat(valor)
 
 
+def _quando_da_midia(midia_id: str) -> datetime | None:
+    """Quando a mídia do Instagram foi publicada, pra ancorar o pareamento do crosspost."""
+    for m in buscar_midias(limite=25):
+        if m.get("id") == midia_id:
+            return _parse_ts(m.get("timestamp"))
+    return None
+
+
 def _posts_facebook(a: dict) -> list[str]:
     """Posts da Página que correspondem ao alvo da automação.
 
@@ -1069,10 +1077,14 @@ def _posts_facebook(a: dict) -> list[str]:
 
     if not a.get("midia_id"):
         return []
-    alvo = _parse_ts(a.get("engatada_em")) or _desde(a)
+    # âncora é a hora da PRÓPRIA mídia do Instagram. Usar a criação da automação erra
+    # quando o post foi escolhido a mão, e dois reels publicados em sequência caem os
+    # dois na janela — então além disso devolvemos só o post mais próximo, nunca dois.
+    alvo = (_quando_da_midia(a["midia_id"]) or _parse_ts(a.get("engatada_em")) or _desde(a))
     folga = timedelta(minutes=JANELA_CROSSPOST_MIN)
-    return [p["id"] for p in posts
-            if (q := _parse_ts(p.get("created_time"))) and abs(q - alvo) <= folga]
+    perto = [(abs(q - alvo), p["id"]) for p in posts
+             if (q := _parse_ts(p.get("created_time"))) and abs(q - alvo) <= folga]
+    return [min(perto)[1]] if perto else []
 
 
 _NOME_ULTIMO_ERRO: dict = {"motivo": ""}
