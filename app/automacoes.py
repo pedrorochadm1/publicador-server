@@ -1152,14 +1152,14 @@ def diagnostico_alvos() -> list[dict]:
         item = {"id": a["id"], "nome": a["nome"], "escopo": a["escopo"],
                 "midia_id": a.get("midia_id"), "desde": _desde(a).isoformat(),
                 "erro_ultima_rodada": _ERRO_RODADA.get(a["id"])}
+        # só resolve os alvos: contar comentário aqui varria milhares por automação e
+        # fazia o próprio diagnóstico estourar o tempo da requisição
         try:
             item["alvos_ig"] = _midias_alvo(a)
-            item["comentarios_ig"] = sum(len(_buscar_comentarios(m)) for m in item["alvos_ig"])
         except Exception as e:  # noqa: BLE001
             item["alvos_ig"] = f"erro: {e}"
         try:
             item["alvos_fb"] = _posts_facebook(a) if a.get("facebook") else []
-            item["comentarios_fb"] = sum(len(_comentarios_facebook(p)) for p in item["alvos_fb"])
         except Exception as e:  # noqa: BLE001
             item["alvos_fb"] = f"erro: {e}"
         out.append(item)
