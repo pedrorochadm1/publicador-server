@@ -810,6 +810,9 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict, plataforma: str 
     return True
 
 
+_ERRO_RODADA: dict = {}      # automacao_id -> última falha da varredura
+
+
 def rodar():
     """Varre os comentários dos posts alvo das automações ativas (job do scheduler)."""
     iniciar_marca_passo()          # religa o marca-passo se ele tiver morrido
@@ -834,7 +837,11 @@ def rodar():
                             print(f"[automacoes] #{a['id']} atingiu o teto da rodada em {plataforma}.")
                             break
         except Exception as e:  # noqa: BLE001
+            # guarda pra aparecer no painel: falha por automação some no log do container
+            _ERRO_RODADA[a["id"]] = f"{type(e).__name__}: {e}"
             print(f"[automacoes] #{a['id']} falhou na rodada: {e}")
+        else:
+            _ERRO_RODADA.pop(a["id"], None)
 
 
 def _definitivo(erro: str) -> str:
@@ -1110,6 +1117,31 @@ def _comentarios_facebook(post_id: str, desde: datetime | None = None) -> list[d
             break
         url, params = proxima, None
     return achatado
+
+
+def diagnostico_alvos() -> list[dict]:
+    """O que cada automação ativa está mirando e quanto tem pra processar.
+
+    Serve pra separar "não disparou" de "não tem comentário": sem isso os dois parecem
+    a mesma coisa no painel.
+    """
+    out = []
+    for a in listar(so_ativas=True):
+        item = {"id": a["id"], "nome": a["nome"], "escopo": a["escopo"],
+                "midia_id": a.get("midia_id"), "desde": _desde(a).isoformat(),
+                "erro_ultima_rodada": _ERRO_RODADA.get(a["id"])}
+        try:
+            item["alvos_ig"] = _midias_alvo(a)
+            item["comentarios_ig"] = sum(len(_buscar_comentarios(m)) for m in item["alvos_ig"])
+        except Exception as e:  # noqa: BLE001
+            item["alvos_ig"] = f"erro: {e}"
+        try:
+            item["alvos_fb"] = _posts_facebook(a) if a.get("facebook") else []
+            item["comentarios_fb"] = sum(len(_comentarios_facebook(p)) for p in item["alvos_fb"])
+        except Exception as e:  # noqa: BLE001
+            item["alvos_fb"] = f"erro: {e}"
+        out.append(item)
+    return out
 
 
 def diagnostico_facebook() -> dict:
