@@ -813,6 +813,8 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict, plataforma: str 
 _ERRO_RODADA: dict = {}      # automacao_id -> última falha da varredura
 # O crosspost do Instagram nasce no Facebook em segundos; essa é a folga pra casar os dois
 JANELA_CROSSPOST_MIN = 20
+# Marco de quando a perna do Facebook entrou no ar (guardado na tabela meta)
+CHAVE_INICIO_FB = "automacoes_facebook_desde"
 
 
 def rodar():
