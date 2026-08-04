@@ -240,6 +240,7 @@ function pintarEditor(){
 
     <div class="acoes">
       ${a.id ? `<span class="chip" id="estado">salvo</span>
+                <button class="sec" id="duplicar">Duplicar</button>
                 <button class="sec" id="rodar">Verificar comentários agora</button>
                 <button class="perigo" id="excluir">Excluir</button>`
              : `<button id="criar">Criar automação</button>
@@ -248,7 +249,7 @@ function pintarEditor(){
 
   $("#f_escopo").onchange = () => { pintarEscolhaPost(); revisar(); };
   $("#f_teste").oninput = testar;
-  if (a.id){ $("#rodar").onclick = rodar; $("#excluir").onclick = excluir; }
+  if (a.id){ $("#rodar").onclick = rodar; $("#excluir").onclick = excluir; $("#duplicar").onclick = duplicar; }
   else {
     $("#criar").onclick = salvar;
     $("#cancelar").onclick = () => { atual = null; pintarEditor(); pintarLista(); };
@@ -452,6 +453,13 @@ async function salvar(){
   aviso("Salvo.");
   await carregar();
   selecionar(automacoes.find(a => a.id === salva.id));
+}
+
+async function duplicar(){
+  const nova = await api("/insta/api/automacoes/"+atual.id+"/duplicar", {method:"POST"});
+  await carregar();
+  selecionar(automacoes.find(a => a.id === nova.id));
+  aviso("Cópia criada, desligada e esperando a próxima publicação.");
 }
 
 async function excluir(){

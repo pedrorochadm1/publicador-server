@@ -193,6 +193,25 @@ def atualizar(aid: int, dados: dict, interno: bool = False) -> dict | None:
     return get(aid)
 
 
+def duplicar(aid: int) -> dict | None:
+    """Cópia de uma automação, pra usar de base.
+
+    Copia o conteúdo (palavras, respostas, direct, botão, chaves) e deixa de fora tudo
+    que é estado de execução: post alvo, marcos e histórico. Nasce DESLIGADA e esperando
+    a próxima publicação de propósito — duas automações ativas com a mesma palavra no
+    mesmo post brigam entre si, e só uma entrega.
+    """
+    base = get(aid)
+    if not base:
+        return None
+    copia = {k: base[k] for k in _CAMPOS if k not in ("engatada_em", "esperando_desde")}
+    copia["nome"] = f"{base['nome']} (cópia)".strip()
+    copia["ativa"] = False
+    copia["escopo"] = "proximo"
+    copia["midia_id"] = None
+    return criar(copia)
+
+
 def remover(aid: int) -> bool:
     _init()
     c = db.conn()

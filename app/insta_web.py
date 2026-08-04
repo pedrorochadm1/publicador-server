@@ -120,6 +120,15 @@ def api_atualizar(aid: int, dados: dict = Body(...), insta_sess: str | None = Co
     return a
 
 
+@router.post("/insta/api/automacoes/{aid}/duplicar")
+def api_duplicar(aid: int, insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    a = automacoes.duplicar(aid)
+    if not a:
+        raise HTTPException(status_code=404, detail="Automação não encontrada.")
+    return a
+
+
 @router.delete("/insta/api/automacoes/{aid}")
 def api_remover(aid: int, insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
