@@ -811,6 +811,8 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict, plataforma: str 
 
 
 _ERRO_RODADA: dict = {}      # automacao_id -> última falha da varredura
+# O crosspost do Instagram nasce no Facebook em segundos; essa é a folga pra casar os dois
+JANELA_CROSSPOST_MIN = 20
 
 
 def rodar():
@@ -822,9 +824,15 @@ def rodar():
                 a = engatar_proximo(a)
             desde = _desde(a)
             alvos = [("ig", m, _buscar_comentarios, desde) for m in _midias_alvo(a)]
+            # o Facebook entra em try próprio: falha lá não pode derrubar o Instagram junto,
+            # que foi exatamente o que aconteceu quando _posts_facebook quebrou
             if a.get("facebook") and config.AUTOMACOES_FACEBOOK:
-                desde_fb = max(desde, _inicio_facebook())
-                alvos += [("fb", p, _comentarios_facebook, desde_fb) for p in _posts_facebook(a)]
+                try:
+                    desde_fb = max(desde, _inicio_facebook())
+                    alvos += [("fb", p, _comentarios_facebook, desde_fb) for p in _posts_facebook(a)]
+                except Exception as e:  # noqa: BLE001
+                    _ERRO_RODADA[a["id"]] = f"perna do Facebook: {type(e).__name__}: {e}"
+                    print(f"[automacoes] #{a['id']} perna do Facebook falhou: {e}")
             for plataforma, alvo_id, buscar, corte in alvos:
                 tratados = 0
                 for c in buscar(alvo_id, corte):
