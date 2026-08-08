@@ -236,6 +236,7 @@ function pintarEditor(){
       </div>
       <label class="sw"><input type="checkbox" id="f_uma" ${a.uma_vez_por_pessoa?"checked":""}>Só uma vez por pessoa</label>
       <label class="sw"><input type="checkbox" id="f_fb" ${a.facebook!==false?"checked":""}>Valer também no Facebook <span class="dica">mesmo reel, post cruzado da Página</span></label>
+      <div id="aviso_fb" class="meta"></div>
     </div>
 
     <div class="acoes">
@@ -349,8 +350,21 @@ function revisar(){
   $("#f_url").classList.toggle("campo-ruim", !!url && !urlOk);
   const bt = $("#criar");                  // só existe em automação nova
   if (bt){ bt.disabled = !(ok && urlOk && !semPost); bt.style.opacity = ok && urlOk && !semPost ? "" : ".5"; }
+  avisarFacebook();
   pintarPrevia();
   return ok && urlOk && !semPost;
+}
+
+// foto não é compartilhada no Facebook, então a perna de lá fica sem alvo — dizer isso
+// evita ler "sem post no Facebook" como se fosse falha
+function avisarFacebook(){
+  const el = $("#aviso_fb");
+  if (!el) return;
+  const m = midias.find(x => x.id === (atual && atual.midia_id));
+  const foto = m && (m.media_product_type || m.media_type) !== "REELS" && m.media_type !== "VIDEO";
+  el.textContent = ($("#f_fb").checked && foto)
+    ? "Este post é foto. Foto não vai pro Facebook, então aqui a automação vale só no Instagram."
+    : "";
 }
 
 function pintarPrevia(){

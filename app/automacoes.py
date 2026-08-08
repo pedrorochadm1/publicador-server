@@ -1141,6 +1141,26 @@ def _comentarios_facebook(post_id: str, desde: datetime | None = None) -> list[d
     return achatado
 
 
+def _motivo_sem_facebook(a: dict) -> str:
+    """Por que a automação está sem alvo no Facebook.
+
+    Lista vazia sozinha é ambígua: pode ser foto (que o Pedro não compartilha lá, então
+    é o esperado) ou crosspost que não saiu. Confundir os dois já custou um alarme falso.
+    """
+    if not a.get("facebook"):
+        return "Facebook desligado nesta automação"
+    if not a.get("midia_id"):
+        return "ainda sem post alvo"
+    tipo = ""
+    for m in buscar_midias(limite=25):
+        if m.get("id") == a["midia_id"]:
+            tipo = m.get("media_product_type") or m.get("media_type") or ""
+            break
+    if tipo and tipo != "REELS":
+        return f"o post é {tipo.lower()}, e foto não é compartilhada no Facebook"
+    return "não achei o post cruzado na Página (crosspost pode não ter saído)"
+
+
 def diagnostico_alvos() -> list[dict]:
     """O que cada automação ativa está mirando e quanto tem pra processar.
 
@@ -1160,6 +1180,8 @@ def diagnostico_alvos() -> list[dict]:
             item["alvos_ig"] = f"erro: {e}"
         try:
             item["alvos_fb"] = _posts_facebook(a) if a.get("facebook") else []
+            if not item["alvos_fb"]:
+                item["motivo_fb"] = _motivo_sem_facebook(a)
         except Exception as e:  # noqa: BLE001
             item["alvos_fb"] = f"erro: {e}"
         out.append(item)
