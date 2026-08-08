@@ -1202,6 +1202,13 @@ def diagnostico_facebook() -> dict:
         f"{config.GRAPH}/{page_id}/subscribed_apps",
         params={"access_token": page_token}, timeout=30,
     )
+    # o /posts nem sempre lista reel cruzado do Instagram: compara com /feed e /video_reels
+    for edge, campos in (("feed", "id,created_time"), ("video_reels", "id,created_time")):
+        r = requests.get(f"{config.GRAPH}/{page_id}/{edge}",
+                         params={"fields": campos, "limit": 6, "access_token": page_token}, timeout=30)
+        out[edge] = ([{"id": x.get("id"), "quando": (x.get("created_time") or "")[:19]}
+                      for x in r.json().get("data", [])] if r.status_code < 400 else _erro_graph(r))
+
     # amostra crua de um comentário: é onde dá pra ver quais campos a Meta entrega mesmo
     if isinstance(out.get("posts"), list) and out["posts"]:
         r = requests.get(
