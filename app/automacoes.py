@@ -350,6 +350,24 @@ def _usuario_proprio() -> str:
 _CACHE_USERNAME: str | None = None
 
 
+def _sou_eu(comentario: dict, plataforma: str) -> bool:
+    """A conta comentando nela mesma — inclusive a resposta pública que a automação
+    acabou de publicar.
+
+    No Instagram a comparação é pelo @. No Facebook o autor é a PÁGINA, com id e nome
+    próprios, que nunca batem com o @ do Instagram: era por isso que a resposta pública
+    voltava como comentário novo e a automação respondia a si mesma.
+    """
+    if plataforma == "fb":
+        page_id, _ = _pagina()
+        if comentario.get("autor_id") and page_id and str(comentario["autor_id"]) == str(page_id):
+            return True
+        nome = _normalizar(_PAGINA.get("nome") or "")
+        return bool(nome and _normalizar(comentario.get("username", "")) == nome)
+    usuario = comentario.get("username", "")
+    return bool(usuario and _normalizar(usuario) == _usuario_proprio())
+
+
 def _erro_graph(r: requests.Response) -> str:
     """Erro da Graph com code/subcode juntos — sem eles não dá pra saber por que falhou."""
     try:
@@ -482,7 +500,7 @@ _HOST_BOM: dict = {"url": ""}
 _ULTIMA_RESPOSTA: dict = {"corpo": None}
 
 # Página ligada à conta, resolvida uma vez e reaproveitada
-_PAGINA: dict = {"id": "", "token": "", "quando": None}
+_PAGINA: dict = {"id": "", "token": "", "nome": "", "quando": None}
 _PAGINA_VALIDA_H = 6
 
 
@@ -521,6 +539,7 @@ def _pagina() -> tuple[str, str]:
     )
     _PAGINA["id"] = escolhida["id"] if escolhida else ""
     _PAGINA["token"] = escolhida["access_token"] if escolhida else ""
+    _PAGINA["nome"] = escolhida.get("name", "") if escolhida else ""
     if escolhida:
         print(f"[automacoes] direct vai pela Página {escolhida.get('name')} ({escolhida['id']}).")
     return _PAGINA["id"], _PAGINA["token"]
@@ -793,7 +812,11 @@ def tratar_comentario(a: dict, midia_id: str, comentario: dict, plataforma: str 
     usuario = comentario.get("username", "")
     if not casa(texto, a["palavras"], a["modo"]):
         return False
-    if usuario and _normalizar(usuario) == _usuario_proprio():
+    if _sou_eu(comentario, plataforma):
+        return False
+    # a própria resposta pública, voltando como comentário. Cinto e suspensório: mesmo que
+    # a identidade escape, o texto idêntico a uma resposta configurada nunca é gatilho.
+    if texto.strip() and texto.strip() in {r.strip() for r in a["respostas"]}:
         return False
     if a["uma_vez_por_pessoa"] and _ja_atendeu(a["id"], usuario):
         return False
@@ -1131,6 +1154,7 @@ def _comentarios_facebook(post_id: str, desde: datetime | None = None) -> list[d
             quem = c.get("from") or {}
             achatado.append({"id": c["id"], "text": c.get("message", ""),
                              "username": quem.get("name") or quem.get("id", ""),
+                             "autor_id": quem.get("id", ""),
                              "timestamp": c.get("created_time")})
         proxima = (corpo.get("paging") or {}).get("next")
         if not pagina or not proxima:
@@ -1352,6 +1376,7 @@ def tratar_webhook(payload: dict) -> int:
                     "id": v.get("comment_id"),
                     "text": v.get("message", ""),
                     "username": (v.get("from") or {}).get("name", ""),
+                    "autor_id": (v.get("from") or {}).get("id", ""),
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
                 midia_id = v.get("post_id", "")
