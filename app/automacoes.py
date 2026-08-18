@@ -889,6 +889,8 @@ def _definitivo(erro: str) -> str:
         return "ja-respondido"          # mesmo caso, do lado do Facebook
     if "2534001" in e or "arquivou ou excluiu esta conversa" in e:
         return "conversa-indisponivel"
+    if "10903" in e or "não são permitidas respostas privadas a páginas" in e:
+        return "comentario-de-pagina"    # Página comentando: a Meta nunca aceita DM pra Página
     if "inválido" in e and "comment_id" in e:
         return "comentario-sumiu"
     return ""
