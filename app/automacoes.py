@@ -398,6 +398,11 @@ def responder_comentario(comment_id: str, mensagem: str, plataforma: str = "ig")
 LIMITE_TEXTO_BOTAO = 640
 LIMITE_TITULO_BOTAO = 20
 
+
+class TokenInvalido(RuntimeError):
+    """Token do Instagram/Facebook recusado (code 190). Não é falha da pessoa na fila:
+    ela continua pendente e é atendida quando o token voltar."""
+
 # Ritmo do direct. A Meta aceita 750 private replies por hora; mandamos 1 a cada 6s, que
 # dá 600/h com folga e, principalmente, sem rajada — rajada é o que dispara o (#613).
 # O teto por hora fica como segunda trava, caso o intervalo escorregue.
@@ -418,6 +423,13 @@ _RITMO: dict = {"minuto": LIMITE_MINUTO_BASE, "limpos": 0}
 # pulso do marca-passo: sem isso não dá pra saber se a thread está viva ou morreu calada
 _PULSO: dict = {"quando": None, "voltas": 0}
 _THREAD: dict = {"t": None}
+# Token morto (code 190): NENHUM direct sai até o token voltar, então insistir só queima
+# cota. Sem essa trava, a fila girava no vazio — em 2026-08-20 o token foi invalidado
+# (190/460, senha do Facebook trocada) e o marca-passo torrou 688 chamadas numa hora pra
+# 11 pessoas na fila. Espera RECHECAR_TOKEN_S e tenta de novo: quando Pedro manda o token
+# novo, a fila volta sozinha, sem redeploy.
+RECHECAR_TOKEN_S = 300
+_TOKEN_MORTO: dict = {"desde": None, "proxima_tentativa": None, "erro": ""}
 
 
 def ritmo_atual() -> dict:
@@ -452,6 +464,8 @@ def _pode_enviar_dm() -> tuple[bool, str]:
     """(pode, motivo). A resposta pública sai logo depois do direct, no mesmo passo,
     então quem comentou é atendido inteiro de uma vez."""
     agora = datetime.now(timezone.utc)
+    if _TOKEN_MORTO["proxima_tentativa"] and agora < _TOKEN_MORTO["proxima_tentativa"]:
+        return False, "token-invalido"
     if _DESCANSO_ATE["quando"] and agora < _DESCANSO_ATE["quando"]:
         return False, "descansando"
     _init()
@@ -474,6 +488,30 @@ def enviados_na_hora() -> int:
     _init()
     corte = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
     return db.conn().execute("SELECT COUNT(*) FROM dm_envios WHERE quando >= ?", (corte,)).fetchone()[0]
+
+
+def _token_morreu(erro: str):
+    """Trava a fila até o token voltar. Não é castigo de ritmo: com token inválido não
+    existe envio possível, então o certo é parar e reconferir de tempos em tempos."""
+    agora = datetime.now(timezone.utc)
+    if not _TOKEN_MORTO["desde"]:
+        _TOKEN_MORTO["desde"] = agora
+        print(f"[automacoes] token inválido. Direct parado até o token voltar: {erro}")
+    _TOKEN_MORTO["erro"] = erro
+    _TOKEN_MORTO["proxima_tentativa"] = agora + timedelta(seconds=RECHECAR_TOKEN_S)
+
+
+def _token_voltou():
+    if _TOKEN_MORTO["desde"]:
+        print("[automacoes] token voltou. Direct religado.")
+    _TOKEN_MORTO.update({"desde": None, "proxima_tentativa": None, "erro": ""})
+
+
+def token_invalido() -> dict:
+    """Pro painel: por que a fila está parada, se for isso."""
+    return {"parado": bool(_TOKEN_MORTO["desde"]),
+            "desde": _TOKEN_MORTO["desde"].isoformat() if _TOKEN_MORTO["desde"] else None,
+            "erro": _TOKEN_MORTO["erro"]}
 
 
 def _tomar_folego():
@@ -603,8 +641,15 @@ def enviar_dm(comment_id: str, texto: str, botao_texto: str = "", botao_url: str
                     print(f"[automacoes] direct sai por {rotulo} ({url}).")
                 _acelerar()
                 _DESCANSO_ATE["nivel"] = 0     # passou: o castigo acabou, zera a escada
+                _token_voltou()
                 return r
             motivo = _erro_graph(r)
+            if "code 190" in motivo:
+                # Token morto: nenhum host vai aceitar e o texto de reserva também não.
+                # Sair agora, senão o mesmo comentário gasta 4 chamadas por volta.
+                _token_morreu(f"{rotulo}: {motivo}")
+                erros.append(f"{rotulo}: {motivo}")
+                raise TokenInvalido("DM falhou: " + " | ".join(erros))
             if "613" in motivo:
                 _tomar_folego()
                 erros.append(f"{rotulo}: {motivo}")
@@ -933,6 +978,10 @@ def enviar_fila() -> int:
     try:
         plataforma = e["plataforma"] if "plataforma" in e.keys() else "ig"
         status = enviar_dm(e["comment_id"], a["dm_texto"], a["botao_texto"], a["botao_url"], plataforma)
+    except TokenInvalido as err:
+        # A pessoa continua na fila ('erro' é pendente): quem falhou foi o token, não ela.
+        _atualizar_dm(e["comment_id"], "erro", str(err))
+        return 0
     except Exception as err:  # noqa: BLE001
         _atualizar_dm(e["comment_id"], _definitivo(str(err)) or "erro", str(err))
         return 0
@@ -1306,7 +1355,7 @@ def iniciar_marca_passo():
                 if pode:
                     if not enviar_fila():
                         time.sleep(1)      # fila vazia: acorda rápido quando chegar comentário
-                elif motivo in ("teto-da-hora", "descansando"):
+                elif motivo in ("teto-da-hora", "descansando", "token-invalido"):
                     time.sleep(10)
                 elif motivo == "teto-do-minuto":
                     time.sleep(2)

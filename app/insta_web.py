@@ -175,6 +175,7 @@ def api_fila(enviar: int = 0, insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
     pode, motivo = automacoes._pode_enviar_dm()
     out = {"nome_indisponivel": automacoes._NOME_ULTIMO_ERRO["motivo"],
+           "token_invalido": automacoes.token_invalido(),
            "na_fila": automacoes.pendentes_na_fila(), "pode_enviar": pode, "motivo": motivo,
            "ritmo": automacoes.ritmo_atual(), "marca_passo": automacoes.marca_passo_vivo(),
            "enviados_na_hora": automacoes.enviados_na_hora(),
