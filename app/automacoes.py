@@ -751,9 +751,13 @@ def buscar_midias(limite: int = 10) -> list[dict]:
 
 
 MAX_PAGINAS = 30  # 30 x 50 = 1500 comentários por rodada, teto de segurança
+# A varredura retrospectiva lê o post inteiro, então precisa de folga: a consulta pública
+# do sensor passou de 5800 comentários e no teto normal a leitura parava na metade.
+MAX_PAGINAS_RETROATIVO = 200
 
 
-def _buscar_comentarios(midia_id: str, desde: datetime | None = None) -> list[dict]:
+def _buscar_comentarios(midia_id: str, desde: datetime | None = None,
+                        max_paginas: int | None = None, truncou: list | None = None) -> list[dict]:
     """Comentários do post, seguindo a paginação da Graph.
 
     Sem paginar, uma enxurrada empurra os comentários pra fora da primeira página e eles
@@ -766,7 +770,7 @@ def _buscar_comentarios(midia_id: str, desde: datetime | None = None) -> list[di
         "limit": 50, "access_token": get_token(),
     }
     achatado: list[dict] = []
-    for _ in range(MAX_PAGINAS):
+    for _ in range(max_paginas or MAX_PAGINAS):
         r = requests.get(url, params=params, timeout=30)
         if r.status_code >= 400:
             raise RuntimeError(_erro_graph(r))
@@ -781,6 +785,11 @@ def _buscar_comentarios(midia_id: str, desde: datetime | None = None) -> list[di
         if desde and all((_parse_ts(c.get("timestamp")) or desde) < desde for c in pagina):
             break
         url, params = proxima, None  # o next já vem com token e cursor embutidos
+    else:
+        # acabaram as páginas permitidas com o post ainda tendo mais: quem chamou precisa
+        # saber, senão uma varredura "completa" mente sobre o que não chegou a olhar
+        if truncou is not None:
+            truncou.append(midia_id)
     return achatado
 
 
@@ -1392,9 +1401,14 @@ def varredura_retrospectiva(enfileirar: bool = True, automacao_id: int | None = 
         linha = {"id": a["id"], "nome": a["nome"], "comentarios": 0, "com_palavra": 0,
                  "ja_tinham_evento": 0, "sem_evento": 0, "novos_na_fila": 0,
                  "fora_da_janela": 0, "erro": ""}
+        truncou: list = []
         try:
             for midia_id in _midias_alvo(a):
-                for com in _buscar_comentarios(midia_id):     # sem 'desde': o post inteiro
+                # sem 'desde' (o post inteiro) e com teto de página alto: o teto normal é
+                # 1500 comentários, e a consulta pública já passou de 5800 — no teto normal
+                # a varredura pararia no meio e diria que está tudo certo
+                for com in _buscar_comentarios(midia_id, max_paginas=MAX_PAGINAS_RETROATIVO,
+                                               truncou=truncou):
                     linha["comentarios"] += 1
                     if not casa(com.get("text", ""), a["palavras"], a["modo"]):
                         continue
@@ -1420,6 +1434,7 @@ def varredura_retrospectiva(enfileirar: bool = True, automacao_id: int | None = 
                         linha["novos_na_fila"] += 1
         except Exception as e:  # noqa: BLE001
             linha["erro"] = str(e)
+        linha["truncado"] = bool(truncou)     # True = sobrou post pra ler, o número está incompleto
         relatorio.append(linha)
     total = sum(l["novos_na_fila"] for l in relatorio)
     print(f"[automacoes] varredura retrospectiva: {total} pessoa(s) de volta pra fila.")
