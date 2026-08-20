@@ -168,6 +168,21 @@ def api_rodar(insta_sess: str | None = Cookie(default=None)):
     return {"ok": True, "direct_na_fila": automacoes.pendentes_na_fila()}
 
 
+@router.post("/insta/api/retroativo")
+def api_retroativo(enfileirar: int = 1, automacao_id: int | None = None,
+                   insta_sess: str | None = Cookie(default=None)):
+    """Relê os posts inteiros e devolve pra fila quem ficou sem resposta.
+    Com ?enfileirar=0 é só auditoria, não mexe em ninguém."""
+    _exige(insta_sess)
+    return automacoes.varredura_retrospectiva(bool(enfileirar), automacao_id)
+
+
+@router.get("/insta/api/eventos/todos")
+def api_eventos_todos(limite: int = 1000, insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    return automacoes.eventos(limite=min(limite, 5000))
+
+
 @router.get("/insta/api/fila")
 def api_fila(enviar: int = 0, insta_sess: str | None = Cookie(default=None)):
     """Estado do marca-passo do direct. Com ?enviar=1 força um envio e mostra a falha

@@ -1370,6 +1370,56 @@ def iniciar_marca_passo():
     novo_t.start()
 
 
+def varredura_retrospectiva(enfileirar: bool = True, automacao_id: int | None = None) -> dict:
+    """Relê o post INTEIRO, do primeiro comentário ao último, e enfileira quem ficou sem.
+
+    A varredura normal só olha do marco da automação pra frente e para de paginar quando
+    a página inteira já é velha. Isso é o certo pro dia a dia, mas deixa buraco quando
+    algo travou no meio (token morto, deploy, enxurrada): o comentário existe, ninguém
+    registrou, e ele nunca mais é olhado. Aqui a paginação vai até o fim.
+
+    Não responde nada por conta própria: só devolve as pessoas pra fila (`tratar_comentario`
+    já cuida de dedupe, 'uma vez por pessoa', não-responder-a-si-mesmo e janela de 7 dias),
+    e o marca-passo atende cada uma na ordem de sempre — direct primeiro, pública depois.
+    Com `enfileirar=False` é só auditoria: conta sem tocar em ninguém.
+    """
+    _init()
+    c = db.conn()
+    relatorio: list[dict] = []
+    for a in listar(so_ativas=True):
+        if automacao_id and a["id"] != automacao_id:
+            continue
+        linha = {"id": a["id"], "nome": a["nome"], "comentarios": 0, "com_palavra": 0,
+                 "ja_tinham_evento": 0, "novos_na_fila": 0, "fora_da_janela": 0, "erro": ""}
+        try:
+            for midia_id in _midias_alvo(a):
+                for com in _buscar_comentarios(midia_id):     # sem 'desde': o post inteiro
+                    linha["comentarios"] += 1
+                    if not casa(com.get("text", ""), a["palavras"], a["modo"]):
+                        continue
+                    if _sou_eu(com, "ig"):
+                        continue
+                    linha["com_palavra"] += 1
+                    ja = c.execute("SELECT 1 FROM automacao_eventos WHERE comment_id = ?",
+                                   (com["id"],)).fetchone()
+                    if ja:
+                        linha["ja_tinham_evento"] += 1
+                        continue
+                    quando = _parse_ts(com.get("timestamp"))
+                    if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS):
+                        linha["fora_da_janela"] += 1          # a Meta não aceita mais direct
+                        continue
+                    if enfileirar and tratar_comentario(a, midia_id, com):
+                        linha["novos_na_fila"] += 1
+        except Exception as e:  # noqa: BLE001
+            linha["erro"] = str(e)
+        relatorio.append(linha)
+    total = sum(l["novos_na_fila"] for l in relatorio)
+    print(f"[automacoes] varredura retrospectiva: {total} pessoa(s) de volta pra fila.")
+    return {"enfileirou": enfileirar, "novos_na_fila": total,
+            "na_fila_agora": pendentes_na_fila(), "por_automacao": relatorio}
+
+
 def marcar_fora_da_janela() -> int:
     """Passou dos 7 dias, a Meta não aceita mais. Sai da fila pra não bater à toa."""
     _init()
