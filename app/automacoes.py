@@ -1390,7 +1390,8 @@ def varredura_retrospectiva(enfileirar: bool = True, automacao_id: int | None = 
         if automacao_id and a["id"] != automacao_id:
             continue
         linha = {"id": a["id"], "nome": a["nome"], "comentarios": 0, "com_palavra": 0,
-                 "ja_tinham_evento": 0, "novos_na_fila": 0, "fora_da_janela": 0, "erro": ""}
+                 "ja_tinham_evento": 0, "sem_evento": 0, "novos_na_fila": 0,
+                 "fora_da_janela": 0, "erro": ""}
         try:
             for midia_id in _midias_alvo(a):
                 for com in _buscar_comentarios(midia_id):     # sem 'desde': o post inteiro
@@ -1407,8 +1408,14 @@ def varredura_retrospectiva(enfileirar: bool = True, automacao_id: int | None = 
                         continue
                     quando = _parse_ts(com.get("timestamp"))
                     if quando and datetime.now(timezone.utc) - quando > timedelta(days=JANELA_DM_DIAS):
-                        linha["fora_da_janela"] += 1          # a Meta não aceita mais direct
+                        # A Meta não aceita mais direct, e resposta pública com link é
+                        # proibida aqui. Então essa pessoa não tem como ser atendida: só
+                        # aparece no relatório, pra Pedro saber o tamanho do estrago.
+                        linha["fora_da_janela"] += 1
                         continue
+                    # conta ANTES de enfileirar: em auditoria (enfileirar=0) é este número
+                    # que responde "quantos ficaram sem", e ele tem que sair sem tocar em ninguém
+                    linha["sem_evento"] += 1
                     if enfileirar and tratar_comentario(a, midia_id, com):
                         linha["novos_na_fila"] += 1
         except Exception as e:  # noqa: BLE001
