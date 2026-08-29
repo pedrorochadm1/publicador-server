@@ -35,12 +35,11 @@ export function desenhar(regua, { animarDe = null } = {}) {
         <span class="fx amarelo"></span><span class="fx vermelho"></span>
         ${regua.cinza ? "" : `<span class="ponteiro" style="left:${de}%"></span>`}
       </div>
-      <div class="regua-txt">
-        <span class="regua-lado esq">← conteúdo</span>
-        <span class="regua-msg">${esc(regua.mensagem)}</span>
-        <span class="regua-lado dir">anúncio →</span>
+      <div class="regua-linha">
+        <span class="regua-msg">${esc(curta(regua))}</span>
+        <span class="regua-sub">${esc(regua.subtexto)}</span>
+        ${metaResumo(regua)}
       </div>
-      <div class="regua-sub">${esc(regua.subtexto)}${metaResumo(regua)}</div>
     </button>`;
 
   el.querySelector(".regua-toque").onclick = () => abrirDetalhe();
@@ -56,11 +55,19 @@ export function desenhar(regua, { animarDe = null } = {}) {
   }
 }
 
+/* A régua ocupa uma faixa fina e a tela do iPhone é estreita: a frase inteira
+   ("VOCÊ PRECISA PRODUZIR CONTEÚDO") não cabe ao lado do resto sem virar
+   reticências. A versão curta diz a mesma coisa; a íntegra fica no detalhe. */
+function curta(regua) {
+  if (regua.cinza) return "SEM HISTÓRICO";
+  if (regua.zona === "verde") return "NO RITMO";
+  return regua.saldo < 0 ? "FAÇA CONTEÚDO" : "FAÇA ANÚNCIO";
+}
+
 function metaResumo(regua) {
   const m = regua.meta_semanal;
   if (!m || !m.meta) return "";
-  const txt = `${m.feitos}/${m.meta} conteúdos esta semana`;
-  return ` · <span class="meta-chip${m.atrasado ? " atrasada" : ""}">${esc(txt)}</span>`;
+  return `<span class="regua-meta${m.atrasado ? " atrasada" : ""}">${m.feitos}/${m.meta} na semana</span>`;
 }
 
 export function esconder() {
@@ -90,11 +97,11 @@ async function abrirDetalhe() {
   const janela = (rot, j) => `
     <div class="jan">
       <span class="jan-rot">${rot}</span>
-      <span class="jan-num">${j.conteudos} <i>conteúdo${j.conteudos === 1 ? "" : "s"}</i></span>
-      <span class="jan-num">${j.anuncios} <i>anúncio${j.anuncios === 1 ? "" : "s"}</i></span>
       <span class="jan-prop">${j.proporcao == null
         ? (j.conteudos ? "sem anúncio" : "—")
         : j.proporcao.toFixed(1).replace(".", ",") + ":1"}</span>
+      <span class="jan-nums">${j.conteudos} conteúdo${j.conteudos === 1 ? "" : "s"}
+        · ${j.anuncios} anúncio${j.anuncios === 1 ? "" : "s"}</span>
     </div>`;
 
   const linhas = (d.publicacoes || []).map((p) => `
@@ -128,9 +135,9 @@ async function abrirDetalhe() {
       </div>
 
       <h3 class="secao">Histórico</h3>
-      ${linhas ? `<table class="tabela">
+      ${linhas ? `<div class="rolagem-x"><table class="tabela">
         <tr><th>Quando</th><th>O quê</th><th>Tipo</th><th>Formato</th><th>Peso</th></tr>
-        ${linhas}</table>`
+        ${linhas}</table></div>`
       : `<p class="vazio">Nenhuma publicação registrada ainda.</p>`}
       <p class="nota">Publicação com mais de 90 dias sai da conta sozinha. Por isso
          o saldo encolhe com o tempo, sem nada precisar rodar em segundo plano.</p>

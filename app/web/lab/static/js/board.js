@@ -1,31 +1,24 @@
-/* A bancada: captura relâmpago no topo e três colunas embaixo.
+/* A bancada: captura no topo, três colunas embaixo.
 
-   No Mac as três colunas ficam lado a lado. No celular viram abas deslizáveis
-   por swipe — não um scroll infinito de tudo junto, que é o que torna um board
-   inútil numa tela estreita. */
+   No Mac as colunas ficam lado a lado. No celular viram abas com swipe — não um
+   scroll infinito de tudo junto, que é o que torna um board inútil numa tela
+   estreita.
+
+   A captura é progressiva: o campo está sempre visível, e tipo/formato/botão só
+   aparecem quando o Pedro começa a escrever. Quem só quer despejar a ideia não
+   vê nada disso; quem já sabe o formato marca ali mesmo. */
 
 import { get, post, put, esc, data, aviso, SemRede } from "./api.js";
 import * as fila from "./fila.js";
 import * as regua from "./regua.js";
 import { abrirEditor } from "./editor.js";
-import { loteParaMarkdown, copiar, baixar } from "./markdown.js";
+import { loteParaMarkdown, copiar } from "./markdown.js";
+import { TIPOS, FORMATOS, nomeFormato, chipsDe } from "./opcoes.js";
 
 const COLUNAS = [
   { id: "ideia", nome: "Ideia" },
   { id: "producao", nome: "Produção" },
   { id: "publicado", nome: "Publicado" },
-];
-
-const FORMATOS = [
-  { id: "lofi", nome: "Lo-fi" },
-  { id: "slide", nome: "Slide" },
-  { id: "vlog", nome: "Vlog" },
-  { id: "documentario", nome: "Documentário" },
-];
-
-const TIPOS = [
-  { id: "conteudo", nome: "Conteúdo" },
-  { id: "anuncio", nome: "Anúncio" },
 ];
 
 let cards = [];
@@ -36,20 +29,23 @@ let colunaAtiva = "ideia";
 let selecao = new Set();
 let verTudoPublicado = false;
 let raiz = null;
+let novoTipo = null;
+let novoFormato = null;
+let fecharPorFora = null;
 
 export async function montar(alvo, dadosIniciais) {
   raiz = alvo;
   cards = dadosIniciais.cards || [];
   config = dadosIniciais.config || {};
   filtros = {
-    tipo: config.filtros?.tipo || [],
-    formato: config.filtros?.formato || [],
+    tipo: [...(config.filtros?.tipo || [])],
+    formato: [...(config.filtros?.formato || [])],
   };
+  selecao = new Set();
   raiz.innerHTML = esqueleto();
   ligarCaptura();
   ligarFiltros();
   pintar();
-  // O que ficou na fila offline sobe assim que o app abre.
   const tentar = fila.vigiar((criados) => { juntar(criados); pintar(); });
   tentar();
 }
@@ -57,113 +53,179 @@ export async function montar(alvo, dadosIniciais) {
 function esqueleto() {
   return `
   <div class="board">
-    <form class="captura" id="captura" autocomplete="off">
-      <input type="text" id="captura-campo" placeholder="uma ideia…"
-             enterkeyhint="done" autocapitalize="sentences" autocorrect="on" spellcheck="false">
-      <button class="bt" type="submit" aria-label="Guardar ideia">+</button>
-    </form>
+    <div class="topo-board">
+      <form class="captura" id="captura" autocomplete="off">
+        <input type="text" id="captura-campo" placeholder="uma ideia…"
+               enterkeyhint="done" autocapitalize="sentences" autocorrect="on">
+        <div class="captura-extra">
+          <div class="grupo-chips" id="novo-tipo"></div>
+          <div class="grupo-chips" id="novo-formato"></div>
+          <button class="bt bt-add" type="submit">Adicionar ideia</button>
+        </div>
+      </form>
 
-    <div class="barra">
-      <input type="search" id="busca" class="busca" placeholder="buscar" enterkeyhint="search">
-      <div class="chips" id="chips"></div>
-      <div class="acoes-lote" id="acoes-lote" hidden></div>
+      <div class="filtros" id="filtros">
+        <div class="filtros-linha">
+          <input type="search" id="busca" placeholder="buscar" enterkeyhint="search">
+          <button class="bt-filtros" id="bt-filtros" type="button">Filtros</button>
+        </div>
+        <div class="filtros-abertos" id="filtros-abertos"></div>
+      </div>
     </div>
 
     <div class="colunas-abas" id="colunas-abas"></div>
     <div class="colunas" id="colunas"></div>
+    <div class="acoes-lote" id="acoes-lote" hidden></div>
   </div>`;
 }
 
-/* ─────────────────────────── Captura relâmpago ─────────────────────────── */
+/* ─────────────────────────── Captura ─────────────────────────── */
 
 function ligarCaptura() {
-  const form = raiz.querySelector("#captura");
+  const bloco = raiz.querySelector("#captura");
   const campo = raiz.querySelector("#captura-campo");
 
+  const abrir = () => bloco.classList.add("aberta");
+  const talvezFechar = () => {
+    if (!campo.value.trim()) bloco.classList.remove("aberta");
+  };
+
+  campo.addEventListener("focus", abrir);
+  campo.addEventListener("input", abrir);
+  // Fecha só quando o toque cai fora do bloco e não há nada escrito. Usar
+  // focusout fecharia ao tocar num chip, que é justamente o que queremos abrir.
+  // O listener anterior é removido: montar() roda a cada troca de aba, e eles
+  // se acumulariam ao longo do dia.
+  if (fecharPorFora) document.removeEventListener("pointerdown", fecharPorFora);
+  fecharPorFora = (e) => {
+    if (bloco.isConnected && !bloco.contains(e.target)) talvezFechar();
+  };
+  document.addEventListener("pointerdown", fecharPorFora);
+
   if (config.autofoco !== false) {
-    // No iOS o teclado não abre sem gesto do usuário, mas o foco já deixa o
-    // cursor no lugar certo e a rolagem na posição certa.
-    setTimeout(() => campo.focus(), 60);
+    // No iOS o teclado não abre sem gesto do usuário, mas o foco já posiciona o
+    // cursor e a rolagem no lugar certo.
+    setTimeout(() => campo.focus(), 80);
   }
 
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    const titulo = campo.value.trim();
-    if (!titulo) return;
-    // Só limpar o value: recriar o nó do input mataria o foco e fecharia o
-    // teclado do iPhone, quebrando o "despejar 4 ideias seguidas".
-    campo.value = "";
-    campo.focus();
+  pintarChipsNovo();
+  bloco.onsubmit = (e) => { e.preventDefault(); capturar(campo, bloco); };
+}
 
-    const item = fila.enfileirar(titulo);
-    // Card provisório na tela na hora, sem esperar a rede.
-    const provisorio = {
-      id: "tmp-" + item.client_uuid, titulo, status: "ideia", tipo: null, formato: null,
-      hook: "", fechamento: "", desenvolvimentos: [], tags: [], provisorio: true,
-      criado_em: item.em,
-    };
-    cards = [provisorio, ...cards];
-    colunaAtiva = "ideia";
-    pintar();
+function pintarChipsNovo() {
+  raiz.querySelector("#novo-tipo").innerHTML =
+    `<span class="grupo-rot">Tipo (opcional)</span>` + chipsDe(TIPOS, novoTipo, "tipo");
+  raiz.querySelector("#novo-formato").innerHTML =
+    `<span class="grupo-rot">Formato (opcional)</span>` + chipsDe(FORMATOS, novoFormato, "fmt");
 
-    try {
-      const card = await post("/lab/api/cards", { titulo, client_uuid: item.client_uuid });
-      fila.remover(item.client_uuid);
-      cards = cards.map((c) => (c.id === provisorio.id ? card : c));
-      pintar();
-    } catch (err) {
-      if (err instanceof SemRede) aviso("Sem rede. A ideia ficou guardada e sobe depois.");
-      else aviso("Não deu pra salvar agora. A ideia ficou na fila.");
-    }
+  raiz.querySelectorAll("#novo-tipo .op").forEach((b) => {
+    b.onclick = () => { novoTipo = novoTipo === b.dataset.v ? null : b.dataset.v; pintarChipsNovo(); };
+  });
+  raiz.querySelectorAll("#novo-formato .op").forEach((b) => {
+    b.onclick = () => { novoFormato = novoFormato === b.dataset.v ? null : b.dataset.v; pintarChipsNovo(); };
+  });
+}
+
+async function capturar(campo, bloco) {
+  const titulo = campo.value.trim();
+  if (!titulo) { campo.focus(); return; }
+
+  const tipo = novoTipo, formato = novoFormato;
+  // Só limpar o value: recriar o nó mataria o foco e fecharia o teclado do
+  // iPhone, quebrando o "despejar quatro ideias seguidas".
+  campo.value = "";
+  campo.focus();
+  novoTipo = null;
+  novoFormato = null;
+  pintarChipsNovo();
+  bloco.classList.remove("aberta");
+
+  const item = fila.enfileirar(titulo, tipo, formato);
+  const provisorio = {
+    id: "tmp-" + item.client_uuid, client_uuid: item.client_uuid, titulo,
+    status: "ideia", tipo, formato, hook: "", fechamento: "",
+    desenvolvimentos: [], referencias: [], reacoes: [], tags: [],
+    provisorio: true, criado_em: item.em,
   };
+  cards = [provisorio, ...cards];
+  colunaAtiva = "ideia";
+  pintar();
+
+  try {
+    const card = await post("/lab/api/cards", {
+      titulo, client_uuid: item.client_uuid, tipo, formato,
+    });
+    fila.remover(item.client_uuid);
+    cards = cards.map((c) => (c.id === provisorio.id ? card : c));
+    pintar();
+    // Um filtro ativo pode esconder a ideia recém-salva. Dizer isso evita ler
+    // "sumiu" como "não salvou".
+    if (!passaNoFiltro(card)) aviso("Salvo, mas escondido pelo filtro ativo.");
+  } catch (err) {
+    if (err instanceof SemRede) aviso("Sem rede. A ideia ficou guardada e sobe depois.");
+    else if (err.status !== 401) aviso("Não deu pra salvar agora. Ficou na fila.");
+  }
 }
 
 function juntar(novos) {
   const porUuid = new Map(novos.map((c) => [c.client_uuid, c]));
-  cards = cards.map((c) =>
-    c.provisorio && porUuid.has(c.id.replace("tmp-", "")) ? porUuid.get(c.id.replace("tmp-", "")) : c);
-  const ids = new Set(cards.map((c) => c.id));
-  cards = [...novos.filter((c) => !ids.has(c.id)), ...cards];
+  cards = cards.map((c) => {
+    if (!c.provisorio) return c;
+    return porUuid.get(c.client_uuid) || c;
+  });
+  const ids = new Set(cards.filter((c) => !c.provisorio).map((c) => c.id));
+  cards = [...novos.filter((c) => !ids.has(c.id)), ...cards.filter((c) => !c.provisorio || !porUuid.has(c.client_uuid))];
+  // Remove duplicata por id, mantendo a primeira ocorrência.
+  const vistos = new Set();
+  cards = cards.filter((c) => (vistos.has(c.id) ? false : (vistos.add(c.id), true)));
 }
 
-/* ─────────────────────────── Filtros e busca ─────────────────────────── */
+/* ─────────────────────────── Filtros ─────────────────────────── */
 
 function ligarFiltros() {
   const b = raiz.querySelector("#busca");
   b.oninput = () => { busca = b.value.trim().toLowerCase(); pintar(); };
+  raiz.querySelector("#bt-filtros").onclick = () => {
+    raiz.querySelector("#filtros").classList.toggle("aberto");
+  };
 }
 
-function pintarChips() {
-  const chip = (grupo, id, nome) => {
-    const ligado = filtros[grupo].includes(id);
-    const cor = grupo === "formato" ? ` chip-${id}` : "";
-    return `<button class="chip-f${cor}${ligado ? " on" : ""}" type="button"
-             data-grupo="${grupo}" data-id="${id}">${nome}</button>`;
-  };
-  raiz.querySelector("#chips").innerHTML =
-    TIPOS.map((t) => chip("tipo", t.id, t.nome)).join("") +
-    `<span class="chips-sep"></span>` +
-    FORMATOS.map((f) => chip("formato", f.id, f.nome)).join("");
+function pintarFiltros() {
+  const n = filtros.tipo.length + filtros.formato.length;
+  const bt = raiz.querySelector("#bt-filtros");
+  bt.classList.toggle("tem", n > 0);
+  bt.innerHTML = `Filtros${n ? `<span class="conta-f">${n}</span>` : ""}`;
 
-  raiz.querySelectorAll(".chip-f").forEach((el) => {
+  raiz.querySelector("#filtros-abertos").innerHTML = `
+    <div class="grupo-chips"><span class="grupo-rot">Tipo</span>
+      ${chipsDe(TIPOS, filtros.tipo, "tipo")}</div>
+    <div class="grupo-chips"><span class="grupo-rot">Formato</span>
+      ${chipsDe(FORMATOS, filtros.formato, "fmt")}</div>
+    ${n ? `<button class="bt-limpar-f" type="button" id="limpar-f">limpar filtros</button>` : ""}`;
+
+  raiz.querySelectorAll("#filtros-abertos .op").forEach((el) => {
     el.onclick = () => {
-      const { grupo, id } = el.dataset;
+      const grupo = el.dataset.g === "tipo" ? "tipo" : "formato";
       const lista = filtros[grupo];
-      const i = lista.indexOf(id);
-      if (i >= 0) lista.splice(i, 1); else lista.push(id);
+      const i = lista.indexOf(el.dataset.v);
+      if (i >= 0) lista.splice(i, 1); else lista.push(el.dataset.v);
       salvarFiltros();
       pintar();
     };
   });
+  const limpar = raiz.querySelector("#limpar-f");
+  if (limpar) limpar.onclick = () => {
+    filtros = { tipo: [], formato: [] };
+    salvarFiltros();
+    pintar();
+  };
 }
 
 let timerFiltros = null;
 function salvarFiltros() {
   // Filtros são persistentes: o board reabre como Pedro deixou.
   clearTimeout(timerFiltros);
-  timerFiltros = setTimeout(() => {
-    put("/lab/api/config", { filtros }).catch(() => {});
-  }, 400);
+  timerFiltros = setTimeout(() => put("/lab/api/config", { filtros }).catch(() => {}), 400);
 }
 
 function passaNoFiltro(c) {
@@ -173,6 +235,8 @@ function passaNoFiltro(c) {
     const alvo = [
       c.titulo, c.hook, c.fechamento,
       ...(c.desenvolvimentos || []).map((d) => d.texto),
+      ...(c.referencias || []).map((l) => `${l.url} ${l.nota}`),
+      ...(c.reacoes || []).map((l) => `${l.url} ${l.nota}`),
       ...(c.tags || []),
     ].join(" ").toLowerCase();
     if (!alvo.includes(busca)) return false;
@@ -183,7 +247,7 @@ function passaNoFiltro(c) {
 /* ─────────────────────────── Pintura ─────────────────────────── */
 
 function daColuna(status) {
-  let lista = cards.filter((c) => c.status === status && passaNoFiltro(c));
+  const lista = cards.filter((c) => c.status === status && passaNoFiltro(c));
   if (status === "publicado") {
     lista.sort((a, b) => (b.publicado_em || "").localeCompare(a.publicado_em || ""));
   }
@@ -192,7 +256,7 @@ function daColuna(status) {
 
 function pintar() {
   if (!raiz) return;
-  pintarChips();
+  pintarFiltros();
   pintarAbas();
   pintarColunas();
   pintarAcoesLote();
@@ -201,35 +265,41 @@ function pintar() {
 function pintarAbas() {
   raiz.querySelector("#colunas-abas").innerHTML = COLUNAS.map((col) => `
     <button class="col-aba${colunaAtiva === col.id ? " ativa" : ""}" type="button" data-col="${col.id}">
-      ${col.nome} <span class="cont">${daColuna(col.id).length}</span>
+      ${col.nome}<span class="cont">${daColuna(col.id).length}</span>
     </button>`).join("");
   raiz.querySelectorAll(".col-aba").forEach((b) => {
-    b.onclick = () => { colunaAtiva = b.dataset.col; pintar(); rolarPraColuna(); };
+    b.onclick = () => { colunaAtiva = b.dataset.col; pintarAbas(); rolarPraColuna(); };
   });
 }
+
+const noCelular = () => window.matchMedia("(max-width: 860px)").matches;
 
 function rolarPraColuna() {
   const i = COLUNAS.findIndex((c) => c.id === colunaAtiva);
   const trilho = raiz.querySelector("#colunas");
-  if (trilho && window.matchMedia("(max-width: 860px)").matches) {
-    trilho.scrollTo({ left: i * trilho.clientWidth, behavior: "smooth" });
-  }
+  if (trilho && noCelular()) trilho.scrollTo({ left: i * trilho.clientWidth, behavior: "smooth" });
 }
 
 function pintarColunas() {
   const alvo = raiz.querySelector("#colunas");
+  const rolagem = alvo.scrollLeft;
+
   alvo.innerHTML = COLUNAS.map((col) => {
     const lista = daColuna(col.id);
     const corte = col.id === "publicado" && !verTudoPublicado;
     return `
-      <section class="coluna${colunaAtiva === col.id ? " ativa" : ""}" data-col="${col.id}">
+      <section class="coluna" data-col="${col.id}">
         <h2 class="col-titulo">${col.nome} <span class="cont">${lista.length}</span></h2>
         <div class="col-lista">
           ${lista.map(cartao).join("") || `<p class="vazio col-vazia">${vazioDe(col.id)}</p>`}
-          ${corte ? `<button class="ver-tudo" type="button">ver tudo</button>` : ""}
+          ${corte && lista.length ? `<button class="ver-tudo" type="button">ver tudo</button>` : ""}
         </div>
       </section>`;
   }).join("");
+
+  // Repintar zera o scroll horizontal; devolver a posição evita o board pular
+  // pra primeira coluna a cada tecla digitada na busca.
+  if (noCelular()) alvo.scrollLeft = rolagem;
 
   alvo.querySelectorAll(".cartao").forEach((el) => {
     el.onclick = (ev) => {
@@ -243,22 +313,20 @@ function pintarColunas() {
       ev.stopPropagation();
       const id = el.closest(".cartao").dataset.id;
       if (selecao.has(id)) selecao.delete(id); else selecao.add(id);
-      pintar();
+      pintarColunas();
+      pintarAcoesLote();
     };
   });
   const vt = alvo.querySelector(".ver-tudo");
   if (vt) vt.onclick = async () => {
     verTudoPublicado = true;
-    try {
-      cards = await get("/lab/api/cards?tudo=1");
-    } catch (e) { /* fica com o que já tem */ }
+    try { cards = await get("/lab/api/cards?tudo=1"); } catch (e) { /* fica com o que tem */ }
     pintar();
   };
 
-  // Swipe entre colunas no celular: a coluna ativa acompanha a rolagem.
   let t = null;
   alvo.onscroll = () => {
-    if (!window.matchMedia("(max-width: 860px)").matches) return;
+    if (!noCelular()) return;
     clearTimeout(t);
     t = setTimeout(() => {
       const i = Math.round(alvo.scrollLeft / alvo.clientWidth);
@@ -280,8 +348,6 @@ function cartao(c) {
     c.formato ? `<span class="tag tag-${c.formato}">${nomeFormato(c.formato)}</span>` : "",
     c.tipo ? `<span class="tag-tipo ${c.tipo}">${c.tipo === "anuncio" ? "anúncio" : "conteúdo"}</span>` : "",
   ].filter(Boolean).join("");
-
-  const progresso = c.status === "publicado" ? "" : barraProgresso(c);
   const quando = c.status === "publicado" && c.publicado_em
     ? `<span class="cartao-quando">${data(c.publicado_em, false)}</span>` : "";
 
@@ -291,7 +357,7 @@ function cartao(c) {
       <button class="cartao-sel" type="button" aria-label="Selecionar"></button>
       <h3>${esc(c.titulo) || "(sem título)"}</h3>
       <div class="cartao-pe">${marcas}${quando}</div>
-      ${progresso}
+      ${c.status === "publicado" ? "" : barraProgresso(c)}
     </article>`;
 }
 
@@ -299,17 +365,21 @@ function barraProgresso(c) {
   const temHook = !!(c.hook || "").trim();
   const temFech = !!(c.fechamento || "").trim();
   const n = (c.desenvolvimentos || []).filter((d) => (d.texto || "").trim()).length;
-  if (!temHook && !temFech && !n) return "";
+  const links = (c.referencias || []).length + (c.reacoes || []).length;
+  if (!temHook && !temFech && !n && !links) return "";
   return `<div class="prog">
       <span class="${temHook ? "ok" : ""}">hook</span>
-      <span class="${n ? "ok" : ""}">${n || 0} desenv.</span>
+      <span class="${n ? "ok" : ""}">${n} desenv.</span>
       <span class="${temFech ? "ok" : ""}">fecho</span>
+      ${links ? `<span class="anexos">🔗 ${links}</span>` : ""}
     </div>`;
 }
 
-const nomeFormato = (f) => (FORMATOS.find((x) => x.id === f) || {}).nome || f;
+/* ─────────────────────────── Seleção em lote ─────────────────────────── */
 
-/* ─────────────────────────── Seleção e lote ─────────────────────────── */
+function selecionados() {
+  return COLUNAS.flatMap((col) => daColuna(col.id)).filter((c) => selecao.has(String(c.id)));
+}
 
 function pintarAcoesLote() {
   const el = raiz.querySelector("#acoes-lote");
@@ -317,24 +387,17 @@ function pintarAcoesLote() {
   if (!selecao.size) return;
   el.innerHTML = `
     <span class="lote-cont">${selecao.size} selecionado${selecao.size === 1 ? "" : "s"}</span>
-    <button class="bt sec" id="lote-copiar" type="button">Copiar markdown</button>
-    <button class="bt sec" id="lote-baixar" type="button">Baixar .md</button>
-    <button class="bt sec" id="lote-limpar" type="button">Limpar</button>`;
-
-  const selecionados = () =>
-    COLUNAS.flatMap((col) => daColuna(col.id)).filter((c) => selecao.has(String(c.id)));
+    <button class="bt sec" id="lote-copiar" type="button">Copiar</button>
+    <button class="bt sec" id="lote-limpar" type="button">✕</button>`;
 
   el.querySelector("#lote-copiar").onclick = async (ev) => {
-    // Texto montado ANTES de qualquer await: o Safari invalida a permissão de
-    // clipboard se houver await antes da chamada dentro do handler.
+    // Texto montado ANTES do await: o Safari invalida a permissão de clipboard
+    // se houver await antes da chamada dentro do handler.
     const texto = loteParaMarkdown(selecionados(), opcoesExport());
     const bt = ev.currentTarget;
     const ok = await copiar(texto);
     bt.textContent = ok ? "Copiado" : "Não deu";
-    setTimeout(() => { bt.textContent = "Copiar markdown"; }, 1600);
-  };
-  el.querySelector("#lote-baixar").onclick = () => {
-    baixar("roteiros.md", loteParaMarkdown(selecionados(), opcoesExport()));
+    setTimeout(() => { bt.textContent = "Copiar"; }, 1600);
   };
   el.querySelector("#lote-limpar").onclick = () => { selecao.clear(); pintar(); };
 }
@@ -351,20 +414,11 @@ function opcoesExport() {
 function aoMudarCard(card, { removido = false, reguaAntes = null, reguaDepois = null } = {}) {
   if (removido) {
     cards = cards.filter((c) => c.id !== card.id);
+    selecao.delete(String(card.id));
   } else {
     const i = cards.findIndex((c) => c.id === card.id);
     if (i >= 0) cards[i] = card; else cards = [card, ...cards];
   }
   if (reguaDepois) regua.animarPara(reguaDepois, reguaAntes);
   pintar();
-}
-
-export function adicionarCard(card) {
-  cards = [card, ...cards];
-  pintar();
-}
-
-export function atualizarConfig(nova) {
-  config = nova;
-  filtros = { tipo: nova.filtros?.tipo || [], formato: nova.filtros?.formato || [] };
 }

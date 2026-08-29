@@ -218,6 +218,100 @@ def test_nao_apaga_publicado_de_vez(cliente):
     assert r.status_code == 409
 
 
+# ─────────────────────────── Referências e reação ───────────────────────────
+
+def test_card_nasce_com_as_duas_listas_vazias(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    assert card["referencias"] == []
+    assert card["reacoes"] == []
+
+
+def test_captura_ja_aceita_tipo_e_formato(cliente):
+    card = cliente.post("/lab/api/cards", json={
+        "titulo": "com formato", "tipo": "anuncio", "formato": "vlog"}).json()
+    assert (card["tipo"], card["formato"]) == ("anuncio", "vlog")
+    assert card["status"] == "ideia", "marcar formato não é escrever roteiro"
+
+
+@pytest.mark.parametrize("lista", ["referencias", "reacoes"])
+def test_links_salvam_e_voltam_na_ordem(cliente, lista):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={lista: [
+        {"url": "https://a.com", "nota": "primeiro"},
+        {"url": "https://b.com", "nota": "segundo"},
+    ]}).json()
+    assert [l["url"] for l in r[lista]] == ["https://a.com", "https://b.com"]
+    assert [l["nota"] for l in r[lista]] == ["primeiro", "segundo"]
+
+
+def test_as_duas_listas_nao_se_misturam(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "referencias": [{"url": "https://estudo.com"}],
+        "reacoes": [{"url": "https://youtube.com/x"}],
+    }).json()
+    assert len(r["referencias"]) == 1 and len(r["reacoes"]) == 1
+    assert r["referencias"][0]["url"] == "https://estudo.com"
+    assert r["reacoes"][0]["url"] == "https://youtube.com/x"
+
+
+def test_link_totalmente_vazio_nao_e_gravado(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={"referencias": [
+        {"url": "https://a.com"}, {"url": "", "nota": ""}, {"url": "  "},
+    ]}).json()
+    assert len(r["referencias"]) == 1
+
+
+def test_remover_link_de_uma_lista_preserva_a_outra(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cid = card["id"]
+    cliente.patch(f"/lab/api/cards/{cid}", json={
+        "referencias": [{"url": "https://a.com"}], "reacoes": [{"url": "https://b.com"}]})
+    r = cliente.patch(f"/lab/api/cards/{cid}", json={"referencias": []}).json()
+    assert r["referencias"] == []
+    assert len(r["reacoes"]) == 1, "mexer numa lista não pode apagar a outra"
+
+
+def test_link_sozinho_nao_move_o_card_pra_producao(cliente):
+    """Link é material de apoio, não roteiro. O card continua sendo uma ideia."""
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "reacoes": [{"url": "https://youtube.com/x", "nota": "reagir aos 2:10"}]}).json()
+    assert r["status"] == "ideia"
+
+
+def test_duplicar_leva_os_links_junto(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "referencias": [{"url": "https://a.com", "nota": "estudo"}],
+        "reacoes": [{"url": "https://b.com"}]})
+    copia = cliente.post(f"/lab/api/cards/{card['id']}/duplicar").json()
+    assert copia["referencias"][0]["url"] == "https://a.com"
+    assert copia["referencias"][0]["nota"] == "estudo"
+    assert copia["reacoes"][0]["url"] == "https://b.com"
+
+
+def test_links_vem_na_listagem_do_board(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cliente.patch(f"/lab/api/cards/{card['id']}", json={"reacoes": [{"url": "https://b.com"}]})
+    lista = cliente.get("/lab/api/estado").json()["cards"]
+    assert len(lista[0]["reacoes"]) == 1, "o board mostra o contador de anexos"
+
+
+def test_ids_dos_links_sao_estaveis_entre_salvamentos(cliente):
+    """Se o id mudasse a cada autosave, o cursor pularia enquanto o Pedro digita."""
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cid = card["id"]
+    r1 = cliente.patch(f"/lab/api/cards/{cid}", json={
+        "referencias": [{"url": "https://a.com"}]}).json()
+    lid = r1["referencias"][0]["id"]
+    r2 = cliente.patch(f"/lab/api/cards/{cid}", json={
+        "referencias": [{"id": lid, "url": "https://a.com/x"}]}).json()
+    assert r2["referencias"][0]["id"] == lid
+    assert r2["referencias"][0]["url"] == "https://a.com/x"
+
+
 # ─────────────────────────── Régua e onboarding ───────────────────────────
 
 def test_simular_mostra_o_preview_sem_gravar(cliente):

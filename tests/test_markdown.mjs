@@ -121,6 +121,53 @@ teste("aceita desenvolvimento como texto puro", () => {
   assert.ok(md.includes("direto como string"));
 });
 
+/* ─── Referências e reação ─── */
+
+const comLinks = {
+  ...card,
+  referencias: [
+    { url: "https://pubmed.gov/123", nota: "meta-análise de 2025" },
+    { url: "https://sbd.org.br/x", nota: "" },
+  ],
+  reacoes: [{ url: "https://youtube.com/watch?v=abc", nota: "reagir aos 2:10" }],
+};
+
+teste("links saem depois do roteiro, com rótulo", () => {
+  const md = cardParaMarkdown(comLinks);
+  assert.ok(md.indexOf("**FECHAMENTO**") < md.indexOf("**REFERÊNCIAS**"),
+            "material de apoio vem depois do roteiro");
+  assert.ok(md.includes("- https://pubmed.gov/123 — meta-análise de 2025"));
+  assert.ok(md.includes("- https://sbd.org.br/x"), "sem nota, sai só a URL");
+  assert.ok(md.includes("**REAGIR A**"));
+  assert.ok(md.includes("- https://youtube.com/watch?v=abc — reagir aos 2:10"));
+});
+
+teste("sem link nenhum, nenhuma seção aparece", () => {
+  const md = cardParaMarkdown(card);
+  assert.ok(!md.includes("REFERÊNCIAS"));
+  assert.ok(!md.includes("REAGIR A"));
+});
+
+teste("links vazios não geram bullet", () => {
+  const md = cardParaMarkdown({
+    ...card, referencias: [{ url: "  ", nota: "" }, { url: "", nota: "" }],
+  });
+  assert.ok(!md.includes("REFERÊNCIAS"));
+});
+
+teste("dá pra exportar sem os links", () => {
+  const md = cardParaMarkdown(comLinks, { incluirLinks: false });
+  assert.ok(!md.includes("REFERÊNCIAS"));
+  assert.ok(!md.includes("pubmed"));
+  assert.ok(md.includes("**HOOK**"), "o roteiro continua inteiro");
+});
+
+teste("só uma das listas preenchida traz só a seção dela", () => {
+  const md = cardParaMarkdown({ ...card, reacoes: [{ url: "https://x.com" }] });
+  assert.ok(!md.includes("REFERÊNCIAS"));
+  assert.ok(md.includes("**REAGIR A**"));
+});
+
 teste("nome de arquivo tira acento e espaço", () => {
   assert.equal(nomeDeArquivo({ titulo: "Contagem de Carboidrato: é fácil?" }),
                "contagem-de-carboidrato-e-facil.md");

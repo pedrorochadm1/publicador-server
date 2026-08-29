@@ -22,8 +22,8 @@ function gravar(itens) {
   catch (e) { /* cota estourada: o card já foi pro servidor ou se perde mesmo */ }
 }
 
-export function enfileirar(titulo) {
-  const item = { client_uuid: uuid(), titulo, em: new Date().toISOString() };
+export function enfileirar(titulo, tipo = null, formato = null) {
+  const item = { client_uuid: uuid(), titulo, tipo, formato, em: new Date().toISOString() };
   gravar([...ler(), item]);
   return item;
 }
@@ -42,6 +42,8 @@ async function escoar() {
       const card = await post("/lab/api/cards", {
         titulo: item.titulo,
         client_uuid: item.client_uuid,
+        tipo: item.tipo || null,
+        formato: item.formato || null,
       });
       remover(item.client_uuid);
       criados.push(card);
@@ -56,13 +58,22 @@ async function escoar() {
   return criados;
 }
 
-/** Liga o escoamento aos momentos em que faz sentido tentar de novo. */
+let ligados = null;
+
+/** Liga o escoamento aos momentos em que faz sentido tentar de novo.
+    Chamar de novo (troca de aba) substitui os listeners em vez de somar. */
 export function vigiar(aoEscoar) {
   const tentar = async () => {
     const criados = await escoar();
     if (criados.length) aoEscoar(criados);
   };
+  const aoVoltar = () => { if (!document.hidden) tentar(); };
+  if (ligados) {
+    window.removeEventListener("online", ligados.tentar);
+    document.removeEventListener("visibilitychange", ligados.aoVoltar);
+  }
+  ligados = { tentar, aoVoltar };
   window.addEventListener("online", tentar);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) tentar(); });
+  document.addEventListener("visibilitychange", aoVoltar);
   return tentar;
 }

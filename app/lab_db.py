@@ -73,6 +73,23 @@ def _init():
         """
     )
     c.execute("CREATE INDEX IF NOT EXISTS ix_lab_desen_card ON lab_desenvolvimentos (card_id, ordem)")
+    # Links do card, em duas listas:
+    #   'referencia' = o embasamento (estudo, post, matéria)
+    #   'reacao'     = vídeos que o Pedro vai reagir DENTRO do vídeo dele
+    # Não entram na derivação do status: link não é roteiro.
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lab_links (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            card_id INTEGER NOT NULL,
+            lista   TEXT    NOT NULL,
+            url     TEXT    NOT NULL DEFAULT '',
+            nota    TEXT    NOT NULL DEFAULT '',
+            ordem   INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    c.execute("CREATE INDEX IF NOT EXISTS ix_lab_links_card ON lab_links (card_id, lista, ordem)")
     # Fonte ÚNICA do saldo. Separada de lab_cards porque o backfill cria registros
     # sem card, e duplicar um card publicado não pode duplicar a publicação.
     c.execute(
@@ -112,12 +129,21 @@ def _status_derivado(atual: str, hook: str, fechamento: str, desen: list[str]) -
 
 # ─────────────────────────── Leitura ───────────────────────────
 
-def _linha(r, desenvolvimentos=None) -> dict:
+LISTAS_LINK = {"referencias": "referencia", "reacoes": "reacao"}
+
+
+def _linha(r, filhos=True) -> dict:
     d = dict(r)
     d["tags"] = json.loads(d["tags"] or "[]")
     d["arquivado"] = bool(d["arquivado"])
-    if desenvolvimentos is not None:
-        d["desenvolvimentos"] = desenvolvimentos
+    if filhos:
+        d["desenvolvimentos"] = _desen_do_card(d["id"])
+        for campo, lista in LISTAS_LINK.items():
+            d[campo] = _links_do_card(d["id"], lista)
+    else:
+        d["desenvolvimentos"] = []
+        for campo in LISTAS_LINK:
+            d[campo] = []
     return d
 
 
@@ -129,10 +155,18 @@ def _desen_do_card(card_id: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def _links_do_card(card_id: int, lista: str) -> list[dict]:
+    rows = conn().execute(
+        "SELECT id, ordem, url, nota FROM lab_links WHERE card_id = ? AND lista = ? "
+        "ORDER BY ordem, id", (card_id, lista),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_card(card_id: int) -> dict | None:
     _init()
     r = conn().execute("SELECT * FROM lab_cards WHERE id = ?", (card_id,)).fetchone()
-    return _linha(r, _desen_do_card(card_id)) if r else None
+    return _linha(r) if r else None
 
 
 def listar_cards(incluir_arquivados: bool = False, publicados_desde: str | None = None) -> list[dict]:
@@ -150,9 +184,10 @@ def listar_cards(incluir_arquivados: bool = False, publicados_desde: str | None 
     if onde:
         sql += " WHERE " + " AND ".join(onde)
     sql += " ORDER BY ordem, id DESC"
-    cards = [_linha(r, []) for r in c.execute(sql, params).fetchall()]
+    cards = [_linha(r, filhos=False) for r in c.execute(sql, params).fetchall()]
     if not cards:
         return []
+    # Os filhos vêm em duas queries, não uma por card (evita N+1 no board).
     por_id = {c_["id"]: c_ for c_ in cards}
     for r in c.execute(
         "SELECT id, card_id, ordem, texto FROM lab_desenvolvimentos ORDER BY ordem, id"
@@ -160,6 +195,14 @@ def listar_cards(incluir_arquivados: bool = False, publicados_desde: str | None 
         alvo = por_id.get(r["card_id"])
         if alvo is not None:
             alvo["desenvolvimentos"].append({"id": r["id"], "ordem": r["ordem"], "texto": r["texto"]})
+    invertido = {v: k for k, v in LISTAS_LINK.items()}
+    for r in c.execute(
+        "SELECT id, card_id, lista, ordem, url, nota FROM lab_links ORDER BY ordem, id"
+    ).fetchall():
+        alvo = por_id.get(r["card_id"])
+        campo = invertido.get(r["lista"])
+        if alvo is not None and campo:
+            alvo[campo].append({"id": r["id"], "ordem": r["ordem"], "url": r["url"], "nota": r["nota"]})
     return cards
 
 
@@ -188,6 +231,58 @@ def criar_card(titulo: str, client_uuid: str | None = None) -> dict:
 
 
 _CAMPOS_TEXTO = ("titulo", "hook", "fechamento")
+
+
+def _sincronizar(c, tabela: str, card_id: int, filtro_extra: str, params_extra: list,
+                 itens: list, colunas: list[str], valores) -> None:
+    """A lista chega INTEIRA do cliente: atualiza quem veio com id, insere quem
+    veio sem, apaga quem sumiu. Os ids voltam na resposta pra que as chaves do
+    DOM continuem estáveis e o cursor não pule enquanto o Pedro digita."""
+    mantidos = []
+    for i, item in enumerate(itens):
+        vals = valores(item, i)
+        iid = item.get("id") if isinstance(item, dict) else None
+        if iid:
+            sets = ", ".join(f"{col} = ?" for col in colunas)
+            c.execute(
+                f"UPDATE {tabela} SET {sets} WHERE id = ? AND card_id = ?{filtro_extra}",
+                [*vals, iid, card_id, *params_extra],
+            )
+            mantidos.append(iid)
+        else:
+            campos = ", ".join(["card_id", *colunas])
+            marcas = ", ".join("?" * (len(colunas) + 1))
+            cur = c.execute(
+                f"INSERT INTO {tabela} ({campos}) VALUES ({marcas})", [card_id, *vals])
+            mantidos.append(cur.lastrowid)
+    sql = f"DELETE FROM {tabela} WHERE card_id = ?{filtro_extra}"
+    args = [card_id, *params_extra]
+    if mantidos:
+        sql += f" AND id NOT IN ({','.join('?' * len(mantidos))})"
+        args += mantidos
+    c.execute(sql, args)
+
+
+def _sincronizar_desenvolvimentos(c, card_id: int, itens: list) -> None:
+    normalizados = [{"texto": i} if isinstance(i, str) else i for i in itens]
+    _sincronizar(
+        c, "lab_desenvolvimentos", card_id, "", [], normalizados,
+        ["ordem", "texto"],
+        lambda item, i: (i, str(item.get("texto") or "")),
+    )
+
+
+def _sincronizar_links(c, card_id: int, lista: str, itens: list) -> None:
+    normalizados = [{"url": i} if isinstance(i, str) else i for i in itens]
+    # Link sem URL nenhuma é linha vazia esquecida na tela: não vale gravar.
+    normalizados = [i for i in normalizados
+                    if str(i.get("url") or "").strip() or str(i.get("nota") or "").strip()]
+    _sincronizar(
+        c, "lab_links", card_id, " AND lista = ?", [lista], normalizados,
+        ["lista", "ordem", "url", "nota"],
+        lambda item, i: (lista, i, str(item.get("url") or "").strip(),
+                         str(item.get("nota") or "").strip()),
+    )
 
 
 def atualizar_card(card_id: int, dados: dict) -> dict | None:
@@ -225,36 +320,11 @@ def atualizar_card(card_id: int, dados: dict) -> dict | None:
         sets.append("ordem = ?")
         params.append(float(dados["ordem"]))
 
-    # A lista de desenvolvimentos chega inteira: upsert dos que vieram, delete
-    # dos que sumiram. Os ids voltam na resposta pra manter as chaves do DOM.
     if "desenvolvimentos" in dados:
-        vieram = dados["desenvolvimentos"] or []
-        mantidos = []
-        for i, item in enumerate(vieram):
-            if isinstance(item, str):
-                item = {"texto": item}
-            texto = str(item.get("texto") or "")
-            did = item.get("id")
-            if did:
-                c.execute(
-                    "UPDATE lab_desenvolvimentos SET texto = ?, ordem = ? WHERE id = ? AND card_id = ?",
-                    (texto, i, did, card_id),
-                )
-                mantidos.append(did)
-            else:
-                cur = c.execute(
-                    "INSERT INTO lab_desenvolvimentos (card_id, ordem, texto) VALUES (?, ?, ?)",
-                    (card_id, i, texto),
-                )
-                mantidos.append(cur.lastrowid)
-        if mantidos:
-            marcas = ",".join("?" * len(mantidos))
-            c.execute(
-                f"DELETE FROM lab_desenvolvimentos WHERE card_id = ? AND id NOT IN ({marcas})",
-                [card_id, *mantidos],
-            )
-        else:
-            c.execute("DELETE FROM lab_desenvolvimentos WHERE card_id = ?", (card_id,))
+        _sincronizar_desenvolvimentos(c, card_id, dados["desenvolvimentos"] or [])
+    for campo, lista in LISTAS_LINK.items():
+        if campo in dados:
+            _sincronizar_links(c, card_id, lista, dados[campo] or [])
 
     if sets:
         sets.append("atualizado_em = ?")
@@ -319,14 +389,17 @@ def duplicar_card(card_id: int) -> dict | None:
     if not orig:
         return None
     novo = criar_card(f"{orig['titulo']} (cópia)")
-    return atualizar_card(novo["id"], {
+    dados = {
         "tipo": orig["tipo"],
         "formato": orig["formato"],
         "hook": orig["hook"],
         "fechamento": orig["fechamento"],
         "tags": orig["tags"],
         "desenvolvimentos": [{"texto": d["texto"]} for d in orig["desenvolvimentos"]],
-    })
+    }
+    for campo in LISTAS_LINK:
+        dados[campo] = [{"url": l["url"], "nota": l["nota"]} for l in orig[campo]]
+    return atualizar_card(novo["id"], dados)
 
 
 def remover_card(card_id: int, definitivo: bool = False) -> bool:
@@ -341,6 +414,7 @@ def remover_card(card_id: int, definitivo: bool = False) -> bool:
             raise ErroPublicar("publicado_nao_apaga",
                                "Card publicado é histórico. Arquive em vez de apagar.")
         c.execute("DELETE FROM lab_desenvolvimentos WHERE card_id = ?", (card_id,))
+        c.execute("DELETE FROM lab_links WHERE card_id = ?", (card_id,))
         c.execute("DELETE FROM lab_cards WHERE id = ?", (card_id,))
     else:
         c.execute("UPDATE lab_cards SET arquivado = 1, atualizado_em = ? WHERE id = ?",

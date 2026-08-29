@@ -75,6 +75,20 @@ viraram a segunda aba dele.
 (tabelas `lab_*` no mesmo `/data/agenda.db`), `lab_web.py` (rotas),
 `sessoes.py` (sessão em SQLite — antes vivia em RAM e todo redeploy deslogava).
 
+**O card tem três abas:** Roteiro (hook → desenvolvimentos → fechamento),
+Referências (o embasamento) e Reação (vídeos que o Pedro vai reagir dentro do
+vídeo dele). As duas listas de link ficam em `lab_links`, separadas pela coluna
+`lista`, e **não entram na derivação do status** — colar um link não move o card
+pra produção, porque link é material de apoio, não roteiro.
+
+### Armadilha de layout que já custou caro
+
+O app ocupa a tela inteira e quem rola é a lista de cards, nunca a página. Em
+flex column, os irmãos do meio precisam de `flex:1; min-height:0`. Um
+`height:100%` num irmão da tabbar empurra o rodapé pra fora da tela e esconde o
+fim da lista — o que parece "não está salvando", porque o card novo renderiza
+numa área invisível. Foi exatamente isso na v1.
+
 **O saldo nunca é armazenado.** É recalculado a cada leitura a partir das
 publicações dos últimos 90 dias, com peso 3× / 2× / 1× por faixa de idade. Por
 isso ele decai sozinho, sem nenhum job em background.

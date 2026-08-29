@@ -3,15 +3,29 @@
    estrutura de DOM nesta versão, pra que o porte continue sendo comparável com
    o painel antigo em /insta/classico. */
 
-.auto { height: 100%; overflow-y: auto; padding: 0 0 calc(24px + var(--safe-b)); }
+.auto {
+  flex: 1; min-height: 0;            /* filho de #tela, que é flex column */
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; padding-bottom: 24px;
+}
 
 .auto-topo {
-  display: flex; align-items: center; gap: 12px;
-  padding: calc(16px + var(--safe-t)) 20px 14px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px;
+  padding-top: calc(12px + var(--safe-t));
+  padding-left: calc(20px + var(--safe-l));
+  padding-right: calc(20px + var(--safe-r));
   position: sticky; top: 0; background: var(--fundo); z-index: 5;
   border-bottom: 1px solid var(--linha);
 }
-.auto-topo h1 { font-size: 18px; flex: 1; }
+.auto-topo h1 { font-size: 17px; flex: none; }
+/* O chip de status é longo ("tempo real · Instagram + Facebook · token 42d") e
+   no iPhone empurrava o cabeçalho pra fora. Aqui ele rola em vez de esticar. */
+.auto-topo .chip {
+  flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap;
+  scrollbar-width: none; text-align: center;
+}
+.auto-topo .chip::-webkit-scrollbar { display: none; }
 
 .auto-grade {
   max-width: 1360px; margin: 0 auto; padding: 18px 20px;
@@ -118,9 +132,39 @@
 .auto .previa .nada { color: var(--texto3); font-size: 13px; padding: 12px; }
 
 @media (max-width: 1180px) {
-  .auto-grade { grid-template-columns: 300px 1fr; }
+  .auto-grade { grid-template-columns: 280px 1fr; }
   .auto .previa { position: static; }
 }
+
+/* No celular tudo empilha, e a lista de automações vira uma faixa rolável no
+   topo: são poucas, e um card por linha empurraria o editor pra fora da tela. */
 @media (max-width: 860px) {
-  .auto-grade { grid-template-columns: 1fr; padding: 14px 16px; }
+  .auto-grade {
+    grid-template-columns: 1fr; gap: 14px;
+    padding: 14px calc(16px + var(--safe-r)) 14px calc(16px + var(--safe-l));
+  }
+  .auto .lista {
+    display: flex; gap: 9px; overflow-x: auto; padding-bottom: 4px;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .auto .lista::-webkit-scrollbar { display: none; }
+  .auto .lista > .bt { flex: none; align-self: stretch; white-space: nowrap; padding: 12px 15px; }
+  .auto .lista #cards { display: flex; gap: 9px; }
+  .auto .lista .card {
+    flex: 0 0 220px; scroll-snap-align: start; padding: 13px;
+  }
+  .auto .lista .card h3 { font-size: 14px; }
+
+  .auto .card { padding: 14px; }
+  .auto .linha { flex-direction: column; gap: 12px; }
+  .auto .acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .auto .acoes .chip { grid-column: 1 / -1; text-align: center; }
+  .auto .acoes .bt { width: 100%; }
+  .auto .posts { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+
+  /* Histórico é largo demais pra 393px: rola em si mesmo em vez de esticar. */
+  .auto #historico { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .auto table { min-width: 560px; }
+  .auto .previa { display: grid; gap: 13px; }
 }

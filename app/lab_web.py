@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "1"
+LAB_VERSAO = "2"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")
@@ -220,7 +220,15 @@ def api_criar(dados: dict = Body(...), insta_sess: str | None = Cookie(default=N
     titulo = str(dados.get("titulo") or "").strip()
     if not titulo:
         raise HTTPException(status_code=400, detail="A ideia precisa de um título.")
-    return lab_db.criar_card(titulo, dados.get("client_uuid") or None)
+    card = lab_db.criar_card(titulo, dados.get("client_uuid") or None)
+    # Tipo e formato podem vir já da captura, quando o Pedro marca os chips.
+    marcados = {c: dados[c] for c in ("tipo", "formato") if dados.get(c)}
+    if marcados and not (card["tipo"] or card["formato"]):
+        try:
+            card = lab_db.atualizar_card(card["id"], marcados)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    return card
 
 
 @router.get("/lab/api/cards/{card_id}")

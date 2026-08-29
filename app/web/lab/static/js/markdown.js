@@ -19,8 +19,21 @@ const LACUNA = {
   fechamento: "_[falta o fechamento]_",
 };
 
+/** Uma lista de links vira bullets "- url — nota". Vazios são descartados. */
+function secaoDeLinks(rotulo, itens) {
+  const uteis = (itens || [])
+    .map((l) => (typeof l === "string" ? { url: l } : l))
+    .filter((l) => (l.url || "").trim() || (l.nota || "").trim());
+  if (!uteis.length) return [];
+  return ["", `**${rotulo}**`, ...uteis.map((l) => {
+    const url = (l.url || "").trim();
+    const nota = (l.nota || "").trim();
+    return url && nota ? `- ${url} — ${nota}` : `- ${url || nota}`;
+  })];
+}
+
 export function cardParaMarkdown(card, opcoes = {}) {
-  const { incluirTipoFormato = true, marcarLacunas = false } = opcoes;
+  const { incluirTipoFormato = true, marcarLacunas = false, incluirLinks = true } = opcoes;
   const linhas = [`# ${card.titulo || "(sem título)"}`];
 
   if (incluirTipoFormato) {
@@ -47,6 +60,13 @@ export function cardParaMarkdown(card, opcoes = {}) {
   const fechamento = (card.fechamento || "").trim();
   if (fechamento || marcarLacunas) {
     linhas.push("", "**FECHAMENTO**", fechamento || LACUNA.fechamento);
+  }
+
+  // Material de apoio vai DEPOIS do roteiro e só quando existe: quem lê está
+  // avaliando o roteiro, não a bibliografia.
+  if (incluirLinks) {
+    linhas.push(...secaoDeLinks("REFERÊNCIAS", card.referencias));
+    linhas.push(...secaoDeLinks("REAGIR A", card.reacoes));
   }
 
   return linhas.join("\n").trim() + "\n";
