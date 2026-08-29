@@ -23,22 +23,32 @@ const card = {
   ],
 };
 
-teste("card completo sai no formato do PRD", () => {
+teste("card completo sai pronto pra colar no WhatsApp", () => {
   const md = cardParaMarkdown(card);
-  assert.equal(md, `# Todo mundo erra a contagem de carboidrato
+  assert.equal(md, `*IDEIA CENTRAL*
+Todo mundo erra a contagem de carboidrato
 
-**Tipo:** Conteúdo · **Formato:** Lo-fi
+*Tipo:* Conteúdo · *Formato:* Lo-fi
 
-**HOOK**
+*HOOK*
 Você conta carboidrato errado e nem sabe.
 
 A conta de olho erra por 30% pra mais ou pra menos.
 
 Quem pesa a comida por duas semanas calibra o olho.
 
-**FECHAMENTO**
+*FECHAMENTO*
 Pesa uma semana. Só isso.
 `);
+});
+
+teste("negrito é sempre um asterisco só", () => {
+  const md = cardParaMarkdown({
+    ...card, titulo_tela: "na tela",
+    referencias: [{ url: "https://a.com" }], reacoes: [{ url: "https://b.com" }],
+  });
+  assert.ok(!md.includes("**"), "** sairia literal no WhatsApp");
+  assert.ok(!md.includes("#"), "cabeçalho de markdown apareceria cru no WhatsApp");
 });
 
 teste("desenvolvimentos não têm rótulo nem numeração", () => {
@@ -49,8 +59,8 @@ teste("desenvolvimentos não têm rótulo nem numeração", () => {
 
 teste("hook e fechamento são rotulados", () => {
   const md = cardParaMarkdown(card);
-  assert.ok(md.includes("**HOOK**"));
-  assert.ok(md.includes("**FECHAMENTO**"));
+  assert.ok(md.includes("*HOOK*"));
+  assert.ok(md.includes("*FECHAMENTO*"));
 });
 
 teste("desenvolvimentos vazios são descartados", () => {
@@ -73,14 +83,14 @@ teste("ordem dos desenvolvimentos é preservada", () => {
 
 teste("metadados podem ser desligados", () => {
   const md = cardParaMarkdown(card, { incluirTipoFormato: false });
-  assert.ok(!md.includes("**Tipo:**"));
-  assert.ok(md.startsWith("# Todo mundo"));
+  assert.ok(!md.includes("*Tipo:*"));
+  assert.ok(md.startsWith("*IDEIA CENTRAL*\nTodo mundo"));
 });
 
 teste("sem lacunas marcadas, campo vazio simplesmente não aparece", () => {
   const md = cardParaMarkdown({ titulo: "Só a ideia", desenvolvimentos: [] },
                               { incluirTipoFormato: false });
-  assert.equal(md, "# Só a ideia\n");
+  assert.equal(md, "*IDEIA CENTRAL*\nSó a ideia\n");
 });
 
 teste("com lacunas marcadas, os buracos ficam explícitos", () => {
@@ -93,7 +103,7 @@ teste("com lacunas marcadas, os buracos ficam explícitos", () => {
 
 teste("tipo e formato indefinidos viram travessão simples", () => {
   const md = cardParaMarkdown({ titulo: "x", tipo: null, formato: null, desenvolvimentos: [] });
-  assert.ok(md.includes("**Tipo:** — · **Formato:** —"));
+  assert.ok(md.includes("*Tipo:* — · *Formato:* —"));
 });
 
 teste("nada de status, data ou id no corpo", () => {
@@ -108,7 +118,7 @@ teste("nada de status, data ou id no corpo", () => {
 teste("lote separa os cards por ---", () => {
   const md = loteParaMarkdown([card, { ...card, titulo: "Segundo" }]);
   assert.equal((md.match(/^---$/gm) || []).length, 1);
-  assert.ok(md.indexOf("# Todo mundo") < md.indexOf("# Segundo"));
+  assert.ok(md.indexOf("Todo mundo") < md.indexOf("Segundo"));
 });
 
 teste("lote de um card não ganha separador", () => {
@@ -125,9 +135,9 @@ teste("aceita desenvolvimento como texto puro", () => {
 
 teste("texto na tela sai logo depois do hook", () => {
   const md = cardParaMarkdown({ ...card, titulo_tela: "NPH ainda é o que o SUS entrega" });
-  assert.ok(md.includes("**TEXTO NA TELA**\nNPH ainda é o que o SUS entrega"));
-  assert.ok(md.indexOf("**HOOK**") < md.indexOf("**TEXTO NA TELA**"));
-  assert.ok(md.indexOf("**TEXTO NA TELA**") < md.indexOf("A conta de olho"));
+  assert.ok(md.includes("*TEXTO NA TELA*\nNPH ainda é o que o SUS entrega"));
+  assert.ok(md.indexOf("*HOOK*") < md.indexOf("*TEXTO NA TELA*"));
+  assert.ok(md.indexOf("*TEXTO NA TELA*") < md.indexOf("A conta de olho"));
 });
 
 teste("sem texto na tela, a seção não aparece", () => {
@@ -154,11 +164,11 @@ const comLinks = {
 
 teste("links saem depois do roteiro, com rótulo", () => {
   const md = cardParaMarkdown(comLinks);
-  assert.ok(md.indexOf("**FECHAMENTO**") < md.indexOf("**REFERÊNCIAS**"),
+  assert.ok(md.indexOf("*FECHAMENTO*") < md.indexOf("*REFERÊNCIAS*"),
             "material de apoio vem depois do roteiro");
   assert.ok(md.includes("- https://pubmed.gov/123 — meta-análise de 2025"));
   assert.ok(md.includes("- https://sbd.org.br/x"), "sem nota, sai só a URL");
-  assert.ok(md.includes("**REAGIR A**"));
+  assert.ok(md.includes("*REAGIR A*"));
   assert.ok(md.includes("- https://youtube.com/watch?v=abc — reagir aos 2:10"));
 });
 
@@ -179,13 +189,13 @@ teste("dá pra exportar sem os links", () => {
   const md = cardParaMarkdown(comLinks, { incluirLinks: false });
   assert.ok(!md.includes("REFERÊNCIAS"));
   assert.ok(!md.includes("pubmed"));
-  assert.ok(md.includes("**HOOK**"), "o roteiro continua inteiro");
+  assert.ok(md.includes("*HOOK*"), "o roteiro continua inteiro");
 });
 
 teste("só uma das listas preenchida traz só a seção dela", () => {
   const md = cardParaMarkdown({ ...card, reacoes: [{ url: "https://x.com" }] });
   assert.ok(!md.includes("REFERÊNCIAS"));
-  assert.ok(md.includes("**REAGIR A**"));
+  assert.ok(md.includes("*REAGIR A*"));
 });
 
 console.log(`${passou} testes de markdown passaram`);

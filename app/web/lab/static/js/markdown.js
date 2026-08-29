@@ -1,6 +1,10 @@
 /* Exportação em markdown, pro roteiro sair do app e ir pro WhatsApp, Notion ou
    pro chat de uma IA sem que o estrategista precise de acesso ao sistema.
 
+   NEGRITO COM UM ASTERISCO SÓ. O destino principal é o WhatsApp, onde *texto* é
+   negrito e **texto** sai literal, com os asteriscos à mostra. Pelo mesmo motivo
+   o título não usa cabeçalho de markdown: um "#" apareceria cru na conversa.
+
    Duas regras que definem o formato:
    - Hook e fechamento SÃO rotulados: são os dois momentos que o estrategista
      avalia isoladamente.
@@ -25,7 +29,7 @@ function secaoDeLinks(rotulo, itens) {
     .map((l) => (typeof l === "string" ? { url: l } : l))
     .filter((l) => (l.url || "").trim() || (l.nota || "").trim());
   if (!uteis.length) return [];
-  return ["", `**${rotulo}**`, ...uteis.map((l) => {
+  return ["", `*${rotulo}*`, ...uteis.map((l) => {
     const url = (l.url || "").trim();
     const nota = (l.nota || "").trim();
     return url && nota ? `- ${url} — ${nota}` : `- ${url || nota}`;
@@ -34,23 +38,23 @@ function secaoDeLinks(rotulo, itens) {
 
 export function cardParaMarkdown(card, opcoes = {}) {
   const { incluirTipoFormato = true, marcarLacunas = false, incluirLinks = true } = opcoes;
-  const linhas = [`# ${card.titulo || "(sem título)"}`];
+  const linhas = ["*IDEIA CENTRAL*", card.titulo || "(sem título)"];
 
   if (incluirTipoFormato) {
     const tipo = NOME_TIPO[card.tipo] || "—";
     const formato = NOME_FORMATO[card.formato] || "—";
-    linhas.push("", `**Tipo:** ${tipo} · **Formato:** ${formato}`);
+    linhas.push("", `*Tipo:* ${tipo} · *Formato:* ${formato}`);
   }
 
   const hook = (card.hook || "").trim();
   if (hook || marcarLacunas) {
-    linhas.push("", "**HOOK**", hook || LACUNA.hook);
+    linhas.push("", "*HOOK*", hook || LACUNA.hook);
   }
 
   // Só sai quando existe: nem todo formato tem texto na tela, e uma lacuna aqui
   // seria ruído num card de foto.
   const tela = (card.titulo_tela || "").trim();
-  if (tela) linhas.push("", "**TEXTO NA TELA**", tela);
+  if (tela) linhas.push("", "*TEXTO NA TELA*", tela);
 
   // Desenvolvimentos vazios são descartados: não geram parágrafo em branco.
   const desen = (card.desenvolvimentos || [])
@@ -64,7 +68,7 @@ export function cardParaMarkdown(card, opcoes = {}) {
 
   const fechamento = (card.fechamento || "").trim();
   if (fechamento || marcarLacunas) {
-    linhas.push("", "**FECHAMENTO**", fechamento || LACUNA.fechamento);
+    linhas.push("", "*FECHAMENTO*", fechamento || LACUNA.fechamento);
   }
 
   // Material de apoio vai DEPOIS do roteiro e só quando existe: quem lê está
