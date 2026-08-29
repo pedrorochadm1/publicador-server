@@ -144,7 +144,7 @@ async function capturar(campo, bloco) {
   const item = fila.enfileirar(titulo, tipo, formato);
   const provisorio = {
     id: "tmp-" + item.client_uuid, client_uuid: item.client_uuid, titulo,
-    status: "ideia", tipo, formato, hook: "", fechamento: "",
+    status: "ideia", tipo, formato, hook: "", titulo_tela: "", fechamento: "",
     desenvolvimentos: [], referencias: [], reacoes: [], tags: [],
     provisorio: true, criado_em: item.em,
   };
@@ -234,7 +234,7 @@ function passaNoFiltro(c) {
   if (filtros.formato.length && !filtros.formato.includes(c.formato)) return false;
   if (busca) {
     const alvo = [
-      c.titulo, c.hook, c.fechamento,
+      c.titulo, c.hook, c.titulo_tela, c.fechamento,
       ...(c.desenvolvimentos || []).map((d) => d.texto),
       ...(c.referencias || []).map((l) => `${l.url} ${l.nota}`),
       ...(c.reacoes || []).map((l) => `${l.url} ${l.nota}`),
@@ -306,7 +306,7 @@ function pintarColunas() {
     el.onclick = (ev) => {
       if (ev.target.closest(".cartao-sel")) return;
       const card = cards.find((c) => String(c.id) === el.dataset.id);
-      if (card && !card.provisorio) abrirEditor(card, aoMudarCard);
+      if (card && !card.provisorio) abrirEditor(card, aoMudarCard, config);
     };
   });
   alvo.querySelectorAll(".cartao-sel").forEach((el) => {
@@ -448,6 +448,7 @@ async function excluirSelecionados() {
 function opcoesExport() {
   return {
     incluirTipoFormato: config.export?.incluir_tipo_formato !== false,
+    incluirLinks: config.export?.incluir_links !== false,
     marcarLacunas: !!config.export?.marcar_lacunas,
   };
 }

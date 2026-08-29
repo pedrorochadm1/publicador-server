@@ -47,6 +47,11 @@ export function cardParaMarkdown(card, opcoes = {}) {
     linhas.push("", "**HOOK**", hook || LACUNA.hook);
   }
 
+  // Só sai quando existe: nem todo formato tem texto na tela, e uma lacuna aqui
+  // seria ruído num card de foto.
+  const tela = (card.titulo_tela || "").trim();
+  if (tela) linhas.push("", "**TEXTO NA TELA**", tela);
+
   // Desenvolvimentos vazios são descartados: não geram parágrafo em branco.
   const desen = (card.desenvolvimentos || [])
     .map((d) => (typeof d === "string" ? d : d.texto || "").trim())
@@ -104,26 +109,4 @@ export async function copiar(texto) {
   } catch (e) {
     return false;
   }
-}
-
-export function baixar(nomeArquivo, texto) {
-  const blob = new Blob([texto], { type: "text/markdown;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nomeArquivo;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-export function nomeDeArquivo(card) {
-  const base = (card.titulo || "roteiro")
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 50) || "roteiro";
-  return base + ".md";
 }

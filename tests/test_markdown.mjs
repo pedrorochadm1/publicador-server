@@ -2,7 +2,7 @@
    Roda com: node tests/test_markdown.mjs   (não entra na imagem Docker) */
 
 import assert from "node:assert/strict";
-import { cardParaMarkdown, loteParaMarkdown, nomeDeArquivo }
+import { cardParaMarkdown, loteParaMarkdown }
   from "../app/web/lab/static/js/markdown.js";
 
 let passou = 0;
@@ -121,6 +121,26 @@ teste("aceita desenvolvimento como texto puro", () => {
   assert.ok(md.includes("direto como string"));
 });
 
+/* ─── Texto na tela ─── */
+
+teste("texto na tela sai logo depois do hook", () => {
+  const md = cardParaMarkdown({ ...card, titulo_tela: "NPH ainda é o que o SUS entrega" });
+  assert.ok(md.includes("**TEXTO NA TELA**\nNPH ainda é o que o SUS entrega"));
+  assert.ok(md.indexOf("**HOOK**") < md.indexOf("**TEXTO NA TELA**"));
+  assert.ok(md.indexOf("**TEXTO NA TELA**") < md.indexOf("A conta de olho"));
+});
+
+teste("sem texto na tela, a seção não aparece", () => {
+  assert.ok(!cardParaMarkdown(card).includes("TEXTO NA TELA"));
+  assert.ok(!cardParaMarkdown({ ...card, titulo_tela: "   " }).includes("TEXTO NA TELA"));
+});
+
+teste("texto na tela não vira lacuna: nem todo formato tem", () => {
+  const md = cardParaMarkdown({ titulo: "x", desenvolvimentos: [] },
+                              { incluirTipoFormato: false, marcarLacunas: true });
+  assert.ok(!md.includes("TEXTO NA TELA"));
+});
+
 /* ─── Referências e reação ─── */
 
 const comLinks = {
@@ -166,13 +186,6 @@ teste("só uma das listas preenchida traz só a seção dela", () => {
   const md = cardParaMarkdown({ ...card, reacoes: [{ url: "https://x.com" }] });
   assert.ok(!md.includes("REFERÊNCIAS"));
   assert.ok(md.includes("**REAGIR A**"));
-});
-
-teste("nome de arquivo tira acento e espaço", () => {
-  assert.equal(nomeDeArquivo({ titulo: "Contagem de Carboidrato: é fácil?" }),
-               "contagem-de-carboidrato-e-facil.md");
-  assert.equal(nomeDeArquivo({ titulo: "" }), "roteiro.md");
-  assert.equal(nomeDeArquivo({ titulo: "!!!" }), "roteiro.md");
 });
 
 console.log(`${passou} testes de markdown passaram`);

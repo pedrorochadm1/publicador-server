@@ -438,14 +438,18 @@
 .bt-publiquei { width: 100%; padding: 15px; font-size: 15px; }
 .ed-publicado { display: grid; gap: 8px; justify-items: start; }
 
-.ed-secundarias { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 10px; }
+.ed-secundarias { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 8px; }
 .ed-secundarias .bt { padding: 11px 10px; font-size: 13px; }
-.ed-secundarias .larga { grid-column: 1 / -1; }
-.ed-md-opcoes {
-  display: grid; gap: 10px; padding: 13px; margin-top: 8px;
-  background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio);
+
+/* Bloco de exportação: as chaves ficam à vista e definem direto como a cópia
+   sai. Não há botão de opções nem download — a única saída é o clipboard. */
+.ed-export {
+  display: grid; gap: 11px; padding: 14px; margin-top: 18px;
+  background: var(--superficie); border: 1px solid var(--linha);
+  border-radius: var(--raio);
 }
-.ed-md-opcoes[hidden] { display: none; }
+.ed-export .ed-rot { margin-top: 0; }
+.ed-export .bt { margin-top: 3px; }
 
 /* Listas de links: Referências e Reação */
 .link-intro { font-size: 12.5px; color: var(--texto3); line-height: 1.6; margin-bottom: 4px; }
@@ -532,3 +536,7 @@
 .aj-linha input[type=number] { width: 82px; text-align: center; font-size: 16px; }
 .aj-linha .nota { flex: 1; }
 .painel-ajustes .grupo-chips { padding: 4px 2px; }
+
+/* O texto na tela é uma linha curta, não um parágrafo: nasce baixo e cresce
+   junto com o conteúdo, como os outros campos. */
+.ed-campo.curto { min-height: 44px; }

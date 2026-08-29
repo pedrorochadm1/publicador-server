@@ -86,6 +86,7 @@ def test_titulo_sozinho_nao_move_da_coluna_ideia(cliente):
     ("hook", {"hook": "todo mundo erra a contagem"}),
     ("fechamento", {"fechamento": "é isso"}),
     ("desenvolvimento", {"desenvolvimentos": [{"texto": "o ponto é a proporção"}]}),
+    ("titulo_tela", {"titulo_tela": "NPH ainda?"}),
 ])
 def test_qualquer_campo_do_roteiro_move_pra_producao(cliente, campo, valor):
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
@@ -242,6 +243,29 @@ def test_excluir_card_inexistente_da_404(cliente):
 
 
 # ─────────────────────────── Referências e reação ───────────────────────────
+
+def test_texto_na_tela_salva_e_volta(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    assert card["titulo_tela"] == ""
+    r = cliente.patch(f"/lab/api/cards/{card['id']}",
+                      json={"titulo_tela": "A insulina do SUS tem 40 anos"}).json()
+    assert r["titulo_tela"] == "A insulina do SUS tem 40 anos"
+    assert r["status"] == "producao", "texto na tela é roteiro, move de coluna"
+
+
+def test_apagar_so_o_texto_na_tela_volta_pra_ideia(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cid = card["id"]
+    cliente.patch(f"/lab/api/cards/{cid}", json={"titulo_tela": "algo"})
+    assert cliente.patch(f"/lab/api/cards/{cid}", json={"titulo_tela": ""}).json()["status"] == "ideia"
+
+
+def test_duplicar_leva_o_texto_na_tela(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cliente.patch(f"/lab/api/cards/{card['id']}", json={"titulo_tela": "na tela"})
+    copia = cliente.post(f"/lab/api/cards/{card['id']}/duplicar").json()
+    assert copia["titulo_tela"] == "na tela"
+
 
 def test_card_nasce_com_as_duas_listas_vazias(cliente):
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()

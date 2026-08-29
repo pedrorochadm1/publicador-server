@@ -9,9 +9,9 @@
    muda de coluna sozinho — quem decide isso é o servidor, que recalcula em toda
    escrita e devolve o status junto da resposta. */
 
-import { patch, post, del, get, esc, data, aviso, SemRede } from "./api.js";
+import { patch, post, del, get, put, esc, data, aviso, SemRede } from "./api.js";
 import { abrirPainel, fecharPainel, confirmar } from "./painel.js";
-import { cardParaMarkdown, copiar, baixar, nomeDeArquivo } from "./markdown.js";
+import { cardParaMarkdown, copiar } from "./markdown.js";
 import { TIPOS, FORMATOS, chipsDe } from "./opcoes.js";
 import * as regua from "./regua.js";
 
@@ -41,7 +41,13 @@ let salvando = false;
 let sujo = false;
 let folha = null;
 
-export function abrirEditor(cardInicial, callback) {
+// Como a exportação está configurada. Vem da config do servidor, então a
+// escolha vale pra todos os cards e sincroniza entre o iPhone e o Mac.
+const PADRAO_EXPORT = { incluir_tipo_formato: true, incluir_links: true, marcar_lacunas: false };
+let exp = { ...PADRAO_EXPORT };
+
+export function abrirEditor(cardInicial, callback, config = {}) {
+  exp = { ...PADRAO_EXPORT, ...(config.export || {}) };
   card = normalizar(cardInicial);
   aoMudar = callback;
   sujo = false;
@@ -86,6 +92,10 @@ function desenhar() {
     <label class="ed-rot" for="ed-hook">HOOK</label>
     <textarea id="ed-hook" class="ed-campo" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
 
+    <label class="ed-rot" for="ed-tela">TÍTULO / TEXTO NA TELA</label>
+    <textarea id="ed-tela" class="ed-campo curto"
+              placeholder="o que aparece escrito no vídeo">${esc(card.titulo_tela || "")}</textarea>
+
     <div id="ed-desen"></div>
     <button class="ed-add" id="ed-add" type="button">+ adicionar desenvolvimento</button>
 
@@ -109,20 +119,25 @@ function desenhar() {
         : `<button class="bt bt-publiquei" id="ed-publicar" type="button">✓ Publiquei</button>`}
     </div>
 
+    <!-- As opções ficam à vista, logo acima do botão: elas SÃO a configuração
+         da cópia, e escondidas atrás de um "opções" ninguém abria. -->
+    <div class="ed-export">
+      <span class="ed-rot">Exportar</span>
+      ${caixa("op-meta", exp.incluir_tipo_formato, "Incluir tipo e formato")}
+      ${caixa("op-links", exp.incluir_links, "Incluir referências e reação")}
+      ${caixa("op-lacunas", exp.marcar_lacunas, "Marcar o que está faltando")}
+      <button class="bt sec" id="ed-md" type="button">Copiar markdown</button>
+    </div>
+
     <div class="ed-secundarias">
-      <button class="bt sec larga" id="ed-md" type="button">Copiar markdown</button>
       <button class="bt sec" id="ed-dup" type="button">Duplicar</button>
       <button class="bt perigo" id="ed-excluir" type="button">Excluir</button>
-      <button class="bt sec larga" id="ed-md-op" type="button">Opções de exportação</button>
-    </div>
-    <div class="ed-md-opcoes" id="ed-md-opcoes" hidden>
-      <label class="sw"><input type="checkbox" id="op-meta" checked> Incluir tipo e formato</label>
-      <label class="sw"><input type="checkbox" id="op-lacunas"> Marcar o que está faltando</label>
-      <label class="sw"><input type="checkbox" id="op-links" checked> Incluir referências e reação</label>
-      <button class="bt sec" id="ed-baixar" type="button">Baixar .md</button>
     </div>
   </div>`;
 }
+
+const caixa = (id, ligada, rotulo) =>
+  `<label class="sw"><input type="checkbox" id="${id}"${ligada ? " checked" : ""}> ${rotulo}</label>`;
 
 function rotuloStatus() {
   const nomes = { ideia: "ideia", producao: "produção", publicado: "publicado" };
@@ -138,7 +153,7 @@ function ligar() {
     $("#ed-topo").textContent = $("#ed-titulo").value || "Sem título";
     agendar();
   });
-  for (const id of ["#ed-hook", "#ed-fech"]) {
+  for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) {
     const el = $(id);
     el.addEventListener("input", () => { autoAltura(el); agendar(); });
   }
@@ -165,8 +180,9 @@ function ligar() {
   if (publicar) publicar.onclick = aoPublicar;
 
   $("#ed-md").onclick = aoCopiarMarkdown;
-  $("#ed-md-op").onclick = () => { $("#ed-md-opcoes").hidden = !$("#ed-md-opcoes").hidden; };
-  $("#ed-baixar").onclick = () => baixar(nomeDeArquivo(card), cardParaMarkdown(coletar(), opcoesMd()));
+  for (const id of ["#op-meta", "#op-links", "#op-lacunas"]) {
+    $(id).addEventListener("change", guardarExport);
+  }
   $("#ed-dup").onclick = aoDuplicar;
   $("#ed-excluir").onclick = aoExcluir;
 
@@ -174,6 +190,7 @@ function ligar() {
   for (const k of Object.keys(LISTAS)) pintarLinks(k);
   pintarProgresso();
   autoAltura($("#ed-hook"));
+  autoAltura($("#ed-tela"));
   autoAltura($("#ed-fech"));
 }
 
@@ -316,6 +333,7 @@ function coletar() {
     ...card,
     titulo: $("#ed-titulo").value,
     hook: $("#ed-hook").value,
+    titulo_tela: $("#ed-tela").value,
     fechamento: $("#ed-fech").value,
     desenvolvimentos: colherDesenvolvimentos(),
   };
@@ -329,6 +347,17 @@ function opcoesMd() {
     marcarLacunas: $("#op-lacunas").checked,
     incluirLinks: $("#op-links").checked,
   };
+}
+
+let timerExport = null;
+function guardarExport() {
+  exp = {
+    incluir_tipo_formato: $("#op-meta").checked,
+    incluir_links: $("#op-links").checked,
+    marcar_lacunas: $("#op-lacunas").checked,
+  };
+  clearTimeout(timerExport);
+  timerExport = setTimeout(() => put("/lab/api/config", { export: exp }).catch(() => {}), 350);
 }
 
 /* ─────────────────────────── Autosave ─────────────────────────── */
@@ -350,6 +379,7 @@ async function salvarAgora() {
     const salvo = await patch(`/lab/api/cards/${card.id}`, {
       titulo: dados.titulo,
       hook: dados.hook,
+      titulo_tela: dados.titulo_tela,
       fechamento: dados.fechamento,
       tipo: dados.tipo,
       formato: dados.formato,

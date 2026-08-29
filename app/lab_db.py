@@ -45,6 +45,7 @@ def _init():
             tipo          TEXT,                              -- 'conteudo'|'anuncio'|NULL
             formato       TEXT,                              -- 'lofi'|'slide'|'vlog'|'documentario'|NULL
             hook          TEXT    NOT NULL DEFAULT '',
+            titulo_tela   TEXT    NOT NULL DEFAULT '',  -- o que aparece escrito no vídeo
             fechamento    TEXT    NOT NULL DEFAULT '',
             status        TEXT    NOT NULL DEFAULT 'ideia',  -- derivado, mas materializado
             publicado_em  TEXT,
@@ -111,20 +112,26 @@ def _init():
         "ON lab_publicacoes (card_id) WHERE card_id IS NOT NULL"
     )
     c.execute("CREATE TABLE IF NOT EXISTS lab_config (chave TEXT PRIMARY KEY, valor TEXT NOT NULL)")
+    # Migração pros bancos criados antes do campo de texto na tela.
+    cols = {r[1] for r in c.execute("PRAGMA table_info(lab_cards)").fetchall()}
+    if "titulo_tela" not in cols:
+        c.execute("ALTER TABLE lab_cards ADD COLUMN titulo_tela TEXT NOT NULL DEFAULT ''")
     c.commit()
     _iniciado = True
 
 
 # ─────────────────────────── Status derivado ───────────────────────────
 
-def tem_roteiro(hook: str, fechamento: str, desenvolvimentos: list[str]) -> bool:
-    return bool(hook.strip() or fechamento.strip() or any(d.strip() for d in desenvolvimentos))
+def tem_roteiro(hook: str, titulo_tela: str, fechamento: str, desenvolvimentos: list[str]) -> bool:
+    return bool(hook.strip() or titulo_tela.strip() or fechamento.strip()
+                or any(d.strip() for d in desenvolvimentos))
 
 
-def _status_derivado(atual: str, hook: str, fechamento: str, desen: list[str]) -> str:
+def _status_derivado(atual: str, hook: str, titulo_tela: str, fechamento: str,
+                     desen: list[str]) -> str:
     if atual == "publicado":
         return "publicado"        # histórico imutável: nunca regride sozinho
-    return "producao" if tem_roteiro(hook, fechamento, desen) else "ideia"
+    return "producao" if tem_roteiro(hook, titulo_tela, fechamento, desen) else "ideia"
 
 
 # ─────────────────────────── Leitura ───────────────────────────
@@ -230,7 +237,7 @@ def criar_card(titulo: str, client_uuid: str | None = None) -> dict:
     return get_card(cur.lastrowid)
 
 
-_CAMPOS_TEXTO = ("titulo", "hook", "fechamento")
+_CAMPOS_TEXTO = ("titulo", "hook", "titulo_tela", "fechamento")
 
 
 def _sincronizar(c, tabela: str, card_id: int, filtro_extra: str, params_extra: list,
@@ -336,7 +343,7 @@ def atualizar_card(card_id: int, dados: dict) -> dict | None:
     # Status sempre recalculado a partir do que ficou gravado de fato.
     depois = get_card(card_id)
     novo = _status_derivado(
-        depois["status"], depois["hook"], depois["fechamento"],
+        depois["status"], depois["hook"], depois["titulo_tela"], depois["fechamento"],
         [d["texto"] for d in depois["desenvolvimentos"]],
     )
     if novo != depois["status"]:
@@ -393,6 +400,7 @@ def duplicar_card(card_id: int) -> dict | None:
         "tipo": orig["tipo"],
         "formato": orig["formato"],
         "hook": orig["hook"],
+        "titulo_tela": orig["titulo_tela"],
         "fechamento": orig["fechamento"],
         "tags": orig["tags"],
         "desenvolvimentos": [{"texto": d["texto"]} for d in orig["desenvolvimentos"]],
@@ -500,7 +508,7 @@ PADRAO_CONFIG = {
     "autofoco": True,
     "meta_semanal": lc.META_SEMANAL_PADRAO,
     "filtros": {"tipo": [], "formato": []},
-    "export": {"incluir_tipo_formato": True, "marcar_lacunas": False},
+    "export": {"incluir_tipo_formato": True, "incluir_links": True, "marcar_lacunas": False},
 }
 
 
