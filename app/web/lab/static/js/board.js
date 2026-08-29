@@ -346,16 +346,21 @@ function vazioDe(status) {
 function cartao(c) {
   const sel = selecao.has(String(c.id));
   const marcas = tagsDe(c);
-  const quando = c.status === "publicado" && c.publicado_em
-    ? `<span class="cartao-quando">${data(c.publicado_em, false)}</span>` : "";
+  // Etiquetas em cima: dizem em que caixa a ideia cai antes de o olho ler o
+  // título. Embaixo fica só o andamento do roteiro, que é leitura secundária.
+  const rodape = c.status === "publicado"
+    ? (c.publicado_em
+        ? `<div class="cartao-pe"><span class="cartao-quando">publicado em ${data(c.publicado_em, false)}</span></div>`
+        : "")
+    : barraProgresso(c);
 
   return `
     <article class="cartao${c.provisorio ? " provisorio" : ""}${sel ? " selecionado" : ""}"
              data-id="${c.id}">
       <button class="cartao-sel" type="button" aria-label="Selecionar"></button>
+      ${marcas ? `<div class="cartao-topo">${marcas}</div>` : ""}
       <h3>${esc(c.titulo) || "(sem título)"}</h3>
-      <div class="cartao-pe">${marcas}${quando}</div>
-      ${c.status === "publicado" ? "" : barraProgresso(c)}
+      ${rodape}
     </article>`;
 }
 

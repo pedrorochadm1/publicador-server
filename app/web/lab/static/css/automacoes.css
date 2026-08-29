@@ -51,7 +51,7 @@
 
 .auto .kw {
   display: inline-block; font-size: 12px; background: var(--acao-fraca); color: var(--acao-txt);
-  border-radius: 6px; padding: 2px 8px; margin: 2px 4px 2px 0; font-weight: 600;
+  border-radius: var(--raio-p); padding: 2px 8px; margin: 2px 4px 2px 0; font-weight: 600;
 }
 .auto .meta { font-size: 12px; color: var(--texto3); margin-top: 8px; line-height: 1.55; }
 .auto h2 { font-size: 15px; margin: 0 0 14px; }
@@ -69,7 +69,7 @@
   gap: 8px; margin-top: 8px;
 }
 .auto .posts figure {
-  margin: 0; cursor: pointer; border: 2px solid transparent; border-radius: 10px;
+  margin: 0; cursor: pointer; border: 2px solid transparent; border-radius: var(--raio);
   overflow: hidden; background: var(--superficie2); aspect-ratio: 1;
 }
 .auto .posts figure.sel { border-color: var(--acao); }
@@ -81,7 +81,7 @@
 }
 .auto th { color: var(--texto3); font-weight: 600; font-size: 12px; }
 .auto .badge {
-  font-size: 11px; padding: 2px 7px; border-radius: 99px;
+  font-size: 11px; padding: 2px 7px; border-radius: var(--raio-p);
   background: var(--superficie2); border: 1px solid var(--linha); color: var(--texto2);
 }
 .auto .badge.ok { color: var(--regua-verde); border-color: color-mix(in srgb, var(--regua-verde) 38%, transparent); background: color-mix(in srgb, var(--regua-verde) 12%, transparent); }
@@ -117,7 +117,7 @@
 .auto .ava.cinza { background: var(--linha-forte); }
 .auto .fone .corpo { padding: 12px; display: grid; gap: 8px; }
 .auto .bolha {
-  max-width: 88%; padding: 9px 13px; border-radius: 18px; font-size: 14px;
+  max-width: 88%; padding: 9px 13px; border-radius: var(--raio); font-size: 14px;
   background: var(--linha); border-bottom-left-radius: 5px;
   white-space: pre-wrap; word-break: break-word;
 }

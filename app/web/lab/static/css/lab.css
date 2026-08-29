@@ -92,7 +92,7 @@
 .captura.aberta { border-color: var(--linha-forte); }
 .captura input[type=text] {
   font-size: 16px; padding: 12px 13px; border: 0; background: transparent;
-  border-radius: 10px;
+  border-radius: var(--raio);
 }
 .captura input[type=text]:focus { background: transparent; border: 0; }
 
@@ -112,7 +112,7 @@
 /* Chip clicável de tipo/formato. Substituiu o <select> da v1: no celular um
    toque resolve, e as quatro opções ficam visíveis de uma vez. */
 .op {
-  font-size: 13px; font-weight: 600; padding: 8px 13px; border-radius: 99px;
+  font-size: 13px; font-weight: 600; padding: 8px 13px; border-radius: var(--raio);
   border: 1px solid var(--linha); color: var(--texto2); background: var(--superficie2);
   transition: .12s; line-height: 1;
 }
@@ -133,16 +133,16 @@
    no iPhone, oito chips sempre abertos comem meia tela de cards. */
 .filtros { margin-top: 10px; }
 .filtros-linha { display: flex; gap: 8px; align-items: center; }
-.filtros-linha input[type=search] { padding: 9px 13px; font-size: 14px; border-radius: 99px; }
+.filtros-linha input[type=search] { padding: 9px 13px; font-size: 14px; border-radius: var(--raio); }
 .bt-filtros {
   flex: none; display: flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 600; color: var(--texto2);
-  border: 1px solid var(--linha); border-radius: 99px; padding: 9px 13px;
+  border: 1px solid var(--linha); border-radius: var(--raio); padding: 9px 13px;
   background: var(--superficie2); white-space: nowrap;
 }
 .bt-filtros.tem { color: var(--acao-txt); border-color: var(--acao); }
 .bt-filtros .conta-f {
-  background: var(--acao); color: var(--sobre-acao); border-radius: 99px;
+  background: var(--acao); color: var(--sobre-acao); border-radius: var(--raio-p);
   font-size: 10.5px; font-weight: 800; padding: 1px 6px; line-height: 1.5;
 }
 .filtros-abertos { display: none; padding: 12px 3px 2px; gap: 10px; flex-direction: column; }
@@ -160,7 +160,7 @@
   padding-right: calc(16px + var(--safe-r));
 }
 .col-aba {
-  flex: 1; padding: 8px 4px; border-radius: 10px;
+  flex: 1; padding: 8px 4px; border-radius: var(--raio);
   font-size: 12.5px; font-weight: 600; color: var(--texto3);
   background: var(--superficie); border: 1px solid var(--linha);
   display: flex; align-items: center; justify-content: center; gap: 5px;
@@ -168,7 +168,7 @@
 }
 .col-aba .cont {
   font-size: 10.5px; font-weight: 700; color: var(--texto3);
-  background: var(--fundo); border-radius: 99px; padding: 1px 6px;
+  background: var(--fundo); border-radius: var(--raio-p); padding: 1px 6px;
 }
 .col-aba.ativa { color: var(--acao-txt); border-color: var(--acao); background: var(--acao-fraca); }
 .col-aba.ativa .cont { color: var(--sobre-acao); background: var(--acao); }
@@ -216,11 +216,11 @@
 
 .cartao-sel {
   position: absolute; top: 8px; right: 8px;
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 32px; height: 32px; border-radius: var(--raio);
   display: grid; place-items: center;
 }
 .cartao-sel::after {
-  content: ""; width: 18px; height: 18px; border-radius: 6px;
+  content: ""; width: 18px; height: 18px; border-radius: var(--raio-p);
   border: 1.5px solid var(--linha-forte); background: var(--fundo);
   transition: .12s;
 }
@@ -229,14 +229,20 @@
 }
 .cartao h3 { padding-right: 30px; }
 
+/* Etiquetas na primeira linha do card. O padding-right abre espaço pra caixa de
+   seleção, que fica absoluta no canto. */
+.cartao-topo {
+  display: flex; gap: 5px; flex-wrap: wrap;
+  margin-bottom: 8px; padding-right: 30px;
+}
 .cartao-pe { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 9px; }
-.cartao-quando { font-size: 11px; color: var(--texto3); margin-left: auto; }
+.cartao-quando { font-size: 11px; color: var(--texto3); }
 
 /* Etiqueta do card: espelha o que foi marcado no topo do card (tipo e formato),
    uma cor por valor. Tinta leve e peso médio de propósito — ela informa de
    relance, mas quem tem que saltar no board é o título da ideia. */
 .tag {
-  font-size: 10.5px; font-weight: 600; padding: 2px 9px; border-radius: 99px;
+  font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: var(--raio-p);
   letter-spacing: .01em; white-space: nowrap;
 }
 .tag-conteudo     { color: var(--cor-conteudo);     background: rgba(21,128,61,.10); }
@@ -262,7 +268,7 @@
   bottom: calc(var(--tabbar-h) + 10px);
   display: flex; align-items: center; gap: 8px;
   background: var(--superficie2); border: 1px solid var(--linha-forte);
-  border-radius: 99px; padding: 7px 8px 7px 15px;
+  border-radius: var(--raio-g); padding: 7px 8px 7px 15px;
   box-shadow: var(--sombra); z-index: 40;
 }
 .acoes-lote[hidden] { display: none; }
@@ -293,7 +299,7 @@
   }
   .col-titulo .cont {
     background: var(--superficie2); color: var(--texto2);
-    border-radius: 99px; padding: 1px 8px; font-size: 11px; letter-spacing: 0;
+    border-radius: var(--raio-p); padding: 1px 8px; font-size: 11px; letter-spacing: 0;
   }
   .acoes-lote { left: auto; right: 24px; bottom: 24px; max-width: 460px; }
   .cartao { cursor: pointer; }
@@ -331,7 +337,7 @@
 }
 .painel-topo h2 { font-size: 16px; flex: 1; min-width: 0; }
 .painel-topo .fechar {
-  width: 38px; height: 38px; border-radius: 10px; flex: none;
+  width: 38px; height: 38px; border-radius: var(--raio); flex: none;
   color: var(--texto2); font-size: 15px; background: var(--superficie2);
 }
 .painel-corpo {
@@ -390,7 +396,7 @@
 .ed-secao .n {
   font-size: 10px; font-weight: 800; letter-spacing: 0;
   background: var(--acao); color: var(--sobre-acao);
-  border-radius: 99px; padding: 1px 7px;
+  border-radius: var(--raio-p); padding: 1px 7px;
 }
 
 .ed-titulo {
@@ -415,7 +421,7 @@
 .desen-topo { display: flex; align-items: center; justify-content: space-between; }
 .desen-bts { display: flex; gap: 2px; }
 .desen-bt {
-  width: 34px; height: 34px; border-radius: 9px; color: var(--texto3);
+  width: 34px; height: 34px; border-radius: var(--raio); color: var(--texto3);
   font-size: 13px; background: var(--superficie2);
 }
 .desen-bt:active:not(:disabled) { background: var(--linha); color: var(--texto); }
@@ -453,7 +459,7 @@
 .link-item input.url { color: var(--acao-txt); }
 .link-abrir {
   font-size: 12px; color: var(--texto2); text-decoration: none;
-  border: 1px solid var(--linha); border-radius: 99px; padding: 5px 11px; white-space: nowrap;
+  border: 1px solid var(--linha); border-radius: var(--raio-p); padding: 5px 11px; white-space: nowrap;
 }
 .link-vazio { padding: 22px 2px; line-height: 1.6; }
 
