@@ -92,6 +92,10 @@ body {
 h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: -.01em; }
 p { margin: 0; }
 
+/* 16px NÃO É ESCOLHA DE ESTILO. Abaixo disso o Safari do iOS dá zoom ao focar
+   o campo, e o zoom deixa a página arrastável na horizontal. Nenhum campo pode
+   descer daqui: densidade se ajusta pelo padding, nunca pela fonte.
+   tests/test_css_zoom.mjs falha se alguma regra violar isso. */
 button, input, select, textarea { font-family: inherit; font-size: 16px; color: inherit; }
 button { cursor: pointer; border: 0; background: none; padding: 0; }
 

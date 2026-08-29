@@ -124,7 +124,13 @@ Ficam em `tests/` e **não entram na imagem** (o Dockerfile só copia `app/`).
 pip install pytest httpx          # só para desenvolvimento
 python -m pytest tests/ -q        # motor da régua + API do Lab
 node tests/test_markdown.mjs      # formato de exportação em markdown
+node tests/test_css_zoom.mjs      # nenhum campo abaixo de 16px
 ```
+
+`test_css_zoom.mjs` existe porque o Safari do iOS amplia a página ao focar
+qualquer campo com fonte menor que 16px, e a ampliação deixa o app arrastável na
+horizontal. Não dá pra desligar isso pelo navegador — a única defesa é a regra,
+e o teste é quem a mantém.
 
 O motor da régua é a parte com mais chance de erro sutil (cinco zonas, limites
 inclusivos, arredondamento). A tabela dourada em `tests/test_lab_calculo.py`

@@ -133,7 +133,7 @@
    no iPhone, oito chips sempre abertos comem meia tela de cards. */
 .filtros { margin-top: 10px; }
 .filtros-linha { display: flex; gap: 8px; align-items: center; }
-.filtros-linha input[type=search] { padding: 9px 13px; font-size: 14px; border-radius: var(--raio); }
+.filtros-linha input[type=search] { padding: 8px 12px; border-radius: var(--raio); }
 .bt-filtros {
   flex: none; display: flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 600; color: var(--texto2);
@@ -477,7 +477,7 @@
 }
 .link-topo { display: flex; align-items: center; gap: 8px; }
 .link-topo .n { font-size: 11px; color: var(--texto3); font-weight: 700; flex: 1; }
-.link-item input { padding: 10px 12px; font-size: 14px; }
+.link-item input { padding: 9px 12px; }
 .link-item input.url { color: var(--acao-txt); }
 .link-abrir {
   font-size: 12px; color: var(--texto2); text-decoration: none;
@@ -537,7 +537,7 @@
 }
 .ob-rot { font-size: 13px; color: var(--texto2); }
 .ob-linha label { font-size: 10.5px; color: var(--texto3); display: grid; gap: 3px; justify-items: center; }
-.ob-linha input { width: 62px; text-align: center; padding: 8px 4px; font-size: 15px; }
+.ob-linha input { width: 66px; text-align: center; padding: 8px 4px; }
 .ob-acoes { display: grid; gap: 8px; margin-top: 14px; }
 
 .erro-aba { padding: 30px 16px; text-align: center; }
@@ -568,5 +568,5 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ponto-cor { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .aj-novo { display: flex; gap: 8px; margin-top: 4px; }
-.aj-novo input { flex: 1; min-width: 0; padding: 9px 12px; font-size: 14px; }
+.aj-novo input { flex: 1; min-width: 0; padding: 9px 12px; }
 .aj-novo .bt { flex: none; padding: 9px 14px; font-size: 13px; }
