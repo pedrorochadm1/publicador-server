@@ -34,8 +34,16 @@ const ESTATICOS = [
 self.addEventListener("install", (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    // Falha de um item não pode abortar a instalação inteira.
-    await Promise.allSettled([...SHELL, ...ESTATICOS].map((u) => c.add(u)));
+    // cache: "reload" é OBRIGATÓRIO. Sem ele o cache.add() pode buscar o arquivo
+    // no cache HTTP do navegador, e a versão nova do app passa a servir CSS/JS
+    // antigo indefinidamente — foi o que aconteceu entre a v7 e a v8, com o
+    // CSS certo no servidor e o errado na tela.
+    // Falha de um item não pode abortar a instalação inteira, daí o allSettled.
+    await Promise.allSettled(
+      [...SHELL, ...ESTATICOS].map(async (u) => {
+        const r = await fetch(new Request(u, { cache: "reload" }));
+        if (r.ok) await c.put(u, r);
+      }));
     await self.skipWaiting();
   })());
 });

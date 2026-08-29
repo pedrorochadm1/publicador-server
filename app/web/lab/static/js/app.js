@@ -102,6 +102,19 @@ function ligarNavegacao() {
 
 /* ─────────────────────────── Boot ─────────────────────────── */
 
+async function limparCaches() {
+  try {
+    if (window.caches) {
+      const nomes = await caches.keys();
+      await Promise.all(nomes.map((n) => caches.delete(n)));
+    }
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch (e) { /* recarregar já ajuda mesmo sem limpar tudo */ }
+}
+
 async function iniciar() {
   $("#carregando").hidden = false;
   try {
@@ -111,6 +124,18 @@ async function iniciar() {
     $("#carregando").textContent = "Não deu pra carregar. Verifique a conexão.";
     return;
   }
+  // Rede de segurança contra cache velho: se o shell que está rodando não é da
+  // mesma versão que o servidor, limpa tudo e recarrega uma vez. O guard no
+  // sessionStorage impede laço infinito se a limpeza não resolver.
+  if (estadoInicial.versao && window.LAB_V && estadoInicial.versao !== window.LAB_V
+      && !sessionStorage.getItem("lab_relimpou")) {
+    sessionStorage.setItem("lab_relimpou", "1");
+    await limparCaches();
+    location.reload();
+    return;
+  }
+  sessionStorage.removeItem("lab_relimpou");
+
   $("#login").hidden = true;
   $("#app").hidden = false;
   $("#carregando").hidden = true;

@@ -172,7 +172,7 @@ function pintarEditor() {
     <div class="acoes">
       ${a.id ? `<span class="chip" id="estado">salvo</span>
                 <button class="bt sec" id="duplicar" type="button">Duplicar</button>
-                <button class="bt sec" id="rodar" type="button">Verificar comentários agora</button>
+                <button class="bt sec" id="rodar" type="button">Verificar comentários</button>
                 <button class="bt perigo" id="excluir" type="button">Excluir</button>`
              : `<button class="bt" id="criar" type="button">Criar automação</button>
                 <button class="bt sec" id="cancelar" type="button">Cancelar</button>`}

@@ -165,9 +165,13 @@
 
   .auto .card { padding: 14px; }
   .auto .linha { flex-direction: column; gap: 12px; }
+  /* A ação principal ocupa a linha inteira; Duplicar e Excluir dividem a de
+     baixo. Antes eram três botões espremidos em duas colunas, e o rótulo mais
+     longo quebrava em três linhas, esticando a caixa toda. */
   .auto .acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .auto .acoes .chip { grid-column: 1 / -1; text-align: center; }
-  .auto .acoes .bt { width: 100%; }
+  .auto .acoes .chip { grid-column: 1 / -1; justify-self: start; }
+  .auto .acoes #rodar, .auto .acoes #criar { grid-column: 1 / -1; }
+  .auto .acoes .bt { width: 100%; white-space: nowrap; }
   .auto .posts { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
 
   /* Histórico é largo demais pra 393px: rola em si mesmo em vez de esticar. */
