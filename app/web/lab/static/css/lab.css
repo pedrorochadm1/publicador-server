@@ -258,7 +258,7 @@
 /* Barra de seleção em lote: flutua acima da tabbar, só quando há seleção. */
 .acoes-lote {
   position: fixed; left: 12px; right: 12px;
-  bottom: calc(66px + var(--safe-b));
+  bottom: calc(var(--tabbar-h) + 10px);
   display: flex; align-items: center; gap: 8px;
   background: var(--superficie2); border: 1px solid var(--linha-forte);
   border-radius: 99px; padding: 7px 8px 7px 15px;

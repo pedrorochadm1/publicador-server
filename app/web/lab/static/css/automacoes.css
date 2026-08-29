@@ -5,7 +5,9 @@
 
 .auto {
   flex: 1; min-height: 0;            /* filho de #tela, que é flex column */
-  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+  overflow-x: hidden;                /* a aba nunca rola de lado; só o que tem overflow próprio */
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain; padding-bottom: 24px;
 }
 
@@ -31,7 +33,12 @@
   max-width: 1360px; margin: 0 auto; padding: 18px 20px;
   display: grid; grid-template-columns: 300px 1fr 320px; gap: 18px; align-items: start;
 }
-.auto .col { display: grid; gap: 13px; }
+/* Item de grid nasce com min-width:auto, ou seja, não encolhe abaixo do conteúdo
+   mais largo que tem dentro. Sem estes min-width:0, a tabela do histórico
+   (min-width 560px) esticava a coluna inteira e o editor passava a rolar na
+   horizontal junto com ela. É o mesmo tipo de armadilha do min-height:0. */
+.auto-grade > *, .auto .col > *, .auto .card { min-width: 0; }
+.auto .col { display: grid; gap: 13px; min-width: 0; }
 .auto .card {
   background: var(--superficie); border: 1px solid var(--linha);
   border-radius: var(--raio-g); padding: 16px;

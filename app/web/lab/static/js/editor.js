@@ -113,7 +113,7 @@ function desenhar() {
       <div class="ed-secundarias">
         <button class="bt sec larga" id="ed-md" type="button">Copiar markdown</button>
         <button class="bt sec" id="ed-dup" type="button">Duplicar</button>
-        <button class="bt sec" id="ed-arq" type="button">Arquivar</button>
+        <button class="bt perigo" id="ed-excluir" type="button">Excluir</button>
         <button class="bt sec larga" id="ed-md-op" type="button">Opções de exportação</button>
       </div>
       <div class="ed-md-opcoes" id="ed-md-opcoes" hidden>
@@ -181,7 +181,7 @@ function ligar() {
   $("#ed-md-op").onclick = () => { $("#ed-md-opcoes").hidden = !$("#ed-md-opcoes").hidden; };
   $("#ed-baixar").onclick = () => baixar(nomeDeArquivo(card), cardParaMarkdown(coletar(), opcoesMd()));
   $("#ed-dup").onclick = aoDuplicar;
-  $("#ed-arq").onclick = aoArquivar;
+  $("#ed-excluir").onclick = aoExcluir;
 
   pintarDesenvolvimentos();
   for (const k of Object.keys(LISTAS)) pintarLinks(k);
@@ -481,18 +481,26 @@ async function aoDuplicar() {
   } catch (e) { aviso("Não deu pra duplicar."); }
 }
 
-async function aoArquivar() {
+async function aoExcluir() {
+  // Apagar um card publicado tira a publicação da conta e move o ponteiro.
+  // Isso precisa estar na tela ANTES de confirmar, não depois.
+  const publicado = card.status === "publicado";
   const ok = await confirmar({
-    titulo: "Arquivar este card?",
-    texto: "Ele sai do board mas continua guardado. Nada é apagado.",
-    ok: "Arquivar",
+    titulo: "Excluir este card?",
+    texto: publicado
+      ? `<p>Apaga o card, o roteiro e os links de vez. Não dá pra desfazer.</p>
+         <p class="nota">Como ele estava publicado, a publicação sai da conta da
+            régua e o ponteiro vai se mexer.</p>`
+      : `<p>Apaga o card, o roteiro e os links de vez. Não dá pra desfazer.</p>`,
+    ok: "Excluir",
     perigo: true,
   });
   if (!ok) return;
   try {
-    await del(`/lab/api/cards/${card.id}`);
+    const r = await del(`/lab/api/cards/${card.id}`);
+    if (r?.regua_depois) regua.animarPara(r.regua_depois, r.regua_antes);
     if (aoMudar) aoMudar(card, { removido: true });
     fecharPainel();
-    aviso("Arquivado.");
-  } catch (e) { aviso("Não deu pra arquivar."); }
+    aviso("Excluído.");
+  } catch (e) { aviso("Não deu pra excluir."); }
 }

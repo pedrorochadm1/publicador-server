@@ -169,13 +169,13 @@ def get_card(card_id: int) -> dict | None:
     return _linha(r) if r else None
 
 
-def listar_cards(incluir_arquivados: bool = False, publicados_desde: str | None = None) -> list[dict]:
-    """Todos os cards com seus desenvolvimentos, em duas queries (sem N+1)."""
+def listar_cards(publicados_desde: str | None = None) -> list[dict]:
+    """Todos os cards com seus filhos, em três queries (sem N+1)."""
     _init()
     c = conn()
-    onde, params = [], []
-    if not incluir_arquivados:
-        onde.append("arquivado = 0")
+    # A coluna `arquivado` continua no schema, mas nada a liga: excluir agora
+    # apaga de vez. O filtro fica como rede de segurança e custa zero.
+    onde, params = ["arquivado = 0"], []
     if publicados_desde:
         # Cards publicados velhos demais somem da coluna; ideia/produção sempre ficam.
         onde.append("(status != 'publicado' OR publicado_em >= ?)")
@@ -402,23 +402,21 @@ def duplicar_card(card_id: int) -> dict | None:
     return atualizar_card(novo["id"], dados)
 
 
-def remover_card(card_id: int, definitivo: bool = False) -> bool:
-    """Padrão é arquivar. Apagar de vez só o que nunca foi publicado."""
+def remover_card(card_id: int) -> bool:
+    """Apaga de vez: o card, o roteiro e os links.
+
+    Se o card estava publicado, a publicação sai junto — e o saldo da régua
+    muda, porque ela conta publicações, não cards. Quem chama é responsável por
+    avisar o Pedro disso ANTES de confirmar.
+    """
     _init()
-    card = get_card(card_id)
-    if not card:
+    if not get_card(card_id):
         return False
     c = conn()
-    if definitivo:
-        if card["status"] == "publicado":
-            raise ErroPublicar("publicado_nao_apaga",
-                               "Card publicado é histórico. Arquive em vez de apagar.")
-        c.execute("DELETE FROM lab_desenvolvimentos WHERE card_id = ?", (card_id,))
-        c.execute("DELETE FROM lab_links WHERE card_id = ?", (card_id,))
-        c.execute("DELETE FROM lab_cards WHERE id = ?", (card_id,))
-    else:
-        c.execute("UPDATE lab_cards SET arquivado = 1, atualizado_em = ? WHERE id = ?",
-                  (_agora(), card_id))
+    c.execute("DELETE FROM lab_desenvolvimentos WHERE card_id = ?", (card_id,))
+    c.execute("DELETE FROM lab_links WHERE card_id = ?", (card_id,))
+    c.execute("DELETE FROM lab_publicacoes WHERE card_id = ?", (card_id,))
+    c.execute("DELETE FROM lab_cards WHERE id = ?", (card_id,))
     c.commit()
     return True
 

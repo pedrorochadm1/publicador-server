@@ -204,18 +204,41 @@ def test_duplicar_copia_o_roteiro_mas_nao_a_publicacao(cliente):
 
 # ─────────────────────────── Remover ───────────────────────────
 
-def test_remover_arquiva_por_padrao(cliente):
+def test_excluir_apaga_de_vez(cliente):
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
-    cliente.delete(f"/lab/api/cards/{card['id']}")
+    cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "hook": "h", "referencias": [{"url": "https://a.com"}]})
+    assert cliente.delete(f"/lab/api/cards/{card['id']}").status_code == 200
     assert cliente.get("/lab/api/cards").json() == []
-    assert len(cliente.get("/lab/api/cards?arquivados=1").json()) == 1
+    assert cliente.get(f"/lab/api/cards/{card['id']}").status_code == 404
 
 
-def test_nao_apaga_publicado_de_vez(cliente):
+def test_excluir_leva_roteiro_e_links_junto(cliente):
+    """Sem isso, os filhos ficariam órfãos no banco pra sempre."""
+    from app import db as appdb
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "desenvolvimentos": [{"texto": "um"}],
+        "referencias": [{"url": "https://a.com"}],
+        "reacoes": [{"url": "https://b.com"}]})
+    cliente.delete(f"/lab/api/cards/{card['id']}")
+    c = appdb.conn()
+    assert c.execute("SELECT COUNT(*) FROM lab_desenvolvimentos").fetchone()[0] == 0
+    assert c.execute("SELECT COUNT(*) FROM lab_links").fetchone()[0] == 0
+
+
+def test_excluir_publicado_tira_da_conta_da_regua(cliente):
     card = _card_pronto(cliente)
     cliente.post(f"/lab/api/cards/{card['id']}/publicar")
-    r = cliente.delete(f"/lab/api/cards/{card['id']}?definitivo=1")
-    assert r.status_code == 409
+    assert cliente.get("/lab/api/regua").json()["saldo"] == 3
+    r = cliente.delete(f"/lab/api/cards/{card['id']}").json()
+    assert r["regua_antes"]["saldo"] == 3
+    assert r["regua_depois"]["saldo"] == 0, "a publicação sai da conta junto"
+    assert cliente.get("/lab/api/regua").json()["saldo"] == 0
+
+
+def test_excluir_card_inexistente_da_404(cliente):
+    assert cliente.delete("/lab/api/cards/9999").status_code == 404
 
 
 # ─────────────────────────── Referências e reação ───────────────────────────

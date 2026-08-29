@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "2"
+LAB_VERSAO = "3"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")
@@ -208,10 +208,9 @@ def api_estado(tudo: int = 0, insta_sess: str | None = Cookie(default=None)):
 
 
 @router.get("/lab/api/cards")
-def api_cards(tudo: int = 0, arquivados: int = 0, insta_sess: str | None = Cookie(default=None)):
+def api_cards(tudo: int = 0, insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
-    return lab_db.listar_cards(incluir_arquivados=bool(arquivados),
-                               publicados_desde=_janela_publicados(bool(tudo)))
+    return lab_db.listar_cards(publicados_desde=_janela_publicados(bool(tudo)))
 
 
 @router.post("/lab/api/cards")
@@ -276,16 +275,14 @@ def api_duplicar(card_id: int, insta_sess: str | None = Cookie(default=None)):
 
 
 @router.delete("/lab/api/cards/{card_id}")
-def api_remover(card_id: int, definitivo: int = 0,
-                insta_sess: str | None = Cookie(default=None)):
+def api_remover(card_id: int, insta_sess: str | None = Cookie(default=None)):
+    """Apaga de vez. Devolve a régua depois, porque apagar um card publicado
+    tira a publicação da conta e move o ponteiro."""
     _exige(insta_sess)
-    try:
-        ok = lab_db.remover_card(card_id, bool(definitivo))
-    except lab_db.ErroPublicar as e:
-        raise HTTPException(status_code=409, detail={"codigo": e.codigo, "mensagem": e.detalhe})
-    if not ok:
+    antes = _montar_regua()
+    if not lab_db.remover_card(card_id):
         raise HTTPException(status_code=404, detail="Card não encontrado.")
-    return {"ok": True}
+    return {"ok": True, "regua_antes": antes, "regua_depois": _montar_regua()}
 
 
 # ─────────────────────────── Onboarding e config ───────────────────────────
