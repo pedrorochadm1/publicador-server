@@ -122,8 +122,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 }
 /* Instalado na tela de início NÃO existe barra de navegador — mas o iOS segue
    descontando a altura dela do dvh, e sobra uma faixa vazia embaixo do rodapé.
-   Em standalone, 100vh é a altura real da tela. O app.js ainda sobrescreve com
-   window.innerHeight, que é a medida de fato. */
+   Em standalone, 100vh é a altura real da tela.
+
+   Isto tem que ser SÓ CSS. Já tentei medir window.innerHeight no JS como reforço
+   e saiu pior: no iOS instalado o teclado dispara `resize` com a altura reduzida,
+   e o valor em linha travava o body naquele tamanho — o rodapé subia ao focar um
+   campo e não voltava. 100vh não se mexe com o teclado. */
 @media all and (display-mode: standalone) {
   body { height: 100vh; }
 }

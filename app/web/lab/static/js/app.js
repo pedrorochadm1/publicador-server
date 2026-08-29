@@ -15,23 +15,6 @@ import { abrirAjustes } from "./ajustes.js";
 
 const $ = (s) => document.querySelector(s);
 
-/* Altura real da janela quando o app está instalado na tela de início.
-
-   O iOS calcula o dvh descontando a barra do navegador mesmo em standalone,
-   onde ela não existe — o resultado é o rodapé subir e sobrar uma faixa vazia
-   embaixo dele. window.innerHeight dá a altura de fato.
-
-   Só mexemos em standalone: no navegador o dvh está correto, e ali ele ainda
-   acompanha a barra aparecendo e sumindo. No iOS instalado o teclado não altera
-   o innerHeight, então isso não briga com o campo em foco. */
-function ajustarAltura() {
-  const instalado = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
-  if (!instalado) return;
-  document.body.style.height = window.innerHeight + "px";
-}
-ajustarAltura();
-window.addEventListener("resize", ajustarAltura);
-window.addEventListener("orientationchange", () => setTimeout(ajustarAltura, 150));
 
 let abaAtual = null;
 let estadoInicial = null;
