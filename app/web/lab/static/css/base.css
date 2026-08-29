@@ -67,20 +67,38 @@ html[data-tema="claro"] {
   --regua-vermelho: #d32f35;
 }
 
-/* --acao-fraca vai escrito à mão em vez de color-mix: é o tom usado em toda aba
+/* Três tokens por combinação, e cada um existe por um motivo:
+
+   --acao       preenchimento e borda (botão, chip ativo, foco).
+   --sobre-acao o texto que vai EM CIMA do preenchimento.
+   --acao-txt   a cor quando a própria ação vira texto pequeno sobre o fundo da
+                página (aba ativa, "✓ hook", proporção da régua).
+
+   O azul #648DCB tem 5,6:1 sobre o fundo escuro, mas só 3,2:1 sobre o claro —
+   bom pra borda, fraco pra texto. Por isso o tema claro usa um tom fechado só
+   em --acao-txt: o preenchimento continua sendo exatamente a cor escolhida, e o
+   texto miúdo ganha contraste. Pelo mesmo motivo o texto sobre o preenchimento
+   é escuro (5,5:1) e não branco (3,4:1).
+
+   --acao-fraca vai escrito à mão em vez de color-mix: é o tom usado em toda aba
    e chip ativo, e se o navegador não entender a função a UI perde o realce
    inteiro. Os demais color-mix desta folha são enfeites que degradam sem dor. */
+
 html[data-tema="escuro"][data-acento="verde"] {
-  --acao: #a3e635; --sobre-acao: #0d1014; --acao-fraca: rgba(163,230,53,.15);
+  --acao: #a3e635; --acao-txt: #a3e635; --sobre-acao: #0d1014;
+  --acao-fraca: rgba(163,230,53,.15);
 }
 html[data-tema="escuro"][data-acento="azul"] {
-  --acao: #4d9fff; --sobre-acao: #071018; --acao-fraca: rgba(77,159,255,.16);
+  --acao: #648dcb; --acao-txt: #8fb0e0; --sobre-acao: #0b1017;
+  --acao-fraca: rgba(100,141,203,.18);
 }
 html[data-tema="claro"][data-acento="verde"] {
-  --acao: #4d7c0f; --sobre-acao: #ffffff; --acao-fraca: rgba(77,124,15,.12);
+  --acao: #4d7c0f; --acao-txt: #4d7c0f; --sobre-acao: #ffffff;
+  --acao-fraca: rgba(77,124,15,.12);
 }
 html[data-tema="claro"][data-acento="azul"] {
-  --acao: #1d6ff2; --sobre-acao: #ffffff; --acao-fraca: rgba(29,111,242,.11);
+  --acao: #648dcb; --acao-txt: #3f6ba8; --sobre-acao: #10141a;
+  --acao-fraca: rgba(100,141,203,.15);
 }
 
 :root {
@@ -190,7 +208,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .trilho-aba .ic { font-size: 18px; line-height: 1; }
 .trilho-aba .ic svg { width: 20px; height: 20px; display: block; }
 .trilho-aba:hover { color: var(--texto2); background: var(--superficie2); }
-.trilho-aba.ativa { color: var(--acao); background: var(--acao-fraca); }
+.trilho-aba.ativa { color: var(--acao-txt); background: var(--acao-fraca); }
 .trilho-aba.sair { margin-top: auto; }
 
 .tabbar { display: none; }
@@ -215,7 +233,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   }
   .tabbar button .ic { display: block; height: 19px; }
   .tabbar button .ic svg { width: 19px; height: 19px; display: block; }
-  .tabbar button.ativa { color: var(--acao); }
+  .tabbar button.ativa { color: var(--acao-txt); }
   .tabbar button.ativa .ic { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--acao) 40%, transparent)); }
 }
 
