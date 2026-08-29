@@ -75,19 +75,41 @@ viraram a segunda aba dele.
 (tabelas `lab_*` no mesmo `/data/agenda.db`), `lab_web.py` (rotas),
 `sessoes.py` (sessão em SQLite — antes vivia em RAM e todo redeploy deslogava).
 
-**O card tem três abas:** Roteiro (hook → desenvolvimentos → fechamento),
-Referências (o embasamento) e Reação (vídeos que o Pedro vai reagir dentro do
-vídeo dele). As duas listas de link ficam em `lab_links`, separadas pela coluna
-`lista`, e **não entram na derivação do status** — colar um link não move o card
-pra produção, porque link é material de apoio, não roteiro.
+**O card é uma rolagem só:** título, tipo e formato, hook, texto na tela,
+desenvolvimentos, fechamento e, no fim, Referências (o embasamento) e Reação
+(vídeos que o Pedro vai reagir dentro do vídeo dele). As duas listas de link
+ficam em `lab_links`, separadas pela coluna `lista`, e **não entram na derivação
+do status** — colar um link não move o card pra produção, porque link é material
+de apoio, não roteiro.
 
-### Armadilha de layout que já custou caro
+O **texto na tela** tem uma chave própria (`tela_ativa`). Desligada, a seção nem
+existe na exportação; ligada e vazia, sai como pendência explícita. Ligar a chave
+é o Pedro declarando que aquele vídeo vai ter texto na tela, então a falta
+aparece independente da opção "marcar o que está faltando".
 
-O app ocupa a tela inteira e quem rola é a lista de cards, nunca a página. Em
-flex column, os irmãos do meio precisam de `flex:1; min-height:0`. Um
-`height:100%` num irmão da tabbar empurra o rodapé pra fora da tela e esconde o
-fim da lista — o que parece "não está salvando", porque o card novo renderiza
-numa área invisível. Foi exatamente isso na v1.
+### Armadilhas de layout que já custaram caro
+
+Todas custaram um ciclo de "está quebrado" e estão aqui pra não voltarem.
+
+**`height:100%` num irmão da tabbar.** O app ocupa a tela inteira e quem rola é a
+lista, nunca a página. Em flex column os irmãos do meio precisam de
+`flex:1; min-height:0` — com `height:100%` o rodapé é empurrado pra fora e o fim
+da lista some. Parece "não está salvando", porque o card novo renderiza numa área
+invisível.
+
+**Filho de container que rola encolhendo.** Item de flex encolhe por padrão
+quando o conteúdo passa da altura. Em `.painel-corpo` e `.col-lista` isso
+espremia os campos de texto e cortava o que estava escrito; ambos têm
+`> * { flex: none }`.
+
+**`min-width:auto` em item de grid.** Não encolhe abaixo do conteúdo mais largo
+que tem dentro: a tabela do histórico esticava a coluna e fazia o editor de
+automação rolar de lado. Daí os `min-width: 0` em `automacoes.css`.
+
+**`dvh` no PWA instalado.** O iOS desconta a barra do navegador mesmo em
+standalone, onde ela não existe, e sobra faixa vazia embaixo do rodapé. Media
+query de `display-mode: standalone` devolve `100vh`, e o `app.js` ainda aplica
+`window.innerHeight`.
 
 **O saldo nunca é armazenado.** É recalculado a cada leitura a partir das
 publicações dos últimos 90 dias, com peso 3× / 2× / 1× por faixa de idade. Por
@@ -100,8 +122,10 @@ no `sw.js` (substituindo `__V__`) e nomeia o cache do service worker. Trocar ess
 número invalida todo o CSS/JS de uma vez. Sem isso, o navegador pode continuar
 servindo o app antigo do cache.
 
-Os ícones do PWA são PNGs commitados em `app/web/lab/` (o Safari do iOS não
-aceita SVG na tela de início). Para regerá-los a partir da logo:
+Os ícones do PWA são PNGs commitados em `app/web/lab/static/` (o Safari do iOS
+não aceita SVG na tela de início). O favicon é separado e transparente; o ícone
+da tela de início é opaco, porque o iOS compõe sobre preto. Para regerá-los a
+partir da logo:
 
 ```bash
 qlmanage -t -s 1024 -o . logo.svg
