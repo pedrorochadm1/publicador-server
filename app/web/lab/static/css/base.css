@@ -1,0 +1,211 @@
+/* Tokens e casca do Lab DM1.
+   Base escura porque o app é usado de dia e de noite, e fundo escuro faz os
+   cards saltarem. Verde-ácido é a cor de ação (remete a reagente). */
+
+:root {
+  --fundo:      #0d1014;
+  --superficie: #151a20;
+  --superficie2:#1b222a;
+  --linha:      #262f3a;
+  --linha-forte:#3a4552;
+  --texto:      #e8ecf1;
+  --texto2:     #9aa4b0;
+  --texto3:     #6b7684;
+
+  --acao:       #a3e635;   /* verde-ácido: marca e ação */
+  --acao-escura:#84cc16;
+  --acao-fraca: rgba(163, 230, 53, .14);
+
+  /* Cores por formato: leitura instantânea no board. */
+  --lofi:  #f59e0b;
+  --slide: #3b82f6;
+  --vlog:  #a855f7;
+  --doc:   #14b8a6;
+
+  /* Sistema de cor da régua, independente do de formato pra não confundir. */
+  --regua-verde:    #3dd68c;
+  --regua-amarelo:  #e8a33d;
+  --regua-vermelho: #e5484d;
+  --regua-cinza:    #4a5058;
+
+  --raio: 12px;
+  --raio-g: 16px;
+  --trilho: 76px;
+  --tabbar: 58px;
+  --sombra: 0 8px 24px rgba(0,0,0,.4);
+
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--fundo);
+  color: var(--texto);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* O app rola dentro dos painéis, não no body — senão o iOS puxa a página toda. */
+  overscroll-behavior-y: none;
+}
+
+body { overflow: hidden; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: -.01em; }
+p { margin: 0; }
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: 16px;   /* 16px evita o zoom automático do Safari no iPhone */
+  color: inherit;
+}
+
+button { cursor: pointer; border: 0; background: none; }
+
+input[type=text], input[type=url], input[type=password], input[type=number], select, textarea {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--linha);
+  border-radius: var(--raio);
+  background: var(--superficie2);
+  color: var(--texto);
+  outline: none;
+  transition: border-color .12s, background .12s;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--acao);
+  background: var(--fundo);
+}
+input::placeholder, textarea::placeholder { color: var(--texto3); }
+textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--linha); border-radius: 99px; border: 3px solid var(--fundo); }
+
+/* ─────────────────────────── Casca ─────────────────────────── */
+
+#app { display: flex; height: 100%; }
+#app[hidden] { display: none; }
+
+.corpo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#tela { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+/* Trilho lateral (Mac) */
+.trilho {
+  width: var(--trilho);
+  flex: none;
+  background: var(--superficie);
+  border-right: 1px solid var(--linha);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 0 calc(14px + var(--safe-b));
+}
+.trilho-marca { display: block; margin-bottom: 10px; }
+.trilho-marca svg { width: 34px; height: 34px; display: block; }
+.trilho-aba {
+  width: 60px; padding: 9px 0; border-radius: var(--raio);
+  display: grid; gap: 3px; justify-items: center;
+  color: var(--texto3); font-size: 10px; font-weight: 600;
+  transition: color .12s, background .12s;
+}
+.trilho-aba .ic { font-size: 19px; line-height: 1; }
+.trilho-aba .ic svg { width: 20px; height: 20px; display: block; }
+.trilho-aba:hover { color: var(--texto2); background: var(--superficie2); }
+.trilho-aba.ativa { color: var(--acao); background: var(--acao-fraca); }
+.trilho-aba.sair { margin-top: auto; }
+
+/* Barra inferior (iPhone) */
+.tabbar { display: none; }
+
+@media (max-width: 860px) {
+  #app { flex-direction: column; }
+  .trilho { display: none; }
+  .tabbar {
+    display: flex;
+    height: calc(var(--tabbar) + var(--safe-b));
+    padding-bottom: var(--safe-b);
+    background: var(--superficie);
+    border-top: 1px solid var(--linha);
+    flex: none;
+  }
+  .tabbar button {
+    flex: 1; display: grid; gap: 2px; place-items: center;
+    color: var(--texto3); font-size: 11px; font-weight: 600;
+  }
+  .tabbar button .ic svg { width: 21px; height: 21px; display: block; }
+  .tabbar button.ativa { color: var(--acao); }
+}
+
+/* ─────────────────────────── Login ─────────────────────────── */
+
+#login {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 24px;
+  background: var(--fundo);
+}
+#login[hidden] { display: none; }
+#login form { width: 100%; max-width: 320px; display: grid; gap: 12px; text-align: center; }
+.login-marca svg { width: 56px; height: 56px; margin: 0 auto; display: block; }
+#login h1 { font-size: 19px; margin-bottom: 6px; }
+#login button[type=submit] {
+  background: var(--acao); color: #0d1014; font-weight: 700;
+  padding: 13px; border-radius: var(--raio);
+}
+#login .erro { color: var(--regua-vermelho); font-size: 13px; min-height: 18px; }
+
+/* ─────────────────────────── Utilitários ─────────────────────────── */
+
+.carregando {
+  position: fixed; inset: 0; display: grid; place-items: center;
+  color: var(--texto3); font-size: 14px; background: var(--fundo); z-index: 70;
+}
+.carregando[hidden] { display: none; }
+
+#aviso {
+  position: fixed; left: 50%; transform: translateX(-50%) translateY(12px);
+  bottom: calc(var(--tabbar) + var(--safe-b) + 16px);
+  background: var(--superficie2); color: var(--texto);
+  border: 1px solid var(--linha-forte);
+  padding: 10px 18px; border-radius: 99px; font-size: 14px;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+  z-index: 80; box-shadow: var(--sombra); max-width: 90vw; text-align: center;
+}
+#aviso.ver { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (min-width: 861px) { #aviso { bottom: 24px; } }
+
+.chip {
+  font-size: 12px; padding: 3px 10px; border-radius: 99px;
+  background: var(--superficie2); border: 1px solid var(--linha);
+  color: var(--texto2); white-space: nowrap; display: inline-block;
+}
+.chip.on { color: var(--regua-verde); border-color: rgba(61,214,140,.35); background: rgba(61,214,140,.10); }
+.chip.erro { color: var(--regua-vermelho); border-color: rgba(229,72,77,.35); background: rgba(229,72,77,.10); }
+
+.vazio { color: var(--texto3); font-size: 14px; }
+
+.bt {
+  padding: 11px 16px; border-radius: var(--raio); font-size: 14px; font-weight: 700;
+  background: var(--acao); color: #0d1014; transition: filter .12s;
+}
+.bt:hover { filter: brightness(1.08); }
+.bt.sec { background: var(--superficie2); color: var(--texto); border: 1px solid var(--linha); }
+.bt.sec:hover { background: var(--linha); filter: none; }
+.bt.perigo { background: transparent; color: var(--regua-vermelho); border: 1px solid rgba(229,72,77,.35); }
+.bt:disabled { opacity: .45; cursor: default; filter: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

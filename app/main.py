@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import automacoes, config, db, insta_web, repost, scheduler, tiktok_web
+from . import automacoes, config, db, insta_web, lab_web, repost, scheduler, tiktok_web
 
 
 @asynccontextmanager
@@ -26,9 +26,17 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Publicador @pedrorochadm1", lifespan=lifespan)
 app.mount("/img", StaticFiles(directory=config.IMG_DIR), name="img")
+# CSS/JS/ícones do Laboratório. O cache-bust vem do ?v=LAB_VERSAO nas URLs.
+# Só esta pasta é pública: index.html e sw.js ficam um nível acima, porque são
+# servidos pelo Python (que substitui __V__ pela versão) e não como estático.
+app.mount("/lab/static",
+          StaticFiles(directory=os.path.join(os.path.dirname(__file__), "web", "lab", "static")),
+          name="lab_static")
+# Laboratório DM1 (insta.pedrorochadm1.com): shell do app + API /lab/api/*
+app.include_router(lab_web.router)
 # Interface web do TikTok (Login Kit + página de publicação conforme + política/termos)
 app.include_router(tiktok_web.router)
-# Painel das automações de comentário (insta.pedrorochadm1.com) + webhook da Meta
+# Painel das automações de comentário + webhook da Meta
 app.include_router(insta_web.router)
 
 

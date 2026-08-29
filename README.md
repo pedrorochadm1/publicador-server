@@ -53,9 +53,66 @@ Todas as rotas (menos `/health`) exigem o header `X-API-Key: <PUBLICADOR_API_KEY
   Usado pelo fluxo de publicação imediata (substitui o litterbox).
 - `GET /health` — status do serviço.
 
+## Laboratório DM1 (`insta.pedrorochadm1.com`)
+
+O mesmo container também serve o **Laboratório DM1**: onde a ideia de conteúdo é
+capturada em dois segundos e amadurece numa estrutura fixa (HOOK →
+Desenvolvimentos → Fechamento), com uma régua no topo dizendo se a proporção de
+**5 conteúdos para 1 anúncio** está saudável. As automações de comentário→direct
+viraram a segunda aba dele.
+
+| Rota | O que é |
+|---|---|
+| `GET /` com `Host: insta.*` | O Laboratório (os outros domínios continuam vendo `home.html`) |
+| `GET /lab` · `GET /automacoes` | As duas abas. Mesmo shell; o JS lê o pathname |
+| `GET /insta` | 307 → `/automacoes` (endereço antigo continua funcionando) |
+| `GET /insta/classico` | **Escotilha**: o painel antigo, intocado. Se a aba nova quebrar, essa URL devolve o que funciona, sem deploy |
+| `GET /manifest.webmanifest` · `GET /sw.js` | PWA. Gerados em Python com a versão injetada |
+| `GET /lab/reset` | Desregistra o service worker e limpa os caches |
+| `/lab/api/*` | API do Lab. Cookie de sessão, mesma senha `INSTA_UI_PASSWORD` |
+
+**Módulos:** `lab_calculo.py` (motor da régua, puro e testável), `lab_db.py`
+(tabelas `lab_*` no mesmo `/data/agenda.db`), `lab_web.py` (rotas),
+`sessoes.py` (sessão em SQLite — antes vivia em RAM e todo redeploy deslogava).
+
+**O saldo nunca é armazenado.** É recalculado a cada leitura a partir das
+publicações dos últimos 90 dias, com peso 3× / 2× / 1× por faixa de idade. Por
+isso ele decai sozinho, sem nenhum job em background.
+
+### Mexeu no front? Bumpe a versão
+
+`LAB_VERSAO` em `app/lab_web.py` é a **fonte única**. Ela é injetada no shell e
+no `sw.js` (substituindo `__V__`) e nomeia o cache do service worker. Trocar esse
+número invalida todo o CSS/JS de uma vez. Sem isso, o navegador pode continuar
+servindo o app antigo do cache.
+
+Os ícones do PWA são PNGs commitados em `app/web/lab/` (o Safari do iOS não
+aceita SVG na tela de início). Para regerá-los a partir da logo:
+
+```bash
+qlmanage -t -s 1024 -o . logo.svg
+sips -Z 512 logo.svg.png --out app/web/lab/icone-512.png
+```
+
 ## Rodar local (teste)
 
 ```bash
 pip install -r requirements.txt
-DATA_DIR=./data PUBLICADOR_API_KEY=teste uvicorn app.main:app --reload
+DATA_DIR=./data PUBLICADOR_API_KEY=teste INSTA_UI_PASSWORD=teste \
+  uvicorn app.main:app --reload
 ```
+
+## Testes
+
+Ficam em `tests/` e **não entram na imagem** (o Dockerfile só copia `app/`).
+
+```bash
+pip install pytest httpx          # só para desenvolvimento
+python -m pytest tests/ -q        # motor da régua + API do Lab
+node tests/test_markdown.mjs      # formato de exportação em markdown
+```
+
+O motor da régua é a parte com mais chance de erro sutil (cinco zonas, limites
+inclusivos, arredondamento). A tabela dourada em `tests/test_lab_calculo.py`
+cobre cada fronteira — inclusive o caso do `round()` do Python, que faz
+bankers' rounding e devolveria 22 para 22.5.

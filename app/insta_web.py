@@ -11,21 +11,18 @@ import hmac
 import json
 import os
 import secrets
-import time
 
 from fastapi import APIRouter, Body, Cookie, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from . import automacoes, config
+from . import automacoes, config, sessoes
 from .token_store import status as token_status
 
 router = APIRouter()
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _COOKIE = "insta_sess"
-_SESSOES: dict[str, float] = {}          # token -> criado_em
 _SESSAO_VALIDA_S = 30 * 24 * 3600        # 30 dias
-_TENTATIVAS: dict[str, list] = {}        # ip -> timestamps de falha
 
 
 def _html(nome: str) -> str:
@@ -33,16 +30,9 @@ def _html(nome: str) -> str:
         return f.read()
 
 
+# As sessões vivem no SQLite (app/sessoes.py) pra sobreviver a redeploy.
 def _logado(sess: str | None) -> bool:
-    if not sess:
-        return False
-    criado = _SESSOES.get(sess)
-    if not criado:
-        return False
-    if time.time() - criado > _SESSAO_VALIDA_S:
-        _SESSOES.pop(sess, None)
-        return False
-    return True
+    return sessoes.valida(sess)
 
 
 def _exige(sess: str | None):
@@ -51,45 +41,71 @@ def _exige(sess: str | None):
 
 
 def _bloqueado(ip: str) -> bool:
-    agora = time.time()
-    tentativas = [t for t in _TENTATIVAS.get(ip, []) if agora - t < 600]
-    _TENTATIVAS[ip] = tentativas
-    return len(tentativas) >= 10
+    return sessoes.bloqueado(ip)
+
+
+def ip_do_pedido(request: Request) -> str:
+    bruto = request.headers.get("x-forwarded-for", "") or (
+        request.client.host if request.client else ""
+    )
+    return bruto.split(",")[0].strip()
 
 
 # ─────────────────────────── Login ───────────────────────────
 
-@router.get("/insta", response_class=HTMLResponse)
-def painel(insta_sess: str | None = Cookie(default=None)):
+@router.get("/insta")
+def painel():
+    """As automações agora são a segunda aba do Laboratório. O endereço antigo
+    continua funcionando: quem tem link ou atalho salvo cai no lugar certo."""
+    return RedirectResponse("/automacoes", status_code=307)
+
+
+@router.get("/insta/classico", response_class=HTMLResponse)
+def painel_classico(insta_sess: str | None = Cookie(default=None)):
+    """Escotilha: o painel antigo, intocado. Se o porte pra aba nova quebrar
+    qualquer coisa, esta URL devolve o painel que funciona, sem precisar de
+    deploy. Some depois de algumas semanas de aba nova rodando limpa."""
     if not config.INSTA_UI_PASSWORD:
         return HTMLResponse("<h1>Painel desativado</h1><p>Falta a variável INSTA_UI_PASSWORD.</p>", 503)
     return HTMLResponse(_html("insta.html") if _logado(insta_sess) else _html("insta_login.html"))
 
 
+def senha_confere(senha: str) -> bool:
+    return bool(config.INSTA_UI_PASSWORD) and secrets.compare_digest(senha, config.INSTA_UI_PASSWORD)
+
+
+def gravar_cookie(resp, token: str):
+    """Cookie de sessão. Usado pelo login clássico e pelo login do Lab."""
+    resp.set_cookie(_COOKIE, token, max_age=_SESSAO_VALIDA_S, httponly=True,
+                    secure=True, samesite="lax", path="/")
+
+
+def apagar_cookie(resp):
+    resp.delete_cookie(_COOKIE, path="/")
+
+
 @router.post("/insta/login")
 async def login(request: Request):
-    ip = (request.headers.get("x-forwarded-for", "") or (request.client.host if request.client else "")).split(",")[0].strip()
+    ip = ip_do_pedido(request)
     if _bloqueado(ip):
         return HTMLResponse(_html("insta_login.html").replace(
             "<!--ERRO-->", '<p class="erro">Muitas tentativas. Espere alguns minutos.</p>'), 429)
     form = await request.form()
-    senha = str(form.get("senha", ""))
-    if not config.INSTA_UI_PASSWORD or not secrets.compare_digest(senha, config.INSTA_UI_PASSWORD):
-        _TENTATIVAS.setdefault(ip, []).append(time.time())
+    if not senha_confere(str(form.get("senha", ""))):
+        sessoes.registrar_falha(ip)
         return HTMLResponse(_html("insta_login.html").replace(
             "<!--ERRO-->", '<p class="erro">Senha incorreta.</p>'), 401)
-    token = secrets.token_urlsafe(32)
-    _SESSOES[token] = time.time()
+    token = sessoes.criar(request.headers.get("user-agent", ""))
     resp = RedirectResponse("/insta", status_code=303)
-    resp.set_cookie(_COOKIE, token, max_age=_SESSAO_VALIDA_S, httponly=True, secure=True, samesite="lax", path="/")
+    gravar_cookie(resp, token)
     return resp
 
 
 @router.get("/insta/sair")
 def sair(insta_sess: str | None = Cookie(default=None)):
-    _SESSOES.pop(insta_sess or "", None)
+    sessoes.encerrar(insta_sess)
     resp = RedirectResponse("/insta", status_code=303)
-    resp.delete_cookie(_COOKIE, path="/")
+    apagar_cookie(resp)
     return resp
 
 

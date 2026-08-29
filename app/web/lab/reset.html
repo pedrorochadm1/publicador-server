@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Limpar cache · Lab DM1</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#0d1014; color:#e8ecf1;
+         font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; padding:24px; }
+  .caixa { max-width:420px; text-align:center; }
+  h1 { font-size:20px; margin:0 0 12px; }
+  p { color:#9aa4b0; font-size:15px; line-height:1.6; }
+  pre { text-align:left; background:#151a20; border:1px solid #232a33; border-radius:10px;
+        padding:12px; font-size:12px; color:#9aa4b0; overflow:auto; max-height:200px; }
+  a { display:inline-block; margin-top:18px; background:#a3e635; color:#0d1014; text-decoration:none;
+      font-weight:700; padding:12px 20px; border-radius:10px; }
+</style>
+</head>
+<body>
+<div class="caixa">
+  <h1>Limpando o cache do app</h1>
+  <p id="estado">Desregistrando o service worker…</p>
+  <pre id="log"></pre>
+  <a href="/lab">Voltar pro Lab</a>
+</div>
+<script>
+(async () => {
+  const log = (t) => { document.getElementById("log").textContent += t + "\n"; };
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) { await r.unregister(); log("service worker removido: " + r.scope); }
+      if (!regs.length) log("nenhum service worker registrado");
+    }
+    if (window.caches) {
+      const nomes = await caches.keys();
+      for (const n of nomes) { await caches.delete(n); log("cache apagado: " + n); }
+      if (!nomes.length) log("nenhum cache guardado");
+    }
+    try { localStorage.removeItem("lab_fila"); log("fila local de captura limpa"); } catch (e) {}
+    document.getElementById("estado").textContent = "Pronto. Feche e abra o app de novo.";
+  } catch (e) {
+    document.getElementById("estado").textContent = "Deu erro: " + e.message;
+  }
+})();
+</script>
+</body>
+</html>

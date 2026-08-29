@@ -12,6 +12,11 @@ def conn():
     if _conn is None:
         _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
         _conn.row_factory = sqlite3.Row
+        # WAL: leitor não bloqueia escritor. Importante porque o scheduler, o
+        # marca-passo do direct e agora o autosave do Lab dividem esta conexão.
+        _conn.execute("PRAGMA journal_mode=WAL")
+        # Em vez de estourar 'database is locked' na hora, espera até 5s pelo lock.
+        _conn.execute("PRAGMA busy_timeout=5000")
         _conn.execute(
             """
             CREATE TABLE IF NOT EXISTS posts (

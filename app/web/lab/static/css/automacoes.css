@@ -1,0 +1,126 @@
+/* Aba de automações: o CSS do insta.html, com as cores fixas trocadas por
+   variáveis do tema escuro. Só cores — nenhuma mudança de layout, de grid ou de
+   estrutura de DOM nesta versão, pra que o porte continue sendo comparável com
+   o painel antigo em /insta/classico. */
+
+.auto { height: 100%; overflow-y: auto; padding: 0 0 calc(24px + var(--safe-b)); }
+
+.auto-topo {
+  display: flex; align-items: center; gap: 12px;
+  padding: calc(16px + var(--safe-t)) 20px 14px;
+  position: sticky; top: 0; background: var(--fundo); z-index: 5;
+  border-bottom: 1px solid var(--linha);
+}
+.auto-topo h1 { font-size: 18px; flex: 1; }
+
+.auto-grade {
+  max-width: 1360px; margin: 0 auto; padding: 18px 20px;
+  display: grid; grid-template-columns: 300px 1fr 320px; gap: 18px; align-items: start;
+}
+.auto .col { display: grid; gap: 13px; }
+.auto .card {
+  background: var(--superficie); border: 1px solid var(--linha);
+  border-radius: var(--raio-g); padding: 16px;
+}
+.auto .card.sel { border-color: var(--acao); box-shadow: 0 0 0 2px var(--acao-fraca); }
+.auto .lista .card { cursor: pointer; }
+.auto .lista .card h3 { margin: 0 0 6px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.auto .ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--texto3); flex: none; }
+.auto .ponto.on { background: var(--acao); }
+
+.auto .kw {
+  display: inline-block; font-size: 12px; background: var(--acao-fraca); color: var(--acao);
+  border-radius: 6px; padding: 2px 8px; margin: 2px 4px 2px 0; font-weight: 600;
+}
+.auto .meta { font-size: 12px; color: var(--texto3); margin-top: 8px; line-height: 1.55; }
+.auto h2 { font-size: 15px; margin: 0 0 14px; }
+.auto label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+.auto label.sw { display: flex; align-items: center; gap: 9px; margin: 12px 0; font-weight: 600; }
+.auto .dica { font-weight: 400; color: var(--texto3); font-size: 12px; }
+.auto textarea { min-height: 92px; }
+.auto .linha { display: flex; gap: 10px; }
+.auto .linha > * { flex: 1; }
+.auto .acoes { display: flex; gap: 9px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
+.auto .bloco { border-top: 1px solid var(--linha); margin-top: 18px; padding-top: 4px; }
+
+.auto .posts {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px; margin-top: 8px;
+}
+.auto .posts figure {
+  margin: 0; cursor: pointer; border: 2px solid transparent; border-radius: 10px;
+  overflow: hidden; background: var(--superficie2); aspect-ratio: 1;
+}
+.auto .posts figure.sel { border-color: var(--acao); }
+.auto .posts img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.auto table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.auto th, .auto td {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--linha); vertical-align: top;
+}
+.auto th { color: var(--texto3); font-weight: 600; font-size: 12px; }
+.auto .badge {
+  font-size: 11px; padding: 2px 7px; border-radius: 99px;
+  background: var(--superficie2); border: 1px solid var(--linha); color: var(--texto2);
+}
+.auto .badge.ok { color: var(--regua-verde); border-color: rgba(61,214,140,.3); background: rgba(61,214,140,.1); }
+.auto .badge.erro { color: var(--regua-vermelho); border-color: rgba(229,72,77,.3); background: rgba(229,72,77,.1); }
+
+/* Contador de caracteres */
+.auto .conta {
+  font-size: 11px; color: var(--texto3); text-align: right; margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.auto .conta.perto { color: var(--regua-amarelo); }
+.auto .conta.estourou { color: var(--regua-vermelho); font-weight: 700; }
+.auto .campo-ruim { border-color: var(--regua-vermelho) !important; background: rgba(229,72,77,.07) !important; }
+
+/* Prévia do comentário e do direct */
+.auto .previa { position: sticky; top: 78px; display: grid; gap: 13px; }
+.auto .previa h4 {
+  margin: 0 0 10px; font-size: 11px; color: var(--texto3);
+  text-transform: uppercase; letter-spacing: .07em;
+}
+.auto .fone {
+  border: 1px solid var(--linha); border-radius: var(--raio-g);
+  overflow: hidden; background: var(--superficie2);
+}
+.auto .fone .topo {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  border-bottom: 1px solid var(--linha); font-size: 13px; font-weight: 700;
+}
+.auto .ava {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, var(--acao), var(--doc));
+}
+.auto .ava.cinza { background: var(--linha-forte); }
+.auto .fone .corpo { padding: 12px; display: grid; gap: 8px; }
+.auto .bolha {
+  max-width: 88%; padding: 9px 13px; border-radius: 18px; font-size: 14px;
+  background: var(--linha); border-bottom-left-radius: 5px;
+  white-space: pre-wrap; word-break: break-word;
+}
+.auto .cartao {
+  max-width: 88%; border: 1px solid var(--linha); border-radius: var(--raio-g);
+  overflow: hidden; padding: 0; cursor: default; background: var(--superficie);
+}
+.auto .cartao .txt { padding: 11px 13px; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+.auto .cartao .bt-dm {
+  border-top: 1px solid var(--linha); padding: 10px; text-align: center;
+  font-size: 14px; font-weight: 600; color: var(--acao);
+}
+.auto .quem { font-size: 11px; color: var(--texto3); margin-left: 4px; }
+.auto .coment { display: grid; gap: 10px; padding: 12px; }
+.auto .coment .item { display: flex; gap: 9px; }
+.auto .coment .item.resp { margin-left: 32px; }
+.auto .coment .bal { font-size: 13px; }
+.auto .coment .bal b { font-size: 13px; }
+.auto .previa .nada { color: var(--texto3); font-size: 13px; padding: 12px; }
+
+@media (max-width: 1180px) {
+  .auto-grade { grid-template-columns: 300px 1fr; }
+  .auto .previa { position: static; }
+}
+@media (max-width: 860px) {
+  .auto-grade { grid-template-columns: 1fr; padding: 14px 16px; }
+}

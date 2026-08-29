@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Lab DM1</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0d1014">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lab DM1">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/lab/static/apple-touch-180.png?v=__V__">
+<link rel="icon" href="/lab/static/icone-192.png?v=__V__" type="image/png">
+<link rel="stylesheet" href="/lab/static/css/base.css?v=__V__">
+<link rel="stylesheet" href="/lab/static/css/lab.css?v=__V__">
+<link rel="stylesheet" href="/lab/static/css/automacoes.css?v=__V__">
+</head>
+<body>
+
+<div id="app" hidden>
+  <!-- Navegação: trilho lateral no Mac, barra inferior no celular. -->
+  <aside class="trilho">
+    <span class="trilho-marca" id="marca"></span>
+    <button class="trilho-aba" data-aba="lab" type="button">
+      <span class="ic" id="ic-lab"></span><span class="rot">Lab</span>
+    </button>
+    <button class="trilho-aba" data-aba="automacoes" type="button">
+      <span class="ic" id="ic-auto"></span><span class="rot">Automações</span>
+    </button>
+    <button class="trilho-aba sair" id="sair" type="button" title="Sair">
+      <span class="ic">⏻</span><span class="rot">Sair</span>
+    </button>
+  </aside>
+
+  <div class="corpo">
+    <!-- Régua de equilíbrio: fixa no topo da aba do Lab. -->
+    <div id="regua" class="regua" hidden></div>
+    <main id="tela"></main>
+  </div>
+
+  <nav class="tabbar">
+    <button data-aba="lab" type="button"><span class="ic"></span><span>Lab</span></button>
+    <button data-aba="automacoes" type="button"><span class="ic"></span><span>Automações</span></button>
+  </nav>
+</div>
+
+<!-- Login desenhado dentro do app: o shell é servido sem sessão pra que o PWA
+     em modo standalone nunca caia num redirect pra fora do app. -->
+<div id="login" hidden>
+  <form id="login-form">
+    <span class="login-marca" id="marca-login"></span>
+    <h1>Laboratório DM1</h1>
+    <input type="password" id="senha" placeholder="Senha" autocomplete="current-password" required>
+    <button type="submit">Entrar</button>
+    <p class="erro" id="login-erro"></p>
+  </form>
+</div>
+
+<div id="carregando" class="carregando">carregando…</div>
+<div id="aviso"></div>
+<div id="painel"></div>
+
+<script type="module" src="/lab/static/js/app.js?v=__V__"></script>
+<script>
+  // O service worker só entra em cena depois que a página carregou, pra não
+  // competir com o primeiro render. Falha aqui não pode quebrar o app.
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js?v=__V__", { scope: "/" }).catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>

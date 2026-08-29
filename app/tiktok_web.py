@@ -18,7 +18,7 @@ import requests
 from fastapi import APIRouter, BackgroundTasks, Form, Request, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 
-from . import config, tiktok
+from . import config, lab_web, tiktok
 
 router = APIRouter()
 
@@ -54,10 +54,14 @@ def _sessao(request: Request) -> dict | None:
 
 @router.get("/", response_class=HTMLResponse)
 def home_page(request: Request):
-    # O domínio insta.* é o painel de automações; os outros veem a homepage real
-    # (site externo completo) — exigência da auditoria do TikTok.
+    # O domínio insta.* é a casa do Laboratório DM1 (as automações viraram a
+    # segunda aba dele); os outros veem a homepage real (site externo completo)
+    # — exigência da auditoria do TikTok.
     if request.headers.get("host", "").split(":")[0].startswith("insta."):
-        return RedirectResponse("/insta", status_code=307)
+        if not config.INSTA_UI_PASSWORD:
+            return HTMLResponse(
+                "<h1>Painel desativado</h1><p>Falta a variável INSTA_UI_PASSWORD.</p>", 503)
+        return HTMLResponse(lab_web.shell())
     return _html("home.html")
 
 

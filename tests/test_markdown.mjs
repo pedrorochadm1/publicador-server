@@ -1,0 +1,131 @@
+/* Testes do formato de exportação em markdown.
+   Roda com: node tests/test_markdown.mjs   (não entra na imagem Docker) */
+
+import assert from "node:assert/strict";
+import { cardParaMarkdown, loteParaMarkdown, nomeDeArquivo }
+  from "../app/web/lab/static/js/markdown.js";
+
+let passou = 0;
+const teste = (nome, fn) => {
+  try { fn(); passou++; }
+  catch (e) { console.error(`FALHOU: ${nome}\n  ${e.message}\n`); process.exitCode = 1; }
+};
+
+const card = {
+  titulo: "Todo mundo erra a contagem de carboidrato",
+  tipo: "conteudo",
+  formato: "lofi",
+  hook: "Você conta carboidrato errado e nem sabe.",
+  fechamento: "Pesa uma semana. Só isso.",
+  desenvolvimentos: [
+    { texto: "A conta de olho erra por 30% pra mais ou pra menos." },
+    { texto: "Quem pesa a comida por duas semanas calibra o olho." },
+  ],
+};
+
+teste("card completo sai no formato do PRD", () => {
+  const md = cardParaMarkdown(card);
+  assert.equal(md, `# Todo mundo erra a contagem de carboidrato
+
+**Tipo:** Conteúdo · **Formato:** Lo-fi
+
+**HOOK**
+Você conta carboidrato errado e nem sabe.
+
+A conta de olho erra por 30% pra mais ou pra menos.
+
+Quem pesa a comida por duas semanas calibra o olho.
+
+**FECHAMENTO**
+Pesa uma semana. Só isso.
+`);
+});
+
+teste("desenvolvimentos não têm rótulo nem numeração", () => {
+  const md = cardParaMarkdown(card);
+  assert.ok(!md.includes("DESENVOLVIMENTO"), "não pode rotular desenvolvimento");
+  assert.ok(!/^\s*\d\./m.test(md), "não pode numerar desenvolvimento");
+});
+
+teste("hook e fechamento são rotulados", () => {
+  const md = cardParaMarkdown(card);
+  assert.ok(md.includes("**HOOK**"));
+  assert.ok(md.includes("**FECHAMENTO**"));
+});
+
+teste("desenvolvimentos vazios são descartados", () => {
+  const md = cardParaMarkdown({
+    ...card,
+    desenvolvimentos: [{ texto: "um" }, { texto: "   " }, { texto: "" }, { texto: "dois" }],
+  });
+  assert.ok(md.includes("um\n\ndois"), "os vazios não podem virar parágrafo em branco");
+  assert.ok(!md.includes("\n\n\n"), "não pode sobrar linha em branco dupla");
+});
+
+teste("ordem dos desenvolvimentos é preservada", () => {
+  const md = cardParaMarkdown({
+    ...card,
+    desenvolvimentos: [{ texto: "primeiro" }, { texto: "segundo" }, { texto: "terceiro" }],
+  });
+  assert.ok(md.indexOf("primeiro") < md.indexOf("segundo"));
+  assert.ok(md.indexOf("segundo") < md.indexOf("terceiro"));
+});
+
+teste("metadados podem ser desligados", () => {
+  const md = cardParaMarkdown(card, { incluirTipoFormato: false });
+  assert.ok(!md.includes("**Tipo:**"));
+  assert.ok(md.startsWith("# Todo mundo"));
+});
+
+teste("sem lacunas marcadas, campo vazio simplesmente não aparece", () => {
+  const md = cardParaMarkdown({ titulo: "Só a ideia", desenvolvimentos: [] },
+                              { incluirTipoFormato: false });
+  assert.equal(md, "# Só a ideia\n");
+});
+
+teste("com lacunas marcadas, os buracos ficam explícitos", () => {
+  const md = cardParaMarkdown({ titulo: "Só a ideia", desenvolvimentos: [] },
+                              { incluirTipoFormato: false, marcarLacunas: true });
+  assert.ok(md.includes("_[falta o hook]_"));
+  assert.ok(md.includes("_[falta desenvolvimento]_"));
+  assert.ok(md.includes("_[falta o fechamento]_"));
+});
+
+teste("tipo e formato indefinidos viram travessão simples", () => {
+  const md = cardParaMarkdown({ titulo: "x", tipo: null, formato: null, desenvolvimentos: [] });
+  assert.ok(md.includes("**Tipo:** — · **Formato:** —"));
+});
+
+teste("nada de status, data ou id no corpo", () => {
+  const md = cardParaMarkdown({
+    ...card, id: 42, status: "publicado", publicado_em: "2026-08-28T12:00:00Z", ordem: 3,
+  });
+  for (const ruido of ["42", "publicado", "2026-08", "status", "ordem"]) {
+    assert.ok(!md.includes(ruido), `"${ruido}" é ruído pra quem está de fora`);
+  }
+});
+
+teste("lote separa os cards por ---", () => {
+  const md = loteParaMarkdown([card, { ...card, titulo: "Segundo" }]);
+  assert.equal((md.match(/^---$/gm) || []).length, 1);
+  assert.ok(md.indexOf("# Todo mundo") < md.indexOf("# Segundo"));
+});
+
+teste("lote de um card não ganha separador", () => {
+  assert.ok(!loteParaMarkdown([card]).includes("---"));
+});
+
+teste("aceita desenvolvimento como texto puro", () => {
+  const md = cardParaMarkdown({ titulo: "x", desenvolvimentos: ["direto como string"] },
+                              { incluirTipoFormato: false });
+  assert.ok(md.includes("direto como string"));
+});
+
+teste("nome de arquivo tira acento e espaço", () => {
+  assert.equal(nomeDeArquivo({ titulo: "Contagem de Carboidrato: é fácil?" }),
+               "contagem-de-carboidrato-e-facil.md");
+  assert.equal(nomeDeArquivo({ titulo: "" }), "roteiro.md");
+  assert.equal(nomeDeArquivo({ titulo: "!!!" }), "roteiro.md");
+});
+
+console.log(`${passou} testes de markdown passaram`);
