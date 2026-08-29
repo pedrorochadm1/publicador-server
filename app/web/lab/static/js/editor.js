@@ -95,8 +95,13 @@ function desenhar() {
     ${rotulo("ed-hook", "HOOK")}
     <textarea id="ed-hook" class="ed-campo" rows="1" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
 
-    ${rotulo("ed-tela", "TÍTULO / TEXTO NA TELA")}
-    <textarea id="ed-tela" class="ed-campo" rows="1"
+    <div class="ed-rot-linha">
+      <label class="ed-rot" for="ed-tela">TÍTULO / TEXTO NA TELA</label>
+      <label class="sw sw-p" title="Este vídeo tem texto na tela">
+        <input type="checkbox" id="ed-tela-on" ${card.tela_ativa ? "checked" : ""}>
+      </label>
+    </div>
+    <textarea id="ed-tela" class="ed-campo" rows="1" ${card.tela_ativa ? "" : "hidden"}
               placeholder="o que aparece escrito no vídeo">${esc(card.titulo_tela || "")}</textarea>
 
     <div id="ed-desen"></div>
@@ -172,6 +177,16 @@ function ligar() {
     el.addEventListener("input", () => { autoAltura(el); agendar(); });
   }
 
+  const chaveTela = $("#ed-tela-on");
+  chaveTela.addEventListener("change", () => {
+    // O texto é preservado ao desligar: religar devolve o que estava escrito.
+    card.tela_ativa = chaveTela.checked;
+    const campo = $("#ed-tela");
+    campo.hidden = !chaveTela.checked;
+    if (chaveTela.checked) { autoAltura(campo); campo.focus(); }
+    agendar(0);
+  });
+
   pintarChipsMeta();
 
   $("#ed-add").onclick = () => {
@@ -233,14 +248,34 @@ function pintarChipsMeta() {
   folha.querySelectorAll("#ed-tipo .op").forEach((b) => {
     b.onclick = () => {
       card.tipo = card.tipo === b.dataset.v ? null : b.dataset.v;
-      pintarChipsMeta();
+      const chaveTela = $("#ed-tela-on");
+  chaveTela.addEventListener("change", () => {
+    // O texto é preservado ao desligar: religar devolve o que estava escrito.
+    card.tela_ativa = chaveTela.checked;
+    const campo = $("#ed-tela");
+    campo.hidden = !chaveTela.checked;
+    if (chaveTela.checked) { autoAltura(campo); campo.focus(); }
+    agendar(0);
+  });
+
+  pintarChipsMeta();
       agendar(0);          // escolha explícita grava na hora, sem debounce
     };
   });
   folha.querySelectorAll("#ed-formato .op").forEach((b) => {
     b.onclick = () => {
       card.formato = card.formato === b.dataset.v ? null : b.dataset.v;
-      pintarChipsMeta();
+      const chaveTela = $("#ed-tela-on");
+  chaveTela.addEventListener("change", () => {
+    // O texto é preservado ao desligar: religar devolve o que estava escrito.
+    card.tela_ativa = chaveTela.checked;
+    const campo = $("#ed-tela");
+    campo.hidden = !chaveTela.checked;
+    if (chaveTela.checked) { autoAltura(campo); campo.focus(); }
+    agendar(0);
+  });
+
+  pintarChipsMeta();
       agendar(0);
     };
   });
@@ -360,6 +395,7 @@ function coletar() {
     titulo: $("#ed-titulo").value,
     hook: $("#ed-hook").value,
     titulo_tela: $("#ed-tela").value,
+    tela_ativa: $("#ed-tela-on").checked,
     fechamento: $("#ed-fech").value,
     desenvolvimentos: colherDesenvolvimentos(),
   };
@@ -406,6 +442,7 @@ async function salvarAgora() {
       titulo: dados.titulo,
       hook: dados.hook,
       titulo_tela: dados.titulo_tela,
+      tela_ativa: dados.tela_ativa,
       fechamento: dados.fechamento,
       tipo: dados.tipo,
       formato: dados.formato,

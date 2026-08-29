@@ -21,6 +21,7 @@ const LACUNA = {
   hook: "_[falta o hook]_",
   desenvolvimento: "_[falta desenvolvimento]_",
   fechamento: "_[falta o fechamento]_",
+  tela: "_[falta o texto na tela]_",
 };
 
 /** Uma lista de links vira bullets "- url — nota". Vazios são descartados. */
@@ -51,10 +52,13 @@ export function cardParaMarkdown(card, opcoes = {}) {
     linhas.push("", "*HOOK*", hook || LACUNA.hook);
   }
 
-  // Só sai quando existe: nem todo formato tem texto na tela, e uma lacuna aqui
-  // seria ruído num card de foto.
-  const tela = (card.titulo_tela || "").trim();
-  if (tela) linhas.push("", "*TEXTO NA TELA*", tela);
+  // A chave é a declaração: desligada, este vídeo não tem texto na tela e a
+  // seção nem aparece. Ligada e vazia, a pendência é explícita — e independe do
+  // "marcar lacunas", porque ligar já foi o Pedro dizendo que vai ter.
+  if (card.tela_ativa) {
+    const tela = (card.titulo_tela || "").trim();
+    linhas.push("", "*TEXTO NA TELA*", tela || LACUNA.tela);
+  }
 
   // Desenvolvimentos vazios são descartados: não geram parágrafo em branco.
   const desen = (card.desenvolvimentos || [])

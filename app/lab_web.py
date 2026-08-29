@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "18"
+LAB_VERSAO = "19"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")

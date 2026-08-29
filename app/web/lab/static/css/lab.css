@@ -570,3 +570,10 @@
 .aj-novo { display: flex; gap: 8px; margin-top: 4px; }
 .aj-novo input { flex: 1; min-width: 0; padding: 9px 12px; }
 .aj-novo .bt { flex: none; padding: 9px 14px; font-size: 13px; }
+
+/* Rótulo com a chave à direita (texto na tela: tem ou não tem neste vídeo). */
+.ed-rot-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ed-rot-linha .ed-rot { margin-top: 4px; }
+.sw-p input[type=checkbox] { width: 36px; height: 21px; }
+.sw-p input[type=checkbox]::after { width: 17px; height: 17px; }
+.sw-p input[type=checkbox]:checked::after { left: 17px; }

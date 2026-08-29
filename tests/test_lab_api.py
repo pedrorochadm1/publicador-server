@@ -86,7 +86,7 @@ def test_titulo_sozinho_nao_move_da_coluna_ideia(cliente):
     ("hook", {"hook": "todo mundo erra a contagem"}),
     ("fechamento", {"fechamento": "é isso"}),
     ("desenvolvimento", {"desenvolvimentos": [{"texto": "o ponto é a proporção"}]}),
-    ("titulo_tela", {"titulo_tela": "NPH ainda?"}),
+    ("titulo_tela", {"titulo_tela": "NPH ainda?", "tela_ativa": True}),
 ])
 def test_qualquer_campo_do_roteiro_move_pra_producao(cliente, campo, valor):
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
@@ -270,27 +270,45 @@ def test_excluir_card_inexistente_da_404(cliente):
 
 # ─────────────────────────── Referências e reação ───────────────────────────
 
+def test_texto_na_tela_nasce_desligado(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    assert card["tela_ativa"] is False
+    assert card["titulo_tela"] == ""
+
+
 def test_texto_na_tela_salva_e_volta(cliente):
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
-    assert card["titulo_tela"] == ""
-    r = cliente.patch(f"/lab/api/cards/{card['id']}",
-                      json={"titulo_tela": "A insulina do SUS tem 40 anos"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "tela_ativa": True, "titulo_tela": "A insulina do SUS tem 40 anos"}).json()
+    assert r["tela_ativa"] is True
     assert r["titulo_tela"] == "A insulina do SUS tem 40 anos"
-    assert r["status"] == "producao", "texto na tela é roteiro, move de coluna"
+    assert r["status"] == "producao", "texto na tela declarado é roteiro"
+
+
+def test_texto_guardado_com_a_chave_desligada_nao_move_de_coluna(cliente):
+    """Desligar preserva o texto, mas ele deixa de contar como roteiro."""
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cid = card["id"]
+    cliente.patch(f"/lab/api/cards/{cid}", json={"tela_ativa": True, "titulo_tela": "algo"})
+    r = cliente.patch(f"/lab/api/cards/{cid}", json={"tela_ativa": False}).json()
+    assert r["titulo_tela"] == "algo", "o texto não é apagado ao desligar"
+    assert r["status"] == "ideia"
 
 
 def test_apagar_so_o_texto_na_tela_volta_pra_ideia(cliente):
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
     cid = card["id"]
-    cliente.patch(f"/lab/api/cards/{cid}", json={"titulo_tela": "algo"})
+    cliente.patch(f"/lab/api/cards/{cid}", json={"tela_ativa": True, "titulo_tela": "algo"})
     assert cliente.patch(f"/lab/api/cards/{cid}", json={"titulo_tela": ""}).json()["status"] == "ideia"
 
 
-def test_duplicar_leva_o_texto_na_tela(cliente):
+def test_duplicar_leva_o_texto_na_tela_e_a_chave(cliente):
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
-    cliente.patch(f"/lab/api/cards/{card['id']}", json={"titulo_tela": "na tela"})
+    cliente.patch(f"/lab/api/cards/{card['id']}",
+                  json={"tela_ativa": True, "titulo_tela": "na tela"})
     copia = cliente.post(f"/lab/api/cards/{card['id']}/duplicar").json()
     assert copia["titulo_tela"] == "na tela"
+    assert copia["tela_ativa"] is True
 
 
 def test_card_nasce_com_as_duas_listas_vazias(cliente):

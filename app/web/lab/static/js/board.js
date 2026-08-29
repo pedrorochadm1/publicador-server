@@ -145,7 +145,7 @@ async function capturar(campo, bloco) {
   const item = fila.enfileirar(titulo, tipo, formato);
   const provisorio = {
     id: "tmp-" + item.client_uuid, client_uuid: item.client_uuid, titulo,
-    status: "ideia", tipo, formato, hook: "", titulo_tela: "", fechamento: "",
+    status: "ideia", tipo, formato, hook: "", titulo_tela: "", tela_ativa: false, fechamento: "",
     desenvolvimentos: [], referencias: [], reacoes: [], tags: [],
     provisorio: true, criado_em: item.em,
   };
@@ -235,7 +235,7 @@ function passaNoFiltro(c) {
   if (filtros.formato.length && !filtros.formato.includes(c.formato)) return false;
   if (busca) {
     const alvo = [
-      c.titulo, c.hook, c.titulo_tela, c.fechamento,
+      c.titulo, c.hook, c.tela_ativa ? c.titulo_tela : "", c.fechamento,
       ...(c.desenvolvimentos || []).map((d) => d.texto),
       ...(c.referencias || []).map((l) => `${l.url} ${l.nota}`),
       ...(c.reacoes || []).map((l) => `${l.url} ${l.nota}`),

@@ -48,6 +48,7 @@ def _init():
             formato       TEXT,                              -- 'lofi'|'slide'|'vlog'|'documentario'|NULL
             hook          TEXT    NOT NULL DEFAULT '',
             titulo_tela   TEXT    NOT NULL DEFAULT '',  -- o que aparece escrito no vídeo
+            tela_ativa    INTEGER NOT NULL DEFAULT 0,   -- este vídeo TEM texto na tela?
             fechamento    TEXT    NOT NULL DEFAULT '',
             status        TEXT    NOT NULL DEFAULT 'ideia',  -- derivado, mas materializado
             publicado_em  TEXT,
@@ -118,6 +119,10 @@ def _init():
     cols = {r[1] for r in c.execute("PRAGMA table_info(lab_cards)").fetchall()}
     if "titulo_tela" not in cols:
         c.execute("ALTER TABLE lab_cards ADD COLUMN titulo_tela TEXT NOT NULL DEFAULT ''")
+    if "tela_ativa" not in cols:
+        c.execute("ALTER TABLE lab_cards ADD COLUMN tela_ativa INTEGER NOT NULL DEFAULT 0")
+        # Quem já tinha texto na tela escrito obviamente usa texto na tela.
+        c.execute("UPDATE lab_cards SET tela_ativa = 1 WHERE TRIM(titulo_tela) != ''")
     c.commit()
     _iniciado = True
 
@@ -145,6 +150,7 @@ def _linha(r, filhos=True) -> dict:
     d = dict(r)
     d["tags"] = json.loads(d["tags"] or "[]")
     d["arquivado"] = bool(d["arquivado"])
+    d["tela_ativa"] = bool(d.get("tela_ativa"))
     if filhos:
         d["desenvolvimentos"] = _desen_do_card(d["id"])
         for campo, lista in LISTAS_LINK.items():
@@ -325,6 +331,9 @@ def atualizar_card(card_id: int, dados: dict) -> dict | None:
     if "tags" in dados:
         sets.append("tags = ?")
         params.append(json.dumps(list(dados["tags"] or [])))
+    if "tela_ativa" in dados:
+        sets.append("tela_ativa = ?")
+        params.append(1 if dados["tela_ativa"] else 0)
     if "arquivado" in dados:
         sets.append("arquivado = ?")
         params.append(1 if dados["arquivado"] else 0)
@@ -348,7 +357,9 @@ def atualizar_card(card_id: int, dados: dict) -> dict | None:
     # Status sempre recalculado a partir do que ficou gravado de fato.
     depois = get_card(card_id)
     novo = _status_derivado(
-        depois["status"], depois["hook"], depois["titulo_tela"], depois["fechamento"],
+        depois["status"], depois["hook"],
+        depois["titulo_tela"] if depois["tela_ativa"] else "",
+        depois["fechamento"],
         [d["texto"] for d in depois["desenvolvimentos"]],
     )
     if novo != depois["status"]:
@@ -406,6 +417,7 @@ def duplicar_card(card_id: int) -> dict | None:
         "formato": orig["formato"],
         "hook": orig["hook"],
         "titulo_tela": orig["titulo_tela"],
+        "tela_ativa": orig["tela_ativa"],
         "fechamento": orig["fechamento"],
         "tags": orig["tags"],
         "desenvolvimentos": [{"texto": d["texto"]} for d in orig["desenvolvimentos"]],

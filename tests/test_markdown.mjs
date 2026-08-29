@@ -133,22 +133,34 @@ teste("aceita desenvolvimento como texto puro", () => {
 
 /* ─── Texto na tela ─── */
 
-teste("texto na tela sai logo depois do hook", () => {
-  const md = cardParaMarkdown({ ...card, titulo_tela: "NPH ainda é o que o SUS entrega" });
+teste("com a chave ligada e texto escrito, sai depois do hook", () => {
+  const md = cardParaMarkdown({
+    ...card, tela_ativa: true, titulo_tela: "NPH ainda é o que o SUS entrega" });
   assert.ok(md.includes("*TEXTO NA TELA*\nNPH ainda é o que o SUS entrega"));
   assert.ok(md.indexOf("*HOOK*") < md.indexOf("*TEXTO NA TELA*"));
   assert.ok(md.indexOf("*TEXTO NA TELA*") < md.indexOf("A conta de olho"));
 });
 
-teste("sem texto na tela, a seção não aparece", () => {
+teste("chave desligada: a seção não existe, mesmo com texto guardado", () => {
   assert.ok(!cardParaMarkdown(card).includes("TEXTO NA TELA"));
-  assert.ok(!cardParaMarkdown({ ...card, titulo_tela: "   " }).includes("TEXTO NA TELA"));
+  const md = cardParaMarkdown({ ...card, tela_ativa: false, titulo_tela: "sobrou daqui" });
+  assert.ok(!md.includes("TEXTO NA TELA"));
+  assert.ok(!md.includes("sobrou daqui"), "texto desligado não vaza pro roteiro");
 });
 
-teste("texto na tela não vira lacuna: nem todo formato tem", () => {
-  const md = cardParaMarkdown({ titulo: "x", desenvolvimentos: [] },
-                              { incluirTipoFormato: false, marcarLacunas: true });
-  assert.ok(!md.includes("TEXTO NA TELA"));
+teste("chave ligada e vazia vira pendência explícita", () => {
+  for (const vazio of ["", "   ", undefined]) {
+    const md = cardParaMarkdown({ ...card, tela_ativa: true, titulo_tela: vazio });
+    assert.ok(md.includes("*TEXTO NA TELA*\n_[falta o texto na tela]_"),
+              `vazio ${JSON.stringify(vazio)} deveria marcar a falta`);
+  }
+});
+
+teste("a pendência do texto na tela não depende de marcar lacunas", () => {
+  // Ligar a chave já foi o Pedro dizendo que este vídeo vai ter texto na tela.
+  const md = cardParaMarkdown({ ...card, tela_ativa: true, titulo_tela: "" },
+                              { marcarLacunas: false });
+  assert.ok(md.includes("_[falta o texto na tela]_"));
 });
 
 /* ─── Referências e reação ─── */
