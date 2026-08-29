@@ -1,9 +1,9 @@
 /* Editor do card: tela cheia no celular, painel lateral no Mac.
 
-   Três abas, pra que o roteiro não divida espaço com material de apoio:
-     Roteiro     — hook, desenvolvimentos, fechamento
-     Referências — o embasamento (estudo, matéria, post)
-     Reação      — vídeos que o Pedro vai reagir DENTRO do vídeo dele
+   Uma rolagem só, na ordem em que o roteiro é pensado: título, tipo e formato,
+   hook, desenvolvimentos, fechamento, e no fim o material de apoio —
+   Referências (o embasamento) e Reação (vídeos que o Pedro vai reagir dentro do
+   vídeo dele).
 
    Não existe botão Salvar. Tudo é gravado por debounce de 600ms, e o status
    muda de coluna sozinho — quem decide isso é o servidor, que recalcula em toda
@@ -40,13 +40,11 @@ let timer = null;
 let salvando = false;
 let sujo = false;
 let folha = null;
-let abaAtiva = "roteiro";
 
 export function abrirEditor(cardInicial, callback) {
   card = normalizar(cardInicial);
   aoMudar = callback;
   sujo = false;
-  abaAtiva = "roteiro";
   folha = abrirPainel(desenhar(), {
     classe: "painel-editor",
     // Fechar não pode engolir edição pendente: grava o que estiver na tela.
@@ -74,62 +72,55 @@ function desenhar() {
     <button class="fechar" type="button" aria-label="Fechar">✕</button>
   </header>
 
-  <nav class="ed-abas" id="ed-abas">
-    <button class="ed-aba ativa" type="button" data-aba="roteiro">Roteiro</button>
-    <button class="ed-aba" type="button" data-aba="referencias">Referências<span class="n" id="n-referencias"></span></button>
-    <button class="ed-aba" type="button" data-aba="reacoes">Reação<span class="n" id="n-reacoes"></span></button>
-  </nav>
-
   <div class="painel-corpo">
-    <div class="ed-painel ativo" data-painel="roteiro">
-      <input type="text" id="ed-titulo" class="ed-titulo" value="${esc(card.titulo)}"
-             placeholder="título da ideia">
+    <input type="text" id="ed-titulo" class="ed-titulo" value="${esc(card.titulo)}"
+           placeholder="título da ideia">
 
-      <div class="ed-meta">
-        <div class="grupo-chips" id="ed-tipo"></div>
-        <div class="grupo-chips" id="ed-formato"></div>
-      </div>
-
-      <div class="ed-prog" id="ed-prog"></div>
-
-      <label class="ed-rot" for="ed-hook">HOOK</label>
-      <textarea id="ed-hook" class="ed-campo" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
-
-      <div id="ed-desen"></div>
-      <button class="ed-add" id="ed-add" type="button">+ adicionar desenvolvimento</button>
-
-      <label class="ed-rot" for="ed-fech">FECHAMENTO</label>
-      <textarea id="ed-fech" class="ed-campo" placeholder="como termina">${esc(card.fechamento)}</textarea>
-
-      <div class="ed-acoes">
-        ${card.status === "publicado"
-          ? `<div class="ed-publicado">
-               <span class="chip on">publicado em ${data(card.publicado_em, false)}</span>
-               <p class="nota">Card publicado é histórico. Para reaproveitar, duplique.</p>
-             </div>`
-          : `<button class="bt bt-publiquei" id="ed-publicar" type="button">✓ Publiquei</button>`}
-      </div>
-
-      <div class="ed-secundarias">
-        <button class="bt sec larga" id="ed-md" type="button">Copiar markdown</button>
-        <button class="bt sec" id="ed-dup" type="button">Duplicar</button>
-        <button class="bt perigo" id="ed-excluir" type="button">Excluir</button>
-        <button class="bt sec larga" id="ed-md-op" type="button">Opções de exportação</button>
-      </div>
-      <div class="ed-md-opcoes" id="ed-md-opcoes" hidden>
-        <label class="sw"><input type="checkbox" id="op-meta" checked> Incluir tipo e formato</label>
-        <label class="sw"><input type="checkbox" id="op-lacunas"> Marcar o que está faltando</label>
-        <label class="sw"><input type="checkbox" id="op-links" checked> Incluir referências e reação</label>
-        <button class="bt sec" id="ed-baixar" type="button">Baixar .md</button>
-      </div>
+    <div class="ed-meta">
+      <div class="grupo-chips" id="ed-tipo"></div>
+      <div class="grupo-chips" id="ed-formato"></div>
     </div>
 
+    <div class="ed-prog" id="ed-prog"></div>
+
+    <label class="ed-rot" for="ed-hook">HOOK</label>
+    <textarea id="ed-hook" class="ed-campo" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
+
+    <div id="ed-desen"></div>
+    <button class="ed-add" id="ed-add" type="button">+ adicionar desenvolvimento</button>
+
+    <label class="ed-rot" for="ed-fech">FECHAMENTO</label>
+    <textarea id="ed-fech" class="ed-campo" placeholder="como termina">${esc(card.fechamento)}</textarea>
+
     ${["referencias", "reacoes"].map((k) => `
-      <div class="ed-painel" data-painel="${k}">
+      <section class="ed-secao">
+        <h3 class="ed-rot">${LISTAS[k].rotulo}<span class="n" id="n-${k}"></span></h3>
         <p class="link-intro">${LISTAS[k].intro}</p>
         <div id="lista-${k}"></div>
         <button class="ed-add" data-add="${k}" type="button">+ adicionar link</button>
-      </div>`).join("")}
+      </section>`).join("")}
+
+    <div class="ed-acoes">
+      ${card.status === "publicado"
+        ? `<div class="ed-publicado">
+             <span class="chip on">publicado em ${data(card.publicado_em, false)}</span>
+             <p class="nota">Card publicado é histórico. Para reaproveitar, duplique.</p>
+           </div>`
+        : `<button class="bt bt-publiquei" id="ed-publicar" type="button">✓ Publiquei</button>`}
+    </div>
+
+    <div class="ed-secundarias">
+      <button class="bt sec larga" id="ed-md" type="button">Copiar markdown</button>
+      <button class="bt sec" id="ed-dup" type="button">Duplicar</button>
+      <button class="bt perigo" id="ed-excluir" type="button">Excluir</button>
+      <button class="bt sec larga" id="ed-md-op" type="button">Opções de exportação</button>
+    </div>
+    <div class="ed-md-opcoes" id="ed-md-opcoes" hidden>
+      <label class="sw"><input type="checkbox" id="op-meta" checked> Incluir tipo e formato</label>
+      <label class="sw"><input type="checkbox" id="op-lacunas"> Marcar o que está faltando</label>
+      <label class="sw"><input type="checkbox" id="op-links" checked> Incluir referências e reação</label>
+      <button class="bt sec" id="ed-baixar" type="button">Baixar .md</button>
+    </div>
   </div>`;
 }
 
@@ -142,10 +133,6 @@ function rotuloStatus() {
 
 function ligar() {
   $(".fechar").onclick = fecharPainel;
-
-  folha.querySelectorAll(".ed-aba").forEach((b) => {
-    b.onclick = () => trocarAba(b.dataset.aba);
-  });
 
   $("#ed-titulo").addEventListener("input", () => {
     $("#ed-topo").textContent = $("#ed-titulo").value || "Sem título";
@@ -188,13 +175,6 @@ function ligar() {
   pintarProgresso();
   autoAltura($("#ed-hook"));
   autoAltura($("#ed-fech"));
-}
-
-function trocarAba(aba) {
-  abaAtiva = aba;
-  folha.querySelectorAll(".ed-aba").forEach((b) => b.classList.toggle("ativa", b.dataset.aba === aba));
-  folha.querySelectorAll(".ed-painel").forEach((p) => p.classList.toggle("ativo", p.dataset.painel === aba));
-  folha.querySelector(".painel-corpo").scrollTop = 0;
 }
 
 function autoAltura(el) {
@@ -409,7 +389,6 @@ async function aoPublicar() {
 
   if (!card.tipo || !card.formato) {
     aviso(!card.tipo ? "Marque se é conteúdo ou anúncio." : "Marque o formato.");
-    trocarAba("roteiro");
     folha.querySelector(!card.tipo ? "#ed-tipo" : "#ed-formato")
       .scrollIntoView({ behavior: "smooth", block: "center" });
     return;

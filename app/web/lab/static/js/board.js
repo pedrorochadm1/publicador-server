@@ -13,7 +13,7 @@ import * as fila from "./fila.js";
 import * as regua from "./regua.js";
 import { abrirEditor } from "./editor.js";
 import { loteParaMarkdown, copiar } from "./markdown.js";
-import { TIPOS, FORMATOS, nomeFormato, chipsDe } from "./opcoes.js";
+import { TIPOS, FORMATOS, chipsDe, tagsDe } from "./opcoes.js";
 
 const COLUNAS = [
   { id: "ideia", nome: "Ideia" },
@@ -344,10 +344,7 @@ function vazioDe(status) {
 
 function cartao(c) {
   const sel = selecao.has(String(c.id));
-  const marcas = [
-    c.formato ? `<span class="tag tag-${c.formato}">${nomeFormato(c.formato)}</span>` : "",
-    c.tipo ? `<span class="tag-tipo ${c.tipo}">${c.tipo === "anuncio" ? "anúncio" : "conteúdo"}</span>` : "",
-  ].filter(Boolean).join("");
+  const marcas = tagsDe(c);
   const quando = c.status === "publicado" && c.publicado_em
     ? `<span class="cartao-quando">${data(c.publicado_em, false)}</span>` : "";
 

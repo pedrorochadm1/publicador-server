@@ -5,29 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Lab DM1</title>
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#0d1014">
+<meta name="theme-color" content="#f7f8fa">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Lab DM1">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/lab/static/apple-touch-180.png?v=__V__">
 <link rel="icon" href="/lab/static/icone-192.png?v=__V__" type="image/png">
-<script>
-  // Aplica o tema ANTES do primeiro pixel. Sem isso o app abriria no padrão e
-  // piscaria pro tema escolhido quando o CSS/JS terminasse de carregar.
-  try {
-    var p = JSON.parse(localStorage.getItem("lab_tema") || "{}");
-    var t = p.tema || "claro";
-    if (t === "auto") {
-      t = matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
-    }
-    document.documentElement.dataset.tema = t;
-    document.documentElement.dataset.acento = p.acento || "azul";
-  } catch (e) {
-    document.documentElement.dataset.tema = "claro";
-    document.documentElement.dataset.acento = "azul";
-  }
-</script>
 <link rel="stylesheet" href="/lab/static/css/base.css?v=__V__">
 <link rel="stylesheet" href="/lab/static/css/lab.css?v=__V__">
 <link rel="stylesheet" href="/lab/static/css/automacoes.css?v=__V__">

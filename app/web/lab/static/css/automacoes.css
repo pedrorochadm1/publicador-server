@@ -112,7 +112,7 @@
 }
 .auto .ava {
   width: 26px; height: 26px; border-radius: 50%; flex: none;
-  background: linear-gradient(135deg, var(--acao), var(--doc));
+  background: linear-gradient(135deg, var(--acao), var(--cor-documentario));
 }
 .auto .ava.cinza { background: var(--linha-forte); }
 .auto .fone .corpo { padding: 12px; display: grid; gap: 8px; }

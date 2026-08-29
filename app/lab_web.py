@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "5"
+LAB_VERSAO = "6"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")
@@ -78,8 +78,8 @@ def manifest():
             "display": "standalone",
             "orientation": "portrait",
             # Cores da splash screen. Acompanham o tema PADRÃO (claro); a barra
-            # de status segue a meta theme-color, que o tema.js atualiza em
-            # tempo real quando o Pedro troca.
+            # de status segue a meta theme-color do shell.
+
             "background_color": "#f7f8fa",
             "theme_color": "#f7f8fa",
             "lang": "pt-BR",

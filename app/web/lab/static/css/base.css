@@ -1,49 +1,14 @@
 /* Tokens e casca do Lab DM1.
 
-   Tudo que é cor sai de token: o app tem tema claro e escuro, e a cor de ação
-   pode ser verde-ácido (reagente, a marca original) ou azul. Nenhuma cor fixa
-   deve aparecer fora do bloco de tema abaixo — senão ela sobrevive à troca e
-   quebra o contraste em um dos dois temas.
+   Tema definido: claro com azul #648DCB. Não é configurável — foi decidido, não
+   é preferência. Tudo que é cor sai daqui.
 
    A cadeia de alturas é a parte delicada: o app ocupa a tela inteira e QUEM
    rola é a lista de cards, nunca a página. Em flex column, os irmãos do meio
    precisam de `flex:1; min-height:0` — um `height:100%` ali empurra o rodapé
    pra fora da tela e corta o fim do conteúdo. */
 
-/* ─────────────────────────── Tema ───────────────────────────
-   Dois eixos independentes, gravados na config e sincronizados entre celular e
-   Mac: `data-tema` (escuro|claro) e `data-acento` (verde|azul) no <html>.
-
-   `--sobre-acao` existe porque a cor de texto que vai EM CIMA da cor de ação
-   muda com o tema: no escuro a ação é clara e pede texto escuro; no claro é o
-   contrário. Sem esse token, botão vira texto ilegível ao trocar de tema. */
-
-html[data-tema="escuro"] {
-  --fundo:      #0d1014;
-  --superficie: #151a20;
-  --superficie2:#1b222a;
-  --linha:      #262f3a;
-  --linha-forte:#3a4552;
-  --texto:      #e8ecf1;
-  --texto2:     #9aa4b0;
-  --texto3:     #6b7684;
-  --sombra: 0 8px 24px rgba(0,0,0,.45);
-  --veu: rgba(0,0,0,.6);
-
-  /* Cores por formato: leitura instantânea no board. */
-  --lofi:  #f59e0b;
-  --slide: #3b82f6;
-  --vlog:  #a855f7;
-  --doc:   #14b8a6;
-  --tinta: .15;
-
-  /* Sistema de cor da régua, independente do de formato pra não confundir. */
-  --regua-verde:    #3dd68c;
-  --regua-amarelo:  #e8a33d;
-  --regua-vermelho: #e5484d;
-}
-
-html[data-tema="claro"] {
+:root {
   --fundo:      #f7f8fa;
   --superficie: #ffffff;
   --superficie2:#f1f3f6;
@@ -55,54 +20,29 @@ html[data-tema="claro"] {
   --sombra: 0 8px 24px rgba(16,20,26,.12);
   --veu: rgba(16,20,26,.32);
 
-  /* Mais escuras que no tema escuro: precisam de contraste sobre branco. */
-  --lofi:  #c2740a;
-  --slide: #2563eb;
-  --vlog:  #9333ea;
-  --doc:   #0d9488;
-  --tinta: .11;
+  /* Azul da marca. Texto em cima dele é SEMPRE branco. */
+  --acao:       #648dcb;
+  --sobre-acao: #ffffff;
+  --acao-fraca: rgba(100,141,203,.15);
+  /* Quando o próprio azul vira texto miúdo sobre o fundo claro (aba ativa,
+     "✓ hook"), um tom fechado do mesmo azul: #648DCB tem 3,2:1 sobre branco e
+     sumiria em 10px. É o mesmo azul, só mais fundo. */
+  --acao-txt:   #3f6ba8;
 
+  /* Uma cor por tipo e por formato, para a etiqueta do card. Escuras porque
+     aparecem como texto sobre uma tinta clara da própria cor — e porque assim
+     aceitam texto branco quando viram chip preenchido. */
+  --cor-conteudo:     #15803d;
+  --cor-anuncio:      #be123c;
+  --cor-lofi:         #b45309;
+  --cor-slide:        #4338ca;
+  --cor-vlog:         #a21caf;
+  --cor-documentario: #0e7490;
+
+  /* Sistema de cor da régua, separado do de tipo/formato pra não confundir. */
   --regua-verde:    #15a05e;
   --regua-amarelo:  #c07807;
   --regua-vermelho: #d32f35;
-}
-
-/* Três tokens por combinação, e cada um existe por um motivo:
-
-   --acao       preenchimento e borda (botão, chip ativo, foco).
-   --sobre-acao o texto que vai EM CIMA do preenchimento.
-   --acao-txt   a cor quando a própria ação vira texto pequeno sobre o fundo da
-                página (aba ativa, "✓ hook", proporção da régua).
-
-   O azul #648DCB tem 5,6:1 sobre o fundo escuro, mas só 3,2:1 sobre o claro —
-   bom pra borda, fraco pra texto. Por isso o tema claro usa um tom fechado só
-   em --acao-txt: o preenchimento continua sendo exatamente a cor escolhida, e o
-   texto miúdo ganha contraste. Pelo mesmo motivo o texto sobre o preenchimento
-   é escuro (5,5:1) e não branco (3,4:1).
-
-   --acao-fraca vai escrito à mão em vez de color-mix: é o tom usado em toda aba
-   e chip ativo, e se o navegador não entender a função a UI perde o realce
-   inteiro. Os demais color-mix desta folha são enfeites que degradam sem dor. */
-
-html[data-tema="escuro"][data-acento="verde"] {
-  --acao: #a3e635; --acao-txt: #a3e635; --sobre-acao: #0d1014;
-  --acao-fraca: rgba(163,230,53,.15);
-}
-html[data-tema="escuro"][data-acento="azul"] {
-  --acao: #648dcb; --acao-txt: #8fb0e0; --sobre-acao: #0b1017;
-  --acao-fraca: rgba(100,141,203,.18);
-}
-html[data-tema="claro"][data-acento="verde"] {
-  --acao: #4d7c0f; --acao-txt: #4d7c0f; --sobre-acao: #ffffff;
-  --acao-fraca: rgba(77,124,15,.12);
-}
-html[data-tema="claro"][data-acento="azul"] {
-  --acao: #648dcb; --acao-txt: #3f6ba8; --sobre-acao: #10141a;
-  --acao-fraca: rgba(100,141,203,.15);
-}
-
-:root {
-  --regua-cinza: var(--texto3);
 
   --raio: 12px;
   --raio-g: 16px;

@@ -19,6 +19,15 @@ export const FORMATOS = [
 export const nomeFormato = (f) => (FORMATOS.find((x) => x.id === f) || {}).nome || f || "";
 export const nomeTipo = (t) => (TIPOS.find((x) => x.id === t) || {}).nome || t || "";
 
+/** Etiquetas do card: exatamente o que estiver marcado no topo. Nada marcado,
+    nada de etiqueta — card sem classificação não ganha enfeite. */
+export function tagsDe(card) {
+  const t = [];
+  if (card.tipo) t.push(`<span class="tag tag-${card.tipo}">${nomeTipo(card.tipo)}</span>`);
+  if (card.formato) t.push(`<span class="tag tag-${card.formato}">${nomeFormato(card.formato)}</span>`);
+  return t.join("");
+}
+
 /** `ativo` aceita um valor (escolha única) ou um array (filtro multi). */
 export function chipsDe(opcoes, ativo, prefixo) {
   const ligado = (id) => (Array.isArray(ativo) ? ativo.includes(id) : ativo === id);

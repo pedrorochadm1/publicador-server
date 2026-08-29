@@ -117,13 +117,15 @@
   transition: .12s; line-height: 1;
 }
 .op:active { transform: scale(.97); }
-.op.on { color: var(--sobre-acao); font-weight: 700; }
-.op.on.tipo-conteudo { background: var(--acao); border-color: var(--acao); }
-.op.on.tipo-anuncio  { background: var(--regua-amarelo); border-color: var(--regua-amarelo); }
-.op.on.fmt-lofi  { background: var(--lofi);  border-color: var(--lofi); }
-.op.on.fmt-slide { background: var(--slide); border-color: var(--slide); color: #fff; }
-.op.on.fmt-vlog  { background: var(--vlog);  border-color: var(--vlog); color: #fff; }
-.op.on.fmt-documentario { background: var(--doc); border-color: var(--doc); }
+/* Chip marcado: preenchido com a cor daquela opção e texto branco. As seis
+   cores são escuras o bastante pra sustentar branco em cima. */
+.op.on { color: #fff; font-weight: 700; }
+.op.on.tipo-conteudo    { background: var(--cor-conteudo);     border-color: var(--cor-conteudo); }
+.op.on.tipo-anuncio     { background: var(--cor-anuncio);      border-color: var(--cor-anuncio); }
+.op.on.fmt-lofi         { background: var(--cor-lofi);         border-color: var(--cor-lofi); }
+.op.on.fmt-slide        { background: var(--cor-slide);        border-color: var(--cor-slide); }
+.op.on.fmt-vlog         { background: var(--cor-vlog);         border-color: var(--cor-vlog); }
+.op.on.fmt-documentario { background: var(--cor-documentario); border-color: var(--cor-documentario); }
 
 .bt-add { width: 100%; padding: 13px; font-size: 15px; }
 
@@ -230,20 +232,19 @@
 .cartao-pe { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 9px; }
 .cartao-quando { font-size: 11px; color: var(--texto3); margin-left: auto; }
 
+/* Etiqueta do card: espelha o que foi marcado no topo do card (tipo e formato),
+   uma cor por valor. Tinta leve e peso médio de propósito — ela informa de
+   relance, mas quem tem que saltar no board é o título da ideia. */
 .tag {
-  font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
-  text-transform: uppercase; letter-spacing: .03em;
+  font-size: 10.5px; font-weight: 600; padding: 2px 9px; border-radius: 99px;
+  letter-spacing: .01em; white-space: nowrap;
 }
-.tag-lofi  { color: var(--lofi);  background: color-mix(in srgb, var(--lofi) calc(var(--tinta) * 100%), transparent); }
-.tag-slide { color: var(--slide); background: color-mix(in srgb, var(--slide) calc(var(--tinta) * 100%), transparent); }
-.tag-vlog  { color: var(--vlog);  background: color-mix(in srgb, var(--vlog) calc(var(--tinta) * 100%), transparent); }
-.tag-documentario { color: var(--doc); background: color-mix(in srgb, var(--doc) calc(var(--tinta) * 100%), transparent); }
-
-.tag-tipo {
-  font-size: 10.5px; padding: 2px 8px; border-radius: 99px;
-  border: 1px solid var(--linha); color: var(--texto3);
-}
-.tag-tipo.anuncio { color: var(--regua-amarelo); border-color: color-mix(in srgb, var(--regua-amarelo) 40%, transparent); }
+.tag-conteudo     { color: var(--cor-conteudo);     background: rgba(21,128,61,.10); }
+.tag-anuncio      { color: var(--cor-anuncio);      background: rgba(190,18,60,.10); }
+.tag-lofi         { color: var(--cor-lofi);         background: rgba(180,83,9,.10); }
+.tag-slide        { color: var(--cor-slide);        background: rgba(67,56,202,.10); }
+.tag-vlog         { color: var(--cor-vlog);         background: rgba(162,28,175,.10); }
+.tag-documentario { color: var(--cor-documentario); background: rgba(14,116,144,.10); }
 
 .prog { display: flex; gap: 10px; margin-top: 9px; font-size: 10.5px; color: var(--texto3); }
 .prog span.ok { color: var(--acao-txt); }
@@ -373,27 +374,18 @@
 .ponto.producao { background: var(--regua-amarelo); }
 .ponto.publicado { background: var(--acao); }
 
-/* Abas do card: Roteiro · Referências · Reação */
-.ed-abas {
-  display: flex; gap: 4px; flex: none;
-  padding: 8px 12px; border-bottom: 1px solid var(--linha);
-  background: var(--fundo);
+/* Referências e Reação ficam no próprio card, no fim da rolagem: são material
+   de apoio do roteiro, não um assunto à parte. */
+.ed-secao {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--linha);
 }
-.ed-aba {
-  flex: 1; padding: 9px 6px; border-radius: 9px;
-  font-size: 13px; font-weight: 600; color: var(--texto3);
-  display: flex; align-items: center; justify-content: center; gap: 5px;
-  min-height: 38px;
+.ed-secao .ed-rot { margin-top: 0; display: flex; align-items: center; gap: 7px; }
+.ed-secao .n {
+  font-size: 10px; font-weight: 800; letter-spacing: 0;
+  background: var(--acao); color: var(--sobre-acao);
+  border-radius: 99px; padding: 1px 7px;
 }
-.ed-aba.ativa { color: var(--acao-txt); background: var(--acao-fraca); }
-.ed-aba .n {
-  font-size: 10px; font-weight: 800; background: var(--superficie2);
-  color: var(--texto2); border-radius: 99px; padding: 1px 6px;
-}
-.ed-aba.ativa .n { background: var(--acao); color: var(--sobre-acao); }
-
-.ed-painel { display: none; flex-direction: column; gap: 10px; }
-.ed-painel.ativo { display: flex; }
 
 .ed-titulo {
   font-size: 19px; font-weight: 700; padding: 8px 0; border: 0;

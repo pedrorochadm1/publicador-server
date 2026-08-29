@@ -11,7 +11,6 @@ import * as automacoes from "./automacoes.js";
 import * as regua from "./regua.js";
 import { precisaOnboarding, abrirOnboarding } from "./onboarding.js";
 import { fecharPainel } from "./painel.js";
-import { aplicar as aplicarTema, vigiarSistema } from "./tema.js";
 import { abrirAjustes } from "./ajustes.js";
 
 const $ = (s) => document.querySelector(s);
@@ -112,10 +111,6 @@ async function iniciar() {
     $("#carregando").textContent = "Não deu pra carregar. Verifique a conexão.";
     return;
   }
-  // O tema do servidor manda: é ele que sincroniza iPhone e Mac. O que já foi
-  // aplicado no <head> veio do localStorage e serviu pra evitar o piscar.
-  aplicarTema({ tema: estadoInicial.config.tema, acento: estadoInicial.config.acento });
-
   $("#login").hidden = true;
   $("#app").hidden = false;
   $("#carregando").hidden = true;
@@ -136,7 +131,6 @@ quandoPerderSessao(() => {
 });
 
 ligarLogin();
-vigiarSistema();
 
 (async () => {
   let sessao;
