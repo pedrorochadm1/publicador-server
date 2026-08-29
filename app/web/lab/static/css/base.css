@@ -110,7 +110,7 @@ input[type=search], select, textarea {
 }
 input:focus, select:focus, textarea:focus { border-color: var(--acao); background: var(--fundo); }
 input::placeholder, textarea::placeholder { color: var(--texto3); }
-textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
+textarea { resize: vertical; line-height: 1.55; }
 input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }

@@ -54,7 +54,10 @@ export function abrirEditor(cardInicial, callback, config = {}) {
   folha = abrirPainel(desenhar(), {
     classe: "painel-editor",
     // Fechar não pode engolir edição pendente: grava o que estiver na tela.
-    aoFechar: () => { if (sujo) salvarAgora(); },
+    aoFechar: () => {
+      window.removeEventListener("resize", reajustarTudo);
+      if (sujo) salvarAgora();
+    },
   });
   ligar();
 }
@@ -79,8 +82,8 @@ function desenhar() {
   </header>
 
   <div class="painel-corpo">
-    <input type="text" id="ed-titulo" class="ed-titulo" value="${esc(card.titulo)}"
-           placeholder="título da ideia">
+    <textarea id="ed-titulo" class="ed-titulo" rows="1"
+              placeholder="título da ideia">${esc(card.titulo)}</textarea>
 
     <div class="ed-meta">
       <div class="grupo-chips" id="ed-tipo"></div>
@@ -90,17 +93,17 @@ function desenhar() {
     <div class="ed-prog" id="ed-prog"></div>
 
     ${rotulo("ed-hook", "HOOK")}
-    <textarea id="ed-hook" class="ed-campo" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
+    <textarea id="ed-hook" class="ed-campo" rows="1" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
 
     ${rotulo("ed-tela", "TÍTULO / TEXTO NA TELA")}
-    <textarea id="ed-tela" class="ed-campo curto"
+    <textarea id="ed-tela" class="ed-campo" rows="1"
               placeholder="o que aparece escrito no vídeo">${esc(card.titulo_tela || "")}</textarea>
 
     <div id="ed-desen"></div>
     <button class="ed-add" id="ed-add" type="button">+ adicionar desenvolvimento</button>
 
     ${rotulo("ed-fech", "FECHAMENTO")}
-    <textarea id="ed-fech" class="ed-campo" placeholder="como termina">${esc(card.fechamento)}</textarea>
+    <textarea id="ed-fech" class="ed-campo" rows="1" placeholder="como termina">${esc(card.fechamento)}</textarea>
 
     ${["referencias", "reacoes"].map((k) => `
       <section class="ed-secao">
@@ -136,15 +139,7 @@ function desenhar() {
   </div>`;
 }
 
-/* Rótulo do campo com o botão de expandir ao lado. No iPhone o Safari não
-   desenha a alça de arrastar do textarea, então sem este botão não existe
-   nenhuma forma de ampliar o campo. */
-const rotulo = (id, texto) => `
-  <div class="ed-rot-linha">
-    <label class="ed-rot" for="${id}">${texto}</label>
-    <button class="bt-expandir" type="button" data-exp="${id}"
-            aria-label="Expandir campo" title="Expandir">⤢</button>
-  </div>`;
+const rotulo = (id, texto) => `<label class="ed-rot" for="${id}">${texto}</label>`;
 
 const caixa = (id, ligada, rotulo) =>
   `<label class="sw"><input type="checkbox" id="${id}"${ligada ? " checked" : ""}> ${rotulo}</label>`;
@@ -159,19 +154,23 @@ function rotuloStatus() {
 function ligar() {
   $(".fechar").onclick = fecharPainel;
 
-  $("#ed-titulo").addEventListener("input", () => {
-    $("#ed-topo").textContent = $("#ed-titulo").value || "Sem título";
+  const tit = $("#ed-titulo");
+  tit.addEventListener("input", () => {
+    // Título é uma frase, não um parágrafo: quebra de linha colada vira espaço.
+    if (tit.value.includes("\n")) {
+      const pos = tit.selectionStart;
+      tit.value = tit.value.replace(/\n+/g, " ");
+      tit.setSelectionRange(pos, pos);
+    }
+    $("#ed-topo").textContent = tit.value || "Sem título";
+    autoAltura(tit);
     agendar();
   });
+  tit.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tit.blur(); } });
   for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) {
     const el = $(id);
     el.addEventListener("input", () => { autoAltura(el); agendar(); });
   }
-
-  folha.querySelectorAll("[data-exp]").forEach((b) => {
-    b.onclick = () => alternarExpandir($("#" + b.dataset.exp), b);
-  });
-  for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) vigiarArrasto($(id));
 
   pintarChipsMeta();
 
@@ -204,60 +203,27 @@ function ligar() {
   pintarDesenvolvimentos();
   for (const k of Object.keys(LISTAS)) pintarLinks(k);
   pintarProgresso();
-  autoAltura($("#ed-hook"));
-  autoAltura($("#ed-tela"));
-  autoAltura($("#ed-fech"));
+  reajustarTudo();
+  window.addEventListener("resize", reajustarTudo);
 }
 
-const MIN_CAMPO = 44;
+/* Cada campo tem exatamente a altura do que está escrito: uma linha de texto,
+   uma linha visível. Sem mínimo artificial — era o min-height de 66px que
+   deixava um hook de uma linha dentro de uma caixa de três.
 
-/* Cresce junto com o texto — MAS só enquanto o Pedro não definiu uma altura na
-   mão. Antes isso não era checado: qualquer arrasto da alça era desfeito na
-   tecla seguinte, e no desktop parecia que redimensionar não funcionava. */
+   scrollHeight não inclui a borda, e com box-sizing:border-box definir a altura
+   sem ela cortaria o texto por 2px; daí somar (offsetHeight - clientHeight). */
 function autoAltura(el) {
-  if (!el || el.dataset.manual === "1") return;
-  el.style.height = "auto";
-  const min = el.classList.contains("curto") ? MIN_CAMPO : 66;
-  const alvo = Math.max(el.scrollHeight, min);
-  el.style.height = alvo + "px";
-  el.dataset.hAuto = String(alvo);   // referência pra detectar arrasto
-}
-
-/* O arrasto da alça não dispara evento nenhum. Comparamos a altura observada
-   com a última que nós mesmos aplicamos: divergiu, foi o usuário. */
-let observador = null;
-function vigiarArrasto(el) {
-  if (!window.ResizeObserver) return;
-  if (!observador) {
-    observador = new ResizeObserver((entradas) => {
-      for (const e of entradas) {
-        const alvo = e.target;
-        if (alvo.dataset.manual === "1") continue;
-        const esperado = parseFloat(alvo.dataset.hAuto || "0");
-        if (esperado && Math.abs(alvo.getBoundingClientRect().height - esperado) > 2) {
-          alvo.dataset.manual = "1";
-        }
-      }
-    });
-  }
-  observador.observe(el);
-}
-
-/* Alterna entre altura automática e uma janela alta pra escrever com folga. */
-function alternarExpandir(el, bt) {
   if (!el) return;
-  const aberto = el.dataset.aberto === "1";
-  if (aberto) {
-    delete el.dataset.aberto;
-    delete el.dataset.manual;
-    autoAltura(el);
-  } else {
-    el.dataset.aberto = "1";
-    el.dataset.manual = "1";
-    el.style.height = "min(58vh, 420px)";
-    el.focus();
-  }
-  if (bt) bt.classList.toggle("on", !aberto);
+  el.style.height = "auto";
+  const borda = el.offsetHeight - el.clientHeight;
+  el.style.height = (el.scrollHeight + borda) + "px";
+}
+
+/** Recalcula tudo: a quebra de linha muda quando a largura muda. */
+function reajustarTudo() {
+  if (!folha) return;
+  folha.querySelectorAll("textarea").forEach(autoAltura);
 }
 
 function pintarChipsMeta() {
@@ -267,24 +233,14 @@ function pintarChipsMeta() {
   folha.querySelectorAll("#ed-tipo .op").forEach((b) => {
     b.onclick = () => {
       card.tipo = card.tipo === b.dataset.v ? null : b.dataset.v;
-      folha.querySelectorAll("[data-exp]").forEach((b) => {
-    b.onclick = () => alternarExpandir($("#" + b.dataset.exp), b);
-  });
-  for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) vigiarArrasto($(id));
-
-  pintarChipsMeta();
+      pintarChipsMeta();
       agendar(0);          // escolha explícita grava na hora, sem debounce
     };
   });
   folha.querySelectorAll("#ed-formato .op").forEach((b) => {
     b.onclick = () => {
       card.formato = card.formato === b.dataset.v ? null : b.dataset.v;
-      folha.querySelectorAll("[data-exp]").forEach((b) => {
-    b.onclick = () => alternarExpandir($("#" + b.dataset.exp), b);
-  });
-  for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) vigiarArrasto($(id));
-
-  pintarChipsMeta();
+      pintarChipsMeta();
       agendar(0);
     };
   });
@@ -299,11 +255,10 @@ function pintarDesenvolvimentos() {
         <span class="desen-bts">
           <button class="desen-bt" type="button" data-mv="-1" ${i === 0 ? "disabled" : ""} aria-label="Subir">↑</button>
           <button class="desen-bt" type="button" data-mv="1" ${i === lista.length - 1 ? "disabled" : ""} aria-label="Descer">↓</button>
-          <button class="desen-bt" type="button" data-exp-desen="1" aria-label="Expandir">⤢</button>
           <button class="desen-bt" type="button" data-rm="1" aria-label="Remover">✕</button>
         </span>
       </div>
-      <textarea class="ed-campo desen-campo" placeholder="um ponto do roteiro">${esc(d.texto || "")}</textarea>
+      <textarea class="ed-campo desen-campo" rows="1" placeholder="um ponto do roteiro">${esc(d.texto || "")}</textarea>
     </div>`).join("");
 
   folha.querySelectorAll("#ed-desen .desen").forEach((el) => {
@@ -311,8 +266,6 @@ function pintarDesenvolvimentos() {
     const ta = el.querySelector(".desen-campo");
     autoAltura(ta);
     ta.addEventListener("input", () => { autoAltura(ta); agendar(); });
-    vigiarArrasto(ta);
-    el.querySelector("[data-exp-desen]").onclick = (ev) => alternarExpandir(ta, ev.currentTarget);
     el.querySelectorAll("[data-mv]").forEach((b) => {
       b.onclick = () => {
         const j = i + Number(b.dataset.mv);

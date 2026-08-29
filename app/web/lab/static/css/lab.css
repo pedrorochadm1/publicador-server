@@ -399,9 +399,13 @@
   border-radius: var(--raio-p); padding: 1px 7px;
 }
 
+/* Não usa .ed-campo de propósito: o título é rente à margem, sem caixa. Mas
+   cresce igual, porque o reajuste em JS pega todos os textarea do painel. */
 .ed-titulo {
-  font-size: 19px; font-weight: 700; padding: 8px 0; border: 0;
-  background: transparent; border-bottom: 1px solid var(--linha); border-radius: 0;
+  font-size: 19px; font-weight: 700; line-height: 1.35;
+  padding: 8px 0; border: 0; border-bottom: 1px solid var(--linha);
+  background: transparent; border-radius: 0;
+  min-height: 0; height: auto; overflow: hidden; resize: none;
 }
 .ed-titulo:focus { background: transparent; border-color: var(--acao); }
 
@@ -415,7 +419,13 @@
   font-size: 10.5px; font-weight: 800; letter-spacing: .09em;
   color: var(--texto3); text-transform: uppercase; display: block; margin-top: 4px;
 }
-.ed-campo { min-height: 66px; overflow: hidden; }
+/* A altura é calculada em JS a partir do conteúdo: uma linha escrita, uma
+   linha visível. Sem mínimo e sem alça — a alça brigaria com o cálculo e foi
+   o que fazia "redimensionar" parecer quebrado. */
+.ed-campo {
+  min-height: 0; height: auto; overflow: hidden; resize: none;
+  padding: 10px 13px;
+}
 
 .desen { display: grid; gap: 4px; margin-top: 6px; }
 .desen-topo { display: flex; align-items: center; justify-content: space-between; }
@@ -537,22 +547,6 @@
 .aj-linha .nota { flex: 1; }
 .painel-ajustes .grupo-chips { padding: 4px 2px; }
 
-/* O texto na tela é uma linha curta, não um parágrafo: nasce baixo e cresce
-   junto com o conteúdo, como os outros campos. */
-.ed-campo.curto { min-height: 44px; }
-
-/* ─── Expandir campo de texto ─── */
-
-.ed-rot-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.ed-rot-linha .ed-rot { margin-top: 4px; }
-.bt-expandir {
-  width: 30px; height: 30px; flex: none; border-radius: var(--raio);
-  color: var(--texto3); background: var(--superficie2); font-size: 13px; line-height: 1;
-}
-.bt-expandir:active, .bt-expandir.on { color: var(--acao-txt); background: var(--acao-fraca); }
-/* Com altura definida à mão o campo precisa rolar por dentro, senão o texto
-   que passa do limite fica escondido. */
-.ed-campo[data-manual="1"] { overflow: auto; }
 
 /* ─── Formatos nos ajustes ─── */
 
