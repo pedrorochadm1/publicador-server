@@ -198,6 +198,9 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
+/* Mesmo motivo do painel: coluna que rola não pode espremer os filhos. Com
+   muitos cards, eles achatariam em vez de a lista rolar. */
+.col-lista > * { flex: none; }
 .col-vazia { padding: 20px 2px; line-height: 1.6; }
 
 .cartao {
@@ -346,6 +349,11 @@
   padding: 14px 16px calc(28px + var(--safe-b));
   display: flex; flex-direction: column; gap: 10px;
 }
+/* Item de flex encolhe por padrão quando o conteúdo passa da altura do
+   container. Num painel que ROLA isso é sempre errado: espremia todo campo de
+   texto e cortava o que estava escrito. O min-height de 66px dos campos
+   mascarava o problema até ele ser removido. */
+.painel-corpo > *, .ed-secao > *, .painel-corpo textarea { flex: none; }
 
 @media (max-width: 860px) {
   .painel-folha {
