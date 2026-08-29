@@ -8,7 +8,8 @@
    aparecem quando o Pedro começa a escrever. Quem só quer despejar a ideia não
    vê nada disso; quem já sabe o formato marca ali mesmo. */
 
-import { get, post, put, esc, data, aviso, SemRede } from "./api.js";
+import { get, post, put, del, esc, data, aviso, SemRede } from "./api.js";
+import { confirmar } from "./painel.js";
 import * as fila from "./fila.js";
 import * as regua from "./regua.js";
 import { abrirEditor } from "./editor.js";
@@ -385,7 +386,8 @@ function pintarAcoesLote() {
   el.innerHTML = `
     <span class="lote-cont">${selecao.size} selecionado${selecao.size === 1 ? "" : "s"}</span>
     <button class="bt sec" id="lote-copiar" type="button">Copiar</button>
-    <button class="bt sec" id="lote-limpar" type="button">✕</button>`;
+    <button class="bt sec perigo" id="lote-excluir" type="button">Excluir</button>
+    <button class="bt sec" id="lote-limpar" type="button" aria-label="Limpar seleção">✕</button>`;
 
   el.querySelector("#lote-copiar").onclick = async (ev) => {
     // Texto montado ANTES do await: o Safari invalida a permissão de clipboard
@@ -396,7 +398,46 @@ function pintarAcoesLote() {
     bt.textContent = ok ? "Copiado" : "Não deu";
     setTimeout(() => { bt.textContent = "Copiar"; }, 1600);
   };
+  el.querySelector("#lote-excluir").onclick = excluirSelecionados;
   el.querySelector("#lote-limpar").onclick = () => { selecao.clear(); pintar(); };
+}
+
+async function excluirSelecionados() {
+  const alvos = selecionados();
+  if (!alvos.length) return;
+  const n = alvos.length;
+  const publicados = alvos.filter((c) => c.status === "publicado").length;
+
+  const ok = await confirmar({
+    titulo: `Excluir ${n} card${n === 1 ? "" : "s"}?`,
+    texto: `<p>Apaga ${n === 1 ? "o card" : "os cards"}, o roteiro e os links de vez.
+              Não dá pra desfazer.</p>
+            ${publicados ? `<p class="nota">${publicados} ${publicados === 1
+              ? "deles está publicado, então sai" : "deles estão publicados, então saem"}
+              da conta da régua e o ponteiro vai se mexer.</p>` : ""}`,
+    ok: `Excluir ${n}`,
+    perigo: true,
+  });
+  if (!ok) return;
+
+  // Um DELETE por card, reaproveitando a rota já existente. A régua do primeiro
+  // e a do último dão as pontas da animação, então o ponteiro faz um movimento
+  // só em vez de pular a cada card apagado.
+  let antes = null, depois = null, falhas = 0;
+  for (const c of alvos) {
+    try {
+      const r = await del(`/lab/api/cards/${c.id}`);
+      if (!antes) antes = r?.regua_antes;
+      depois = r?.regua_depois || depois;
+      cards = cards.filter((x) => x.id !== c.id);
+      selecao.delete(String(c.id));
+    } catch (e) {
+      falhas++;
+    }
+  }
+  if (depois) regua.animarPara(depois, antes);
+  pintar();
+  aviso(falhas ? `${n - falhas} de ${n} excluídos.` : `${n} excluído${n === 1 ? "" : "s"}.`);
 }
 
 function opcoesExport() {

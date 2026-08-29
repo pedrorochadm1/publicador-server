@@ -266,8 +266,14 @@
   box-shadow: var(--sombra); z-index: 40;
 }
 .acoes-lote[hidden] { display: none; }
-.lote-cont { font-size: 12.5px; color: var(--texto2); white-space: nowrap; flex: 1; }
-.acoes-lote .bt { padding: 8px 13px; font-size: 12.5px; }
+.lote-cont {
+  font-size: 12.5px; color: var(--texto2); flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.acoes-lote .bt { padding: 8px 12px; font-size: 12.5px; flex: none; }
+/* Excluir em lote fica com a cor de perigo, mas sem virar botão preenchido:
+   ele mora ao lado do Copiar e não pode parecer a ação principal. */
+.acoes-lote .bt.perigo { color: var(--regua-vermelho); border-color: rgba(211,47,53,.35); }
 
 /* ─────────────────────────── Desktop ─────────────────────────── */
 
