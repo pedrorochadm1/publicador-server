@@ -12,6 +12,22 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/lab/static/apple-touch-180.png?v=__V__">
 <link rel="icon" href="/lab/static/icone-192.png?v=__V__" type="image/png">
+<script>
+  // Aplica o tema ANTES do primeiro pixel. Sem isso o app abriria no padrão e
+  // piscaria pro tema escolhido quando o CSS/JS terminasse de carregar.
+  try {
+    var p = JSON.parse(localStorage.getItem("lab_tema") || "{}");
+    var t = p.tema || "claro";
+    if (t === "auto") {
+      t = matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
+    }
+    document.documentElement.dataset.tema = t;
+    document.documentElement.dataset.acento = p.acento || "azul";
+  } catch (e) {
+    document.documentElement.dataset.tema = "claro";
+    document.documentElement.dataset.acento = "azul";
+  }
+</script>
 <link rel="stylesheet" href="/lab/static/css/base.css?v=__V__">
 <link rel="stylesheet" href="/lab/static/css/lab.css?v=__V__">
 <link rel="stylesheet" href="/lab/static/css/automacoes.css?v=__V__">
@@ -28,8 +44,8 @@
     <button class="trilho-aba" data-aba="automacoes" type="button">
       <span class="ic" id="ic-auto"></span><span class="rot">Automações</span>
     </button>
-    <button class="trilho-aba sair" id="sair" type="button" title="Sair">
-      <span class="ic">⏻</span><span class="rot">Sair</span>
+    <button class="trilho-aba sair" data-ajustes="1" type="button" title="Ajustes">
+      <span class="ic" id="ic-ajustes"></span><span class="rot">Ajustes</span>
     </button>
   </aside>
 
@@ -42,6 +58,7 @@
   <nav class="tabbar">
     <button data-aba="lab" type="button"><span class="ic"></span><span>Lab</span></button>
     <button data-aba="automacoes" type="button"><span class="ic"></span><span>Automações</span></button>
+    <button data-ajustes="1" type="button"><span class="ic"></span><span>Ajustes</span></button>
   </nav>
 </div>
 

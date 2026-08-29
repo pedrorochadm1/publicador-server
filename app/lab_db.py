@@ -501,6 +501,11 @@ PADRAO_CONFIG = {
     "meta_semanal": lc.META_SEMANAL_PADRAO,
     "filtros": {"tipo": [], "formato": []},
     "export": {"incluir_tipo_formato": True, "marcar_lacunas": False},
+    # Aparência. Fica no servidor pra sincronizar entre o iPhone e o Mac; o
+    # cliente também guarda em localStorage, mas só pra aplicar antes do
+    # primeiro render e não piscar.
+    "tema": "claro",      # claro | escuro | auto
+    "acento": "azul",     # azul | verde
 }
 
 

@@ -84,8 +84,8 @@
   font-size: 11px; padding: 2px 7px; border-radius: 99px;
   background: var(--superficie2); border: 1px solid var(--linha); color: var(--texto2);
 }
-.auto .badge.ok { color: var(--regua-verde); border-color: rgba(61,214,140,.3); background: rgba(61,214,140,.1); }
-.auto .badge.erro { color: var(--regua-vermelho); border-color: rgba(229,72,77,.3); background: rgba(229,72,77,.1); }
+.auto .badge.ok { color: var(--regua-verde); border-color: color-mix(in srgb, var(--regua-verde) 38%, transparent); background: color-mix(in srgb, var(--regua-verde) 12%, transparent); }
+.auto .badge.erro { color: var(--regua-vermelho); border-color: color-mix(in srgb, var(--regua-vermelho) 38%, transparent); background: color-mix(in srgb, var(--regua-vermelho) 12%, transparent); }
 
 /* Contador de caracteres */
 .auto .conta {
@@ -94,7 +94,7 @@
 }
 .auto .conta.perto { color: var(--regua-amarelo); }
 .auto .conta.estourou { color: var(--regua-vermelho); font-weight: 700; }
-.auto .campo-ruim { border-color: var(--regua-vermelho) !important; background: rgba(229,72,77,.07) !important; }
+.auto .campo-ruim { border-color: var(--regua-vermelho) !important; background: color-mix(in srgb, var(--regua-vermelho) 8%, transparent) !important; }
 
 /* Prévia do comentário e do direct */
 .auto .previa { position: sticky; top: 78px; display: grid; gap: 13px; }

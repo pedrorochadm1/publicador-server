@@ -27,7 +27,7 @@ const ESTATICOS = [
   "css/base.css", "css/lab.css", "css/automacoes.css",
   "js/app.js", "js/api.js", "js/board.js", "js/editor.js", "js/regua.js",
   "js/painel.js", "js/markdown.js", "js/fila.js", "js/onboarding.js",
-  "js/logo.js", "js/automacoes.js", "js/opcoes.js",
+  "js/logo.js", "js/automacoes.js", "js/opcoes.js", "js/tema.js", "js/ajustes.js",
   "icone-192.png", "apple-touch-180.png",
 ].map((p) => `/lab/static/${p}`);
 

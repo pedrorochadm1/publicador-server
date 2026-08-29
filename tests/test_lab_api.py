@@ -410,6 +410,15 @@ def test_config_salva_parcial(cliente):
     assert r["meta_semanal"] == 6, "o que não foi mandado continua no padrão"
 
 
+def test_aparencia_tem_padrao_e_e_salva(cliente):
+    """Tema e cor vivem no servidor pra sincronizar iPhone e Mac."""
+    cfg = cliente.get("/lab/api/config").json()
+    assert (cfg["tema"], cfg["acento"]) == ("claro", "azul")
+    nova = cliente.put("/lab/api/config", json={"tema": "escuro", "acento": "verde"}).json()
+    assert (nova["tema"], nova["acento"]) == ("escuro", "verde")
+    assert cliente.get("/lab/api/estado").json()["config"]["tema"] == "escuro"
+
+
 def test_meta_semanal_configuravel_afeta_a_regua(cliente):
     cliente.put("/lab/api/config", json={"meta_semanal": 10})
     assert cliente.get("/lab/api/regua").json()["meta_semanal"]["meta"] == 10

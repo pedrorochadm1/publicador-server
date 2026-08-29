@@ -1,14 +1,24 @@
 /* Tokens e casca do Lab DM1.
 
-   Base escura porque o app é usado de dia e de noite, e fundo escuro faz os
-   cards saltarem. Verde-ácido é a cor de ação (remete a reagente).
+   Tudo que é cor sai de token: o app tem tema claro e escuro, e a cor de ação
+   pode ser verde-ácido (reagente, a marca original) ou azul. Nenhuma cor fixa
+   deve aparecer fora do bloco de tema abaixo — senão ela sobrevive à troca e
+   quebra o contraste em um dos dois temas.
 
    A cadeia de alturas é a parte delicada: o app ocupa a tela inteira e QUEM
    rola é a lista de cards, nunca a página. Em flex column, os irmãos do meio
    precisam de `flex:1; min-height:0` — um `height:100%` ali empurra o rodapé
    pra fora da tela e corta o fim do conteúdo. */
 
-:root {
+/* ─────────────────────────── Tema ───────────────────────────
+   Dois eixos independentes, gravados na config e sincronizados entre celular e
+   Mac: `data-tema` (escuro|claro) e `data-acento` (verde|azul) no <html>.
+
+   `--sobre-acao` existe porque a cor de texto que vai EM CIMA da cor de ação
+   muda com o tema: no escuro a ação é clara e pede texto escuro; no claro é o
+   contrário. Sem esse token, botão vira texto ilegível ao trocar de tema. */
+
+html[data-tema="escuro"] {
   --fundo:      #0d1014;
   --superficie: #151a20;
   --superficie2:#1b222a;
@@ -17,26 +27,68 @@
   --texto:      #e8ecf1;
   --texto2:     #9aa4b0;
   --texto3:     #6b7684;
-
-  --acao:       #a3e635;   /* verde-ácido: marca e ação */
-  --acao-fraca: rgba(163, 230, 53, .14);
+  --sombra: 0 8px 24px rgba(0,0,0,.45);
+  --veu: rgba(0,0,0,.6);
 
   /* Cores por formato: leitura instantânea no board. */
   --lofi:  #f59e0b;
   --slide: #3b82f6;
   --vlog:  #a855f7;
   --doc:   #14b8a6;
+  --tinta: .15;
 
   /* Sistema de cor da régua, independente do de formato pra não confundir. */
   --regua-verde:    #3dd68c;
   --regua-amarelo:  #e8a33d;
   --regua-vermelho: #e5484d;
-  --regua-cinza:    #4a5058;
+}
+
+html[data-tema="claro"] {
+  --fundo:      #f7f8fa;
+  --superficie: #ffffff;
+  --superficie2:#f1f3f6;
+  --linha:      #e4e8ed;
+  --linha-forte:#c6cfd9;
+  --texto:      #10141a;
+  --texto2:     #59636f;
+  --texto3:     #8a94a0;
+  --sombra: 0 8px 24px rgba(16,20,26,.12);
+  --veu: rgba(16,20,26,.32);
+
+  /* Mais escuras que no tema escuro: precisam de contraste sobre branco. */
+  --lofi:  #c2740a;
+  --slide: #2563eb;
+  --vlog:  #9333ea;
+  --doc:   #0d9488;
+  --tinta: .11;
+
+  --regua-verde:    #15a05e;
+  --regua-amarelo:  #c07807;
+  --regua-vermelho: #d32f35;
+}
+
+/* --acao-fraca vai escrito à mão em vez de color-mix: é o tom usado em toda aba
+   e chip ativo, e se o navegador não entender a função a UI perde o realce
+   inteiro. Os demais color-mix desta folha são enfeites que degradam sem dor. */
+html[data-tema="escuro"][data-acento="verde"] {
+  --acao: #a3e635; --sobre-acao: #0d1014; --acao-fraca: rgba(163,230,53,.15);
+}
+html[data-tema="escuro"][data-acento="azul"] {
+  --acao: #4d9fff; --sobre-acao: #071018; --acao-fraca: rgba(77,159,255,.16);
+}
+html[data-tema="claro"][data-acento="verde"] {
+  --acao: #4d7c0f; --sobre-acao: #ffffff; --acao-fraca: rgba(77,124,15,.12);
+}
+html[data-tema="claro"][data-acento="azul"] {
+  --acao: #1d6ff2; --sobre-acao: #ffffff; --acao-fraca: rgba(29,111,242,.11);
+}
+
+:root {
+  --regua-cinza: var(--texto3);
 
   --raio: 12px;
   --raio-g: 16px;
   --trilho: 76px;
-  --sombra: 0 8px 24px rgba(0,0,0,.45);
 
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
@@ -164,7 +216,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   .tabbar button .ic { display: block; height: 19px; }
   .tabbar button .ic svg { width: 19px; height: 19px; display: block; }
   .tabbar button.ativa { color: var(--acao); }
-  .tabbar button.ativa .ic { filter: drop-shadow(0 0 6px rgba(163,230,53,.35)); }
+  .tabbar button.ativa .ic { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--acao) 40%, transparent)); }
 }
 
 /* ─────────────────────────── Login ─────────────────────────── */
@@ -180,7 +232,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .login-marca svg { width: 56px; height: 56px; margin: 0 auto; display: block; }
 #login h1 { font-size: 19px; margin-bottom: 6px; }
 #login button[type=submit] {
-  background: var(--acao); color: #0d1014; font-weight: 700;
+  background: var(--acao); color: var(--sobre-acao); font-weight: 700;
   padding: 14px; border-radius: var(--raio);
 }
 #login .erro { color: var(--regua-vermelho); font-size: 13px; min-height: 18px; }
@@ -210,19 +262,19 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
   background: var(--superficie2); border: 1px solid var(--linha);
   color: var(--texto2); white-space: nowrap; display: inline-block;
 }
-.chip.on { color: var(--regua-verde); border-color: rgba(61,214,140,.35); background: rgba(61,214,140,.10); }
-.chip.erro { color: var(--regua-vermelho); border-color: rgba(229,72,77,.35); background: rgba(229,72,77,.10); }
+.chip.on { color: var(--regua-verde); border-color: color-mix(in srgb, var(--regua-verde) 40%, transparent); background: color-mix(in srgb, var(--regua-verde) 12%, transparent); }
+.chip.erro { color: var(--regua-vermelho); border-color: color-mix(in srgb, var(--regua-vermelho) 40%, transparent); background: color-mix(in srgb, var(--regua-vermelho) 12%, transparent); }
 
 .vazio { color: var(--texto3); font-size: 14px; }
 
 .bt {
   padding: 11px 16px; border-radius: var(--raio); font-size: 14px; font-weight: 700;
-  background: var(--acao); color: #0d1014; transition: filter .12s, opacity .12s;
+  background: var(--acao); color: var(--sobre-acao); transition: filter .12s, opacity .12s;
 }
 .bt:active { filter: brightness(.92); }
 .bt.sec { background: var(--superficie2); color: var(--texto); border: 1px solid var(--linha); }
 .bt.sec:active { background: var(--linha); }
-.bt.perigo { background: transparent; color: var(--regua-vermelho); border: 1px solid rgba(229,72,77,.35); }
+.bt.perigo { background: transparent; color: var(--regua-vermelho); border: 1px solid color-mix(in srgb, var(--regua-vermelho) 40%, transparent); }
 .bt:disabled { opacity: .4; cursor: default; filter: none; }
 
 @media (prefers-reduced-motion: reduce) {

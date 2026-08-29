@@ -36,3 +36,10 @@ export const ICONE_AUTO = `
   <circle cx="12.5" cy="11.5" r="1.1" fill="currentColor"/>
   <circle cx="16" cy="11.5" r="1.1" fill="currentColor"/>
 </svg>`;
+
+export const ICONE_AJUSTES = `
+<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <circle cx="12" cy="12" r="3.1" stroke="currentColor" stroke-width="1.8"/>
+  <path d="M12 3.4v2.1M12 18.5v2.1M20.6 12h-2.1M5.5 12H3.4M18.1 5.9l-1.5 1.5M7.4 16.6l-1.5 1.5M18.1 18.1l-1.5-1.5M7.4 7.4 5.9 5.9"
+        stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+</svg>`;

@@ -5,12 +5,14 @@
    trocar de aba não pode custar um round-trip nem perder o estado do board. */
 
 import { get, post, aviso, quandoPerderSessao } from "./api.js";
-import { logo, ICONE_LAB, ICONE_AUTO } from "./logo.js";
+import { logo, ICONE_LAB, ICONE_AUTO, ICONE_AJUSTES } from "./logo.js";
 import * as board from "./board.js";
 import * as automacoes from "./automacoes.js";
 import * as regua from "./regua.js";
 import { precisaOnboarding, abrirOnboarding } from "./onboarding.js";
 import { fecharPainel } from "./painel.js";
+import { aplicar as aplicarTema, vigiarSistema } from "./tema.js";
+import { abrirAjustes } from "./ajustes.js";
 
 const $ = (s) => document.querySelector(s);
 
@@ -79,20 +81,23 @@ async function irPara(aba, { push = true } = {}) {
   }
 }
 
+const ICONES = { lab: ICONE_LAB, automacoes: ICONE_AUTO };
+
 function ligarNavegacao() {
-  $("#marca").innerHTML = logo(34);
+  $("#marca").innerHTML = logo(32);
   $("#ic-lab").innerHTML = ICONE_LAB;
   $("#ic-auto").innerHTML = ICONE_AUTO;
-  document.querySelectorAll(".tabbar [data-aba]").forEach((b) => {
-    b.querySelector(".ic").innerHTML = b.dataset.aba === "lab" ? ICONE_LAB : ICONE_AUTO;
+  $("#ic-ajustes").innerHTML = ICONE_AJUSTES;
+  document.querySelectorAll(".tabbar button").forEach((b) => {
+    b.querySelector(".ic").innerHTML = b.dataset.ajustes ? ICONE_AJUSTES : ICONES[b.dataset.aba];
   });
   document.querySelectorAll("[data-aba]").forEach((b) => {
     b.onclick = () => irPara(b.dataset.aba);
   });
-  $("#sair").onclick = async () => {
-    try { await post("/lab/api/sair"); } catch (e) { /* segue */ }
-    location.href = "/lab";
-  };
+  // Ajustes é painel, não aba: abre por cima e não troca de rota.
+  document.querySelectorAll("[data-ajustes]").forEach((b) => {
+    b.onclick = () => abrirAjustes(estadoInicial.config, (nova) => { estadoInicial.config = nova; });
+  });
   window.addEventListener("popstate", () => irPara(abaDoCaminho(), { push: false }));
 }
 
@@ -107,6 +112,10 @@ async function iniciar() {
     $("#carregando").textContent = "Não deu pra carregar. Verifique a conexão.";
     return;
   }
+  // O tema do servidor manda: é ele que sincroniza iPhone e Mac. O que já foi
+  // aplicado no <head> veio do localStorage e serviu pra evitar o piscar.
+  aplicarTema({ tema: estadoInicial.config.tema, acento: estadoInicial.config.acento });
+
   $("#login").hidden = true;
   $("#app").hidden = false;
   $("#carregando").hidden = true;
@@ -127,6 +136,7 @@ quandoPerderSessao(() => {
 });
 
 ligarLogin();
+vigiarSistema();
 
 (async () => {
   let sessao;
