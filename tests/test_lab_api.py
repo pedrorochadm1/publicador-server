@@ -403,6 +403,21 @@ def test_ids_dos_links_sao_estaveis_entre_salvamentos(cliente):
     assert r2["referencias"][0]["url"] == "https://a.com/x"
 
 
+def test_mexer_so_nos_filhos_marca_o_card_como_editado(cliente):
+    """A coluna Produção se ordena por `atualizado_em`. Se editar só os
+    desenvolvimentos não mexesse nele, o card em que o Pedro acabou de trabalhar
+    ficaria parado no meio da pilha."""
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    antes = card["atualizado_em"]
+    depois = cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "desenvolvimentos": [{"texto": "um ponto"}]}).json()
+    assert depois["atualizado_em"] > antes
+
+    so_link = cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "referencias": [{"url": "https://a.com"}]}).json()
+    assert so_link["atualizado_em"] > depois["atualizado_em"]
+
+
 # ─────────────────────────── Régua e onboarding ───────────────────────────
 
 def test_simular_mostra_o_preview_sem_gravar(cliente):

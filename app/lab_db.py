@@ -341,13 +341,19 @@ def atualizar_card(card_id: int, dados: dict) -> dict | None:
         sets.append("ordem = ?")
         params.append(float(dados["ordem"]))
 
+    # Os filhos mudam sozinhos, fora do UPDATE do card. Mexer só neles ainda
+    # conta como mexer no card: a coluna Produção se ordena por `atualizado_em`,
+    # e um card onde só os desenvolvimentos mudaram tem que subir igual.
+    mexeu_em_filho = False
     if "desenvolvimentos" in dados:
         _sincronizar_desenvolvimentos(c, card_id, dados["desenvolvimentos"] or [])
+        mexeu_em_filho = True
     for campo, lista in LISTAS_LINK.items():
         if campo in dados:
             _sincronizar_links(c, card_id, lista, dados[campo] or [])
+            mexeu_em_filho = True
 
-    if sets:
+    if sets or mexeu_em_filho:
         sets.append("atualizado_em = ?")
         params.append(_agora())
         params.append(card_id)

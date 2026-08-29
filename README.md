@@ -82,6 +82,17 @@ ficam em `lab_links`, separadas pela coluna `lista`, e **não entram na derivaç
 do status** — colar um link não move o card pra produção, porque link é material
 de apoio, não roteiro.
 
+**Cada coluna se ordena pela pergunta que ela responde.** *Ideia* é caixa de
+entrada: a última capturada em cima. Inverter faria a ideia recém escrita nascer
+fora da tela e parecer que não salvou — o apodrecimento de ideia velha se
+resolve com a marca de parada (14 dias sem toque), não com a ordem. *Produção* é
+pilha de trabalho: em cima o que foi editado por último, porque é nele que o
+Pedro volta a mexer. *Publicado* é histórico: mais recente em cima.
+
+Como Produção depende de `atualizado_em`, **mexer só nos filhos** (um
+desenvolvimento, um link) também bumpa esse campo. Sem isso, o card em que ele
+acabou de trabalhar ficaria parado no meio da pilha.
+
 O **texto na tela** tem uma chave própria (`tela_ativa`). Desligada, a seção nem
 existe na exportação; ligada e vazia, sai como pendência explícita. Ligar a chave
 é o Pedro declarando que aquele vídeo vai ter texto na tela, então a falta

@@ -248,10 +248,22 @@ function passaNoFiltro(c) {
 
 /* ─────────────────────────── Pintura ─────────────────────────── */
 
+/* Cada coluna tem o seu topo, porque cada uma responde a uma pergunta diferente.
+
+   Ideia é caixa de entrada: a última capturada em cima (é o que o servidor já
+   devolve, por `ordem`). Inverter pra mais antiga primeiro faria a ideia recém
+   escrita nascer fora da tela — o Pedro digita, salva e não vê nada acontecer,
+   que parece não ter salvado. O apodrecimento de ideia velha se resolve com a
+   marca de parada no card, não com a ordem.
+
+   Produção é pilha de trabalho: em cima o que ele mexeu por último, porque é
+   nele que ele volta a mexer. Publicado é histórico: mais recente em cima. */
 function daColuna(status) {
   const lista = cards.filter((c) => c.status === status && passaNoFiltro(c));
   if (status === "publicado") {
     lista.sort((a, b) => (b.publicado_em || "").localeCompare(a.publicado_em || ""));
+  } else if (status === "producao") {
+    lista.sort((a, b) => (b.atualizado_em || "").localeCompare(a.atualizado_em || ""));
   }
   return lista;
 }
@@ -353,7 +365,7 @@ function cartao(c) {
     ? (c.publicado_em
         ? `<div class="cartao-pe"><span class="cartao-quando">publicado em ${data(c.publicado_em, false)}</span></div>`
         : "")
-    : barraProgresso(c);
+    : barraProgresso(c) + marcaParada(c);
 
   return `
     <article class="cartao${c.provisorio ? " provisorio" : ""}${sel ? " selecionado" : ""}"
@@ -363,6 +375,31 @@ function cartao(c) {
       <h3>${esc(c.titulo) || "(sem título)"}</h3>
       ${rodape}
     </article>`;
+}
+
+/* Marca de parada: a defesa contra a ideia velha afundar e morrer, que é
+   exatamente a dor do bloco de notas. Só na coluna Ideia — em Produção a
+   ordenação por última edição já conta essa história, e em Publicado não existe
+   "parado". O relógio conta da última mexida, não da captura: reabrir e editar
+   zera. */
+const DIAS_PARADA = 14;
+
+function diasParado(c) {
+  const iso = c.atualizado_em || c.criado_em;
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return 0;
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
+function marcaParada(c) {
+  if (c.status !== "ideia" || c.provisorio) return "";
+  const d = diasParado(c);
+  if (d < DIAS_PARADA) return "";
+  const texto = d >= 60 ? "parada há mais de 2 meses"
+    : d >= 30 ? "parada há mais de 1 mês"
+    : `parada há ${d} dias`;
+  return `<div class="cartao-pe"><span class="parada">${texto}</span></div>`;
 }
 
 function barraProgresso(c) {
