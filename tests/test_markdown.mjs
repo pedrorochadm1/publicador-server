@@ -4,6 +4,8 @@
 import assert from "node:assert/strict";
 import { cardParaMarkdown, loteParaMarkdown }
   from "../app/web/lab/static/js/markdown.js";
+import { configurarFormatos, FORMATOS_PADRAO }
+  from "../app/web/lab/static/js/opcoes.js";
 
 let passou = 0;
 const teste = (nome, fn) => {
@@ -99,6 +101,21 @@ teste("com lacunas marcadas, os buracos ficam explícitos", () => {
   assert.ok(md.includes("_[falta o hook]_"));
   assert.ok(md.includes("_[falta desenvolvimento]_"));
   assert.ok(md.includes("_[falta o fechamento]_"));
+});
+
+teste("formato criado pelo Pedro sai com o nome, não com travessão", () => {
+  // Regressão: markdown.js tinha o próprio mapa com os quatro formatos
+  // originais, então um formato novo saía como "—" enquanto aparecia certo no
+  // card. Os nomes precisam vir da mesma fonte que a lista configurada.
+  configurarFormatos([...FORMATOS_PADRAO, { id: "react", nome: "React" }]);
+  const md = cardParaMarkdown({ ...card, tipo: "anuncio", formato: "react" });
+  assert.ok(md.includes("*Tipo:* Anúncio · *Formato:* React"));
+  configurarFormatos(FORMATOS_PADRAO);
+});
+
+teste("formato removido da lista ainda sai com o id, nunca vazio", () => {
+  const md = cardParaMarkdown({ ...card, formato: "carrossel" });
+  assert.ok(md.includes("*Formato:* carrossel"));
 });
 
 teste("tipo e formato indefinidos viram travessão simples", () => {

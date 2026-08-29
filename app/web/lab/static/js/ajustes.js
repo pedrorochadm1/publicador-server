@@ -59,9 +59,10 @@ export function abrirAjustes(config, aoSalvar) {
 
   function pintarFormatos() {
     folha.querySelector("#aj-formatos").innerHTML = formatos().map((f) => `
-      <div class="aj-formato" data-id="${esc(f.id)}">
+      <div class="aj-formato">
         <span class="ponto-cor" style="background:${corFormato(f.id)}"></span>
-        <span class="aj-formato-nome">${esc(f.nome)}</span>
+        <input class="aj-formato-nome" type="text" maxlength="24"
+               data-id="${esc(f.id)}" value="${esc(f.nome)}" aria-label="Nome do formato">
         <button class="desen-bt" type="button" data-rm="${esc(f.id)}"
                 aria-label="Remover ${esc(f.nome)}">✕</button>
       </div>`).join("")
@@ -70,15 +71,36 @@ export function abrirAjustes(config, aoSalvar) {
     folha.querySelectorAll("#aj-formatos [data-rm]").forEach((b) => {
       b.onclick = () => removerFormato(b.dataset.rm);
     });
+
+    // Renomear troca só o rótulo: o id fica, senão os cards que já usam o
+    // formato perderiam o vínculo. E não repinta a lista enquanto digita, senão
+    // o campo perderia o foco a cada tecla.
+    folha.querySelectorAll(".aj-formato-nome").forEach((inp) => {
+      const antes = inp.value;
+      inp.addEventListener("input", () => {
+        salvarFormatos(formatos().map((f) =>
+          (f.id === inp.dataset.id ? { ...f, nome: inp.value } : f)), { repintar: false });
+      });
+      inp.addEventListener("blur", () => {
+        if (inp.value.trim()) return;
+        inp.value = antes;      // nome vazio some da tela: devolve o anterior
+        salvarFormatos(formatos().map((f) =>
+          (f.id === inp.dataset.id ? { ...f, nome: antes } : f)), { repintar: false });
+      });
+    });
   }
 
-  async function salvarFormatos(lista) {
+  let timerFormatos = null;
+  function salvarFormatos(lista, { repintar = true } = {}) {
     configurarFormatos(lista);
-    pintarFormatos();
-    try {
-      const nova = await put("/lab/api/config", { formatos: lista });
-      if (aoSalvar) aoSalvar(nova);
-    } catch (e) { aviso("Não deu pra salvar os formatos."); }
+    if (repintar) pintarFormatos();
+    clearTimeout(timerFormatos);
+    timerFormatos = setTimeout(async () => {
+      try {
+        const nova = await put("/lab/api/config", { formatos: lista });
+        if (aoSalvar) aoSalvar(nova);
+      } catch (e) { aviso("Não deu pra salvar os formatos."); }
+    }, 350);
   }
 
   async function removerFormato(id) {

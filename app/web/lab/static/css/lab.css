@@ -562,8 +562,14 @@
   padding: 8px 8px 8px 12px; background: var(--superficie2);
   border: 1px solid var(--linha); border-radius: var(--raio);
 }
-.aj-formato-nome { flex: 1; min-width: 0; font-size: 14px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Editável: renomear troca o rótulo, o id continua o mesmo. Sem font-size
+   próprio de propósito — herda os 16px e não dispara o zoom do iOS. */
+.aj-formato-nome {
+  flex: 1; min-width: 0; padding: 6px 8px;
+  border: 1px solid transparent; background: transparent;
+  border-radius: var(--raio-p);
+}
+.aj-formato-nome:focus { border-color: var(--acao); background: var(--superficie); }
 .ponto-cor { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .aj-novo { display: flex; gap: 8px; margin-top: 4px; }
 .aj-novo input { flex: 1; min-width: 0; padding: 9px 12px; }

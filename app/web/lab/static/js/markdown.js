@@ -14,8 +14,10 @@
    Roda no cliente porque precisa funcionar offline, e porque a escrita no
    clipboard tem que acontecer de forma síncrona dentro do gesto do usuário. */
 
-const NOME_TIPO = { conteudo: "Conteúdo", anuncio: "Anúncio" };
-const NOME_FORMATO = { lofi: "Lo-fi", slide: "Slide", vlog: "Vlog", documentario: "Documentário" };
+/* Os nomes vêm de opcoes.js, que é quem conhece a lista configurada pelo Pedro.
+   Duplicar o mapa aqui foi o que fez um formato criado por ele sair como "—" no
+   markdown enquanto aparecia certo no card. */
+import { nomeTipo, nomeFormato } from "./opcoes.js";
 
 const LACUNA = {
   hook: "_[falta o hook]_",
@@ -42,8 +44,8 @@ export function cardParaMarkdown(card, opcoes = {}) {
   const linhas = ["*IDEIA CENTRAL*", card.titulo || "(sem título)"];
 
   if (incluirTipoFormato) {
-    const tipo = NOME_TIPO[card.tipo] || "—";
-    const formato = NOME_FORMATO[card.formato] || "—";
+    const tipo = card.tipo ? nomeTipo(card.tipo) : "—";
+    const formato = card.formato ? nomeFormato(card.formato) : "—";
     linhas.push("", `*Tipo:* ${tipo} · *Formato:* ${formato}`);
   }
 
