@@ -540,3 +540,31 @@
 /* O texto na tela é uma linha curta, não um parágrafo: nasce baixo e cresce
    junto com o conteúdo, como os outros campos. */
 .ed-campo.curto { min-height: 44px; }
+
+/* ─── Expandir campo de texto ─── */
+
+.ed-rot-linha { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ed-rot-linha .ed-rot { margin-top: 4px; }
+.bt-expandir {
+  width: 30px; height: 30px; flex: none; border-radius: var(--raio);
+  color: var(--texto3); background: var(--superficie2); font-size: 13px; line-height: 1;
+}
+.bt-expandir:active, .bt-expandir.on { color: var(--acao-txt); background: var(--acao-fraca); }
+/* Com altura definida à mão o campo precisa rolar por dentro, senão o texto
+   que passa do limite fica escondido. */
+.ed-campo[data-manual="1"] { overflow: auto; }
+
+/* ─── Formatos nos ajustes ─── */
+
+.aj-formatos { display: grid; gap: 6px; }
+.aj-formato {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 8px 8px 12px; background: var(--superficie2);
+  border: 1px solid var(--linha); border-radius: var(--raio);
+}
+.aj-formato-nome { flex: 1; min-width: 0; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ponto-cor { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.aj-novo { display: flex; gap: 8px; margin-top: 4px; }
+.aj-novo input { flex: 1; min-width: 0; padding: 9px 12px; font-size: 14px; }
+.aj-novo .bt { flex: none; padding: 9px 14px; font-size: 13px; }

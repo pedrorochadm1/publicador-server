@@ -14,7 +14,7 @@ import * as fila from "./fila.js";
 import * as regua from "./regua.js";
 import { abrirEditor } from "./editor.js";
 import { loteParaMarkdown, copiar } from "./markdown.js";
-import { TIPOS, FORMATOS, chipsDe, tagsDe } from "./opcoes.js";
+import { TIPOS, formatos, configurarFormatos, chipsDe, tagsDe } from "./opcoes.js";
 
 const COLUNAS = [
   { id: "ideia", nome: "Ideia" },
@@ -38,6 +38,7 @@ export async function montar(alvo, dadosIniciais) {
   raiz = alvo;
   cards = dadosIniciais.cards || [];
   config = dadosIniciais.config || {};
+  configurarFormatos(config.formatos);
   filtros = {
     tipo: [...(config.filtros?.tipo || [])],
     formato: [...(config.filtros?.formato || [])],
@@ -117,7 +118,7 @@ function pintarChipsNovo() {
   raiz.querySelector("#novo-tipo").innerHTML =
     `<span class="grupo-rot">Tipo (opcional)</span>` + chipsDe(TIPOS, novoTipo, "tipo");
   raiz.querySelector("#novo-formato").innerHTML =
-    `<span class="grupo-rot">Formato (opcional)</span>` + chipsDe(FORMATOS, novoFormato, "fmt");
+    `<span class="grupo-rot">Formato (opcional)</span>` + chipsDe(formatos(), novoFormato, "fmt");
 
   raiz.querySelectorAll("#novo-tipo .op").forEach((b) => {
     b.onclick = () => { novoTipo = novoTipo === b.dataset.v ? null : b.dataset.v; pintarChipsNovo(); };
@@ -201,7 +202,7 @@ function pintarFiltros() {
     <div class="grupo-chips"><span class="grupo-rot">Tipo</span>
       ${chipsDe(TIPOS, filtros.tipo, "tipo")}</div>
     <div class="grupo-chips"><span class="grupo-rot">Formato</span>
-      ${chipsDe(FORMATOS, filtros.formato, "fmt")}</div>
+      ${chipsDe(formatos(), filtros.formato, "fmt")}</div>
     ${n ? `<button class="bt-limpar-f" type="button" id="limpar-f">limpar filtros</button>` : ""}`;
 
   raiz.querySelectorAll("#filtros-abertos .op").forEach((el) => {
@@ -454,6 +455,14 @@ function opcoesExport() {
 }
 
 /* ─────────────────────────── Mudanças vindas do editor ─────────────────────────── */
+
+/** Chamado quando os Ajustes mudam a config — hoje, a lista de formatos. */
+export function reconfigurar(nova) {
+  if (!raiz) return;
+  config = nova || config;
+  configurarFormatos(config.formatos);
+  pintar();
+}
 
 function aoMudarCard(card, { removido = false, reguaAntes = null, reguaDepois = null } = {}) {
   if (removido) {

@@ -16,13 +16,15 @@ Duas regras de negócio vivem aqui, e não no cliente:
    duplicado.
 """
 import json
+import re
 from datetime import datetime, timezone
 
 from . import lab_calculo as lc
 from .db import conn
 
 TIPOS = ("conteudo", "anuncio")
-FORMATOS = ("lofi", "slide", "vlog", "documentario")
+FORMATOS = ("lofi", "slide", "vlog", "documentario")   # só o padrão inicial
+_SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
 STATUS = ("ideia", "producao", "publicado")
 
 _iniciado = False
@@ -313,7 +315,10 @@ def atualizar_card(card_id: int, dados: dict) -> dict | None:
         params.append(v)
     if "formato" in dados:
         v = dados["formato"] or None
-        if v is not None and v not in FORMATOS:
+        # Sem enum: a lista de formatos é editável nos Ajustes, e remover um
+        # deles não pode passar a rejeitar os cards que já o usam. Só checamos
+        # que é um slug curto, pra não entrar lixo no banco.
+        if v is not None and not _SLUG.fullmatch(v):
             raise ValueError(f"formato inválido: {v}")
         sets.append("formato = ?")
         params.append(v)
@@ -509,6 +514,14 @@ PADRAO_CONFIG = {
     "meta_semanal": lc.META_SEMANAL_PADRAO,
     "filtros": {"tipo": [], "formato": []},
     "export": {"incluir_tipo_formato": True, "incluir_links": True, "marcar_lacunas": False},
+    # Formatos são editáveis pelo Pedro nos Ajustes. Valem pra conteúdo e pra
+    # anúncio. O TIPO não entra aqui: a régua depende dele e é fixo.
+    "formatos": [
+        {"id": "lofi", "nome": "Lo-fi"},
+        {"id": "slide", "nome": "Slide"},
+        {"id": "vlog", "nome": "Vlog"},
+        {"id": "documentario", "nome": "Documentário"},
+    ],
 }
 
 

@@ -124,10 +124,36 @@ def test_desenvolvimentos_mantem_ordem_e_ids(cliente):
     assert ids[1] not in [d["id"] for d in r2["desenvolvimentos"]]
 
 
-def test_tipo_e_formato_invalidos_dao_400(cliente):
+def test_tipo_invalido_da_400(cliente):
+    """Tipo é fechado: a régua depende dele."""
     card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
     assert cliente.patch(f"/lab/api/cards/{card['id']}", json={"tipo": "xpto"}).status_code == 400
-    assert cliente.patch(f"/lab/api/cards/{card['id']}", json={"formato": "xpto"}).status_code == 400
+
+
+def test_formato_aceita_qualquer_slug_mas_nao_lixo(cliente):
+    """A lista de formatos é editável nos Ajustes, então o servidor não pode ter
+    um enum fechado — senão remover um formato invalidaria os cards antigos."""
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={"formato": "carrossel"})
+    assert r.status_code == 200 and r.json()["formato"] == "carrossel"
+    for lixo in ("Formato Com Espaço", "com/barra", "-comeca-com-traco", "x" * 40):
+        assert cliente.patch(f"/lab/api/cards/{card['id']}",
+                             json={"formato": lixo}).status_code == 400
+
+
+def test_formatos_configuraveis(cliente):
+    cfg = cliente.get("/lab/api/config").json()
+    assert [f["id"] for f in cfg["formatos"]] == ["lofi", "slide", "vlog", "documentario"]
+    nova = cliente.put("/lab/api/config", json={"formatos": [
+        {"id": "lofi", "nome": "Lo-fi"}, {"id": "carrossel", "nome": "Carrossel"}]}).json()
+    assert [f["id"] for f in nova["formatos"]] == ["lofi", "carrossel"]
+    assert cliente.get("/lab/api/estado").json()["config"]["formatos"][1]["nome"] == "Carrossel"
+
+
+def test_remover_formato_nao_mexe_nos_cards(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a", "formato": "vlog"}).json()
+    cliente.put("/lab/api/config", json={"formatos": [{"id": "lofi", "nome": "Lo-fi"}]})
+    assert cliente.get(f"/lab/api/cards/{card['id']}").json()["formato"] == "vlog"
 
 
 # ─────────────────────────── Publicar ───────────────────────────

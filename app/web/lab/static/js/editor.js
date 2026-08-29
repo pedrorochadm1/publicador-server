@@ -12,7 +12,7 @@
 import { patch, post, del, get, put, esc, data, aviso, SemRede } from "./api.js";
 import { abrirPainel, fecharPainel, confirmar } from "./painel.js";
 import { cardParaMarkdown, copiar } from "./markdown.js";
-import { TIPOS, FORMATOS, chipsDe } from "./opcoes.js";
+import { TIPOS, formatos, chipsDe } from "./opcoes.js";
 import * as regua from "./regua.js";
 
 const DEBOUNCE_MS = 600;
@@ -89,17 +89,17 @@ function desenhar() {
 
     <div class="ed-prog" id="ed-prog"></div>
 
-    <label class="ed-rot" for="ed-hook">HOOK</label>
+    ${rotulo("ed-hook", "HOOK")}
     <textarea id="ed-hook" class="ed-campo" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
 
-    <label class="ed-rot" for="ed-tela">TÍTULO / TEXTO NA TELA</label>
+    ${rotulo("ed-tela", "TÍTULO / TEXTO NA TELA")}
     <textarea id="ed-tela" class="ed-campo curto"
               placeholder="o que aparece escrito no vídeo">${esc(card.titulo_tela || "")}</textarea>
 
     <div id="ed-desen"></div>
     <button class="ed-add" id="ed-add" type="button">+ adicionar desenvolvimento</button>
 
-    <label class="ed-rot" for="ed-fech">FECHAMENTO</label>
+    ${rotulo("ed-fech", "FECHAMENTO")}
     <textarea id="ed-fech" class="ed-campo" placeholder="como termina">${esc(card.fechamento)}</textarea>
 
     ${["referencias", "reacoes"].map((k) => `
@@ -136,6 +136,16 @@ function desenhar() {
   </div>`;
 }
 
+/* Rótulo do campo com o botão de expandir ao lado. No iPhone o Safari não
+   desenha a alça de arrastar do textarea, então sem este botão não existe
+   nenhuma forma de ampliar o campo. */
+const rotulo = (id, texto) => `
+  <div class="ed-rot-linha">
+    <label class="ed-rot" for="${id}">${texto}</label>
+    <button class="bt-expandir" type="button" data-exp="${id}"
+            aria-label="Expandir campo" title="Expandir">⤢</button>
+  </div>`;
+
 const caixa = (id, ligada, rotulo) =>
   `<label class="sw"><input type="checkbox" id="${id}"${ligada ? " checked" : ""}> ${rotulo}</label>`;
 
@@ -157,6 +167,11 @@ function ligar() {
     const el = $(id);
     el.addEventListener("input", () => { autoAltura(el); agendar(); });
   }
+
+  folha.querySelectorAll("[data-exp]").forEach((b) => {
+    b.onclick = () => alternarExpandir($("#" + b.dataset.exp), b);
+  });
+  for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) vigiarArrasto($(id));
 
   pintarChipsMeta();
 
@@ -194,27 +209,82 @@ function ligar() {
   autoAltura($("#ed-fech"));
 }
 
+const MIN_CAMPO = 44;
+
+/* Cresce junto com o texto — MAS só enquanto o Pedro não definiu uma altura na
+   mão. Antes isso não era checado: qualquer arrasto da alça era desfeito na
+   tecla seguinte, e no desktop parecia que redimensionar não funcionava. */
 function autoAltura(el) {
-  if (!el) return;
+  if (!el || el.dataset.manual === "1") return;
   el.style.height = "auto";
-  el.style.height = Math.max(el.scrollHeight, 66) + "px";
+  const min = el.classList.contains("curto") ? MIN_CAMPO : 66;
+  const alvo = Math.max(el.scrollHeight, min);
+  el.style.height = alvo + "px";
+  el.dataset.hAuto = String(alvo);   // referência pra detectar arrasto
+}
+
+/* O arrasto da alça não dispara evento nenhum. Comparamos a altura observada
+   com a última que nós mesmos aplicamos: divergiu, foi o usuário. */
+let observador = null;
+function vigiarArrasto(el) {
+  if (!window.ResizeObserver) return;
+  if (!observador) {
+    observador = new ResizeObserver((entradas) => {
+      for (const e of entradas) {
+        const alvo = e.target;
+        if (alvo.dataset.manual === "1") continue;
+        const esperado = parseFloat(alvo.dataset.hAuto || "0");
+        if (esperado && Math.abs(alvo.getBoundingClientRect().height - esperado) > 2) {
+          alvo.dataset.manual = "1";
+        }
+      }
+    });
+  }
+  observador.observe(el);
+}
+
+/* Alterna entre altura automática e uma janela alta pra escrever com folga. */
+function alternarExpandir(el, bt) {
+  if (!el) return;
+  const aberto = el.dataset.aberto === "1";
+  if (aberto) {
+    delete el.dataset.aberto;
+    delete el.dataset.manual;
+    autoAltura(el);
+  } else {
+    el.dataset.aberto = "1";
+    el.dataset.manual = "1";
+    el.style.height = "min(58vh, 420px)";
+    el.focus();
+  }
+  if (bt) bt.classList.toggle("on", !aberto);
 }
 
 function pintarChipsMeta() {
   $("#ed-tipo").innerHTML = `<span class="grupo-rot">Tipo</span>` + chipsDe(TIPOS, card.tipo, "tipo");
-  $("#ed-formato").innerHTML = `<span class="grupo-rot">Formato</span>` + chipsDe(FORMATOS, card.formato, "fmt");
+  $("#ed-formato").innerHTML = `<span class="grupo-rot">Formato</span>` + chipsDe(formatos(), card.formato, "fmt");
 
   folha.querySelectorAll("#ed-tipo .op").forEach((b) => {
     b.onclick = () => {
       card.tipo = card.tipo === b.dataset.v ? null : b.dataset.v;
-      pintarChipsMeta();
+      folha.querySelectorAll("[data-exp]").forEach((b) => {
+    b.onclick = () => alternarExpandir($("#" + b.dataset.exp), b);
+  });
+  for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) vigiarArrasto($(id));
+
+  pintarChipsMeta();
       agendar(0);          // escolha explícita grava na hora, sem debounce
     };
   });
   folha.querySelectorAll("#ed-formato .op").forEach((b) => {
     b.onclick = () => {
       card.formato = card.formato === b.dataset.v ? null : b.dataset.v;
-      pintarChipsMeta();
+      folha.querySelectorAll("[data-exp]").forEach((b) => {
+    b.onclick = () => alternarExpandir($("#" + b.dataset.exp), b);
+  });
+  for (const id of ["#ed-hook", "#ed-tela", "#ed-fech"]) vigiarArrasto($(id));
+
+  pintarChipsMeta();
       agendar(0);
     };
   });
@@ -229,6 +299,7 @@ function pintarDesenvolvimentos() {
         <span class="desen-bts">
           <button class="desen-bt" type="button" data-mv="-1" ${i === 0 ? "disabled" : ""} aria-label="Subir">↑</button>
           <button class="desen-bt" type="button" data-mv="1" ${i === lista.length - 1 ? "disabled" : ""} aria-label="Descer">↓</button>
+          <button class="desen-bt" type="button" data-exp-desen="1" aria-label="Expandir">⤢</button>
           <button class="desen-bt" type="button" data-rm="1" aria-label="Remover">✕</button>
         </span>
       </div>
@@ -240,6 +311,8 @@ function pintarDesenvolvimentos() {
     const ta = el.querySelector(".desen-campo");
     autoAltura(ta);
     ta.addEventListener("input", () => { autoAltura(ta); agendar(); });
+    vigiarArrasto(ta);
+    el.querySelector("[data-exp-desen]").onclick = (ev) => alternarExpandir(ta, ev.currentTarget);
     el.querySelectorAll("[data-mv]").forEach((b) => {
       b.onclick = () => {
         const j = i + Number(b.dataset.mv);

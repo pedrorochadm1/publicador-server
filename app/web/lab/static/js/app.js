@@ -95,7 +95,10 @@ function ligarNavegacao() {
   });
   // Ajustes é painel, não aba: abre por cima e não troca de rota.
   document.querySelectorAll("[data-ajustes]").forEach((b) => {
-    b.onclick = () => abrirAjustes(estadoInicial.config, (nova) => { estadoInicial.config = nova; });
+    b.onclick = () => abrirAjustes(estadoInicial.config, (nova) => {
+      estadoInicial.config = nova;
+      if (abaAtual === "lab") board.reconfigurar(nova);
+    });
   });
   window.addEventListener("popstate", () => irPara(abaDoCaminho(), { push: false }));
 }
