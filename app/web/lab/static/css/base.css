@@ -52,7 +52,9 @@
   --raio-p: 5px;    /* etiqueta, contador, badge */
   --raio:   8px;    /* padrão: botão, campo, chip, card */
   --raio-g: 12px;   /* superfície grande: painel, bloco de captura */
-  --trilho: 76px;
+  /* Largura do trilho: cabe "Automações" (o rótulo mais longo) dentro do botão
+     com folga. Com 76px o texto vazava pra fora do fundo destacado. */
+  --trilho: 92px;
 
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
@@ -146,13 +148,20 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
 .trilho-marca { display: block; margin-bottom: 10px; }
 .trilho-marca svg { width: 32px; height: 32px; display: block; }
 .trilho-aba {
-  width: 60px; padding: 9px 0; border-radius: var(--raio);
+  width: 76px; padding: 9px 4px; border-radius: var(--raio);
   display: grid; gap: 3px; justify-items: center;
   color: var(--texto3); font-size: 10px; font-weight: 600;
   transition: color .12s, background .12s;
 }
 .trilho-aba .ic { font-size: 18px; line-height: 1; }
 .trilho-aba .ic svg { width: 20px; height: 20px; display: block; }
+/* Garantia estrutural: o rótulo nunca escapa do botão, mesmo que um nome novo
+   seja mais longo do que a largura prevista. */
+.trilho-aba .rot, .tabbar button span:not(.ic) {
+  max-width: 100%; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.25;
+}
 .trilho-aba:hover { color: var(--texto2); background: var(--superficie2); }
 .trilho-aba.ativa { color: var(--acao-txt); background: var(--acao-fraca); }
 .trilho-aba.sair { margin-top: auto; }
@@ -171,7 +180,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; }
     padding-bottom: var(--tabbar-pad);
   }
   .tabbar button {
-    flex: 1;
+    flex: 1; min-width: 0; padding: 0 4px;
     min-height: var(--tabbar-bt);
     display: flex; flex-direction: column; gap: 1px;
     align-items: center; justify-content: center;
