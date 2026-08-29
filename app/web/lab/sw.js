@@ -28,7 +28,7 @@ const ESTATICOS = [
   "js/app.js", "js/api.js", "js/board.js", "js/editor.js", "js/regua.js",
   "js/painel.js", "js/markdown.js", "js/fila.js", "js/onboarding.js",
   "js/logo.js", "js/automacoes.js", "js/opcoes.js", "js/ajustes.js",
-  "icone-192.png", "apple-touch-180.png",
+  "icone-192.png", "apple-touch-180.png", "favicon.svg", "favicon-64.png",
 ].map((p) => `/lab/static/${p}`);
 
 self.addEventListener("install", (e) => {
