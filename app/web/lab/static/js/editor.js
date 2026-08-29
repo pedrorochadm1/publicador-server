@@ -20,15 +20,13 @@ const DEBOUNCE_MS = 600;
 const LISTAS = {
   referencias: {
     rotulo: "Referências",
-    intro: "Estudo, matéria, post — o que embasa o que você vai falar.",
-    vazio: "Nenhuma referência ainda.",
+    add: "+ adicionar referência",
     placeholder: "https://…",
     nota: "de onde é / o que interessa aqui",
   },
   reacoes: {
     rotulo: "Reação",
-    intro: "Vídeos que você vai reagir dentro deste vídeo. Cole o link e anote o trecho.",
-    vazio: "Nenhum vídeo pra reagir ainda.",
+    add: "+ adicionar vídeo pra reagir",
     placeholder: "https://…",
     nota: "trecho / o que comentar",
   },
@@ -113,9 +111,8 @@ function desenhar() {
     ${["referencias", "reacoes"].map((k) => `
       <section class="ed-secao">
         <h3 class="ed-rot">${LISTAS[k].rotulo}<span class="n" id="n-${k}"></span></h3>
-        <p class="link-intro">${LISTAS[k].intro}</p>
         <div id="lista-${k}"></div>
-        <button class="ed-add" data-add="${k}" type="button">+ adicionar link</button>
+        <button class="ed-add" data-add="${k}" type="button">${LISTAS[k].add}</button>
       </section>`).join("")}
 
     <div class="ed-acoes">
@@ -328,17 +325,19 @@ function pintarLinks(k) {
   const cfg = LISTAS[k];
   const lista = card[k] || [];
   const alvo = folha.querySelector(`#lista-${k}`);
-  alvo.innerHTML = lista.length ? lista.map((l, i) => `
+  // Lista vazia não desenha nada — nem "nenhuma referência ainda". O botão
+  // logo abaixo já diz o que a seção é e o que fazer.
+  alvo.innerHTML = lista.map((l, i) => `
     <div class="link-item" data-i="${i}">
       <div class="link-topo">
-        <span class="n">${i + 1}</span>
-        ${l.url ? `<a class="link-abrir" href="${esc(l.url)}" target="_blank" rel="noopener">abrir</a>` : ""}
+        ${l.url ? `<a class="link-abrir" href="${esc(l.url)}" target="_blank" rel="noopener">abrir</a>`
+                : `<span></span>`}
         <button class="desen-bt" type="button" data-rm="1" aria-label="Remover">✕</button>
       </div>
       <input type="url" class="url" inputmode="url" autocapitalize="off" autocorrect="off"
              placeholder="${cfg.placeholder}" value="${esc(l.url || "")}">
       <input type="text" class="nota" placeholder="${cfg.nota}" value="${esc(l.nota || "")}">
-    </div>`).join("") : `<p class="vazio link-vazio">${cfg.vazio}</p>`;
+    </div>`).join("");
 
   alvo.querySelectorAll(".link-item").forEach((el) => {
     const i = Number(el.dataset.i);
