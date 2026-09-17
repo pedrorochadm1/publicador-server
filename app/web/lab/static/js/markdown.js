@@ -40,7 +40,8 @@ function secaoDeLinks(rotulo, itens) {
 }
 
 export function cardParaMarkdown(card, opcoes = {}) {
-  const { incluirTipoFormato = true, marcarLacunas = false, incluirLinks = true } = opcoes;
+  const { incluirTipoFormato = true, marcarLacunas = false, incluirLinks = true,
+          incluirObservacoes = true } = opcoes;
   const linhas = ["*IDEIA CENTRAL*", card.titulo || "(sem título)"];
 
   if (incluirTipoFormato) {
@@ -75,6 +76,16 @@ export function cardParaMarkdown(card, opcoes = {}) {
   const fechamento = (card.fechamento || "").trim();
   if (fechamento || marcarLacunas) {
     linhas.push("", "*FECHAMENTO*", fechamento || LACUNA.fechamento);
+  }
+
+  // As observações vêm depois do roteiro, não antes: quem lê avalia o roteiro
+  // primeiro. Mas vêm antes dos links, porque são raciocínio do Pedro sobre a
+  // ideia — e é justamente o que uma IA precisa pra escrever o resto.
+  if (incluirObservacoes) {
+    const obs = (card.observacoes || [])
+      .map((o) => (typeof o === "string" ? o : o.texto || "").trim())
+      .filter(Boolean);
+    if (obs.length) linhas.push("", "*OBSERVAÇÕES*", ...obs.flatMap((o, i) => (i ? ["", o] : [o])));
   }
 
   // Material de apoio vai DEPOIS do roteiro e só quando existe: quem lê está

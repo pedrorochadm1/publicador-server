@@ -1,9 +1,9 @@
 /* Editor do card: tela cheia no celular, painel lateral no Mac.
 
    Uma rolagem só, na ordem em que o roteiro é pensado: título, tipo e formato,
-   hook, desenvolvimentos, fechamento, e no fim o material de apoio —
-   Referências (o embasamento) e Reação (vídeos que o Pedro vai reagir dentro do
-   vídeo dele).
+   hook, desenvolvimentos, fechamento, e no fim o que sustenta o roteiro —
+   Observações (o pensamento solto sobre a ideia), Referências (o embasamento) e
+   Reação (vídeos que o Pedro vai reagir dentro do vídeo dele).
 
    Não existe botão Salvar. Tudo é gravado por debounce de 600ms, e o status
    muda de coluna sozinho — quem decide isso é o servidor, que recalcula em toda
@@ -41,7 +41,8 @@ let folha = null;
 
 // Como a exportação está configurada. Vem da config do servidor, então a
 // escolha vale pra todos os cards e sincroniza entre o iPhone e o Mac.
-const PADRAO_EXPORT = { incluir_tipo_formato: true, incluir_links: true, marcar_lacunas: false };
+const PADRAO_EXPORT = { incluir_tipo_formato: true, incluir_observacoes: true,
+                        incluir_links: true, marcar_lacunas: false };
 let exp = { ...PADRAO_EXPORT };
 
 export function abrirEditor(cardInicial, callback, config = {}) {
@@ -63,6 +64,7 @@ export function abrirEditor(cardInicial, callback, config = {}) {
 function normalizar(c) {
   const copia = JSON.parse(JSON.stringify(c));
   copia.desenvolvimentos = copia.desenvolvimentos || [];
+  copia.observacoes = copia.observacoes || [];
   for (const k of Object.keys(LISTAS)) copia[k] = copia[k] || [];
   return copia;
 }
@@ -108,6 +110,14 @@ function desenhar() {
     ${rotulo("ed-fech", "FECHAMENTO")}
     <textarea id="ed-fech" class="ed-campo" rows="1" placeholder="como termina">${esc(card.fechamento)}</textarea>
 
+    <!-- Observações vêm antes das Referências: é o raciocínio do Pedro sobre a
+         própria ideia, e material de apoio é de fora pra dentro. -->
+    <section class="ed-secao">
+      <h3 class="ed-rot">Observações<span class="n" id="n-observacoes"></span></h3>
+      <div id="lista-observacoes"></div>
+      <button class="ed-add" id="ed-add-obs" type="button">+ escrever observação</button>
+    </section>
+
     ${["referencias", "reacoes"].map((k) => `
       <section class="ed-secao">
         <h3 class="ed-rot">${LISTAS[k].rotulo}<span class="n" id="n-${k}"></span></h3>
@@ -129,6 +139,7 @@ function desenhar() {
     <div class="ed-export">
       <span class="ed-rot">Exportar</span>
       ${caixa("op-meta", exp.incluir_tipo_formato, "Incluir tipo e formato")}
+      ${caixa("op-obs", exp.incluir_observacoes, "Incluir observações")}
       ${caixa("op-links", exp.incluir_links, "Incluir referências e reação")}
       ${caixa("op-lacunas", exp.marcar_lacunas, "Marcar o que está faltando")}
       <button class="bt sec" id="ed-md" type="button">Copiar markdown</button>
@@ -193,6 +204,12 @@ function ligar() {
     campos[campos.length - 1]?.focus();
   };
 
+  $("#ed-add-obs").onclick = () => {
+    card.observacoes = [...colherObservacoes(), { texto: "" }];
+    pintarObservacoes();
+    folha.querySelector("#lista-observacoes .obs-item:last-child textarea")?.focus();
+  };
+
   folha.querySelectorAll("[data-add]").forEach((b) => {
     b.onclick = () => {
       const k = b.dataset.add;
@@ -206,13 +223,14 @@ function ligar() {
   if (publicar) publicar.onclick = aoPublicar;
 
   $("#ed-md").onclick = aoCopiarMarkdown;
-  for (const id of ["#op-meta", "#op-links", "#op-lacunas"]) {
+  for (const id of ["#op-meta", "#op-obs", "#op-links", "#op-lacunas"]) {
     $(id).addEventListener("change", guardarExport);
   }
   $("#ed-dup").onclick = aoDuplicar;
   $("#ed-excluir").onclick = aoExcluir;
 
   pintarDesenvolvimentos();
+  pintarObservacoes();
   for (const k of Object.keys(LISTAS)) pintarLinks(k);
   pintarProgresso();
   reajustarTudo();
@@ -245,34 +263,14 @@ function pintarChipsMeta() {
   folha.querySelectorAll("#ed-tipo .op").forEach((b) => {
     b.onclick = () => {
       card.tipo = card.tipo === b.dataset.v ? null : b.dataset.v;
-      const chaveTela = $("#ed-tela-on");
-  chaveTela.addEventListener("change", () => {
-    // O texto é preservado ao desligar: religar devolve o que estava escrito.
-    card.tela_ativa = chaveTela.checked;
-    const campo = $("#ed-tela");
-    campo.hidden = !chaveTela.checked;
-    if (chaveTela.checked) { autoAltura(campo); campo.focus(); }
-    agendar(0);
-  });
-
-  pintarChipsMeta();
+      pintarChipsMeta();
       agendar(0);          // escolha explícita grava na hora, sem debounce
     };
   });
   folha.querySelectorAll("#ed-formato .op").forEach((b) => {
     b.onclick = () => {
       card.formato = card.formato === b.dataset.v ? null : b.dataset.v;
-      const chaveTela = $("#ed-tela-on");
-  chaveTela.addEventListener("change", () => {
-    // O texto é preservado ao desligar: religar devolve o que estava escrito.
-    card.tela_ativa = chaveTela.checked;
-    const campo = $("#ed-tela");
-    campo.hidden = !chaveTela.checked;
-    if (chaveTela.checked) { autoAltura(campo); campo.focus(); }
-    agendar(0);
-  });
-
-  pintarChipsMeta();
+      pintarChipsMeta();
       agendar(0);
     };
   });
@@ -321,6 +319,42 @@ function pintarDesenvolvimentos() {
   });
 }
 
+/* Observação é texto corrido: sem rótulo numerado e sem setas de ordem. O que
+   importa é despejar o raciocínio, não organizá-lo — organizar é o que os
+   desenvolvimentos fazem depois.
+
+   O id vai no DOM (e não pelo índice, como nas outras listas) porque uma
+   observação em branco não é gravada: a lista que volta do servidor pode ser
+   menor que a da tela, e aí o índice apontaria pra linha errada. */
+function pintarObservacoes() {
+  const lista = card.observacoes || [];
+  const alvo = $("#lista-observacoes");
+  alvo.innerHTML = lista.map((o, i) => `
+    <div class="obs-item" data-i="${i}" data-id="${o.id || ""}">
+      <div class="link-topo">
+        <span></span>
+        <button class="desen-bt" type="button" data-rm="1" aria-label="Remover">✕</button>
+      </div>
+      <textarea class="ed-campo obs-campo" rows="1"
+                placeholder="o que passou pela cabeça sobre essa ideia">${esc(o.texto || "")}</textarea>
+    </div>`).join("");
+
+  alvo.querySelectorAll(".obs-item").forEach((el) => {
+    const i = Number(el.dataset.i);
+    const ta = el.querySelector(".obs-campo");
+    autoAltura(ta);
+    ta.addEventListener("input", () => { autoAltura(ta); agendar(); });
+    el.querySelector("[data-rm]").onclick = () => {
+      const atual = colherObservacoes();
+      atual.splice(i, 1);
+      card.observacoes = atual;
+      pintarObservacoes();
+      agendar(0);
+    };
+  });
+  atualizarContadores();
+}
+
 function pintarLinks(k) {
   const cfg = LISTAS[k];
   const lista = card[k] || [];
@@ -336,7 +370,7 @@ function pintarLinks(k) {
       </div>
       <input type="url" class="url" inputmode="url" autocapitalize="off" autocorrect="off"
              placeholder="${cfg.placeholder}" value="${esc(l.url || "")}">
-      <input type="text" class="nota" placeholder="${cfg.nota}" value="${esc(l.nota || "")}">
+      <input type="text" class="link-nota" placeholder="${cfg.nota}" value="${esc(l.nota || "")}">
     </div>`).join("");
 
   alvo.querySelectorAll(".link-item").forEach((el) => {
@@ -354,11 +388,14 @@ function pintarLinks(k) {
 }
 
 function atualizarContadores() {
-  for (const k of Object.keys(LISTAS)) {
-    const n = (card[k] || []).filter((l) => (l.url || "").trim() || (l.nota || "").trim()).length;
+  const marcar = (k, n) => {
     const el = folha.querySelector(`#n-${k}`);
     if (el) { el.textContent = n || ""; el.style.display = n ? "" : "none"; }
+  };
+  for (const k of Object.keys(LISTAS)) {
+    marcar(k, (card[k] || []).filter((l) => (l.url || "").trim() || (l.nota || "").trim()).length);
   }
+  marcar("observacoes", colherObservacoes().filter((o) => o.texto.trim()).length);
 }
 
 function pintarProgresso() {
@@ -380,11 +417,18 @@ function colherDesenvolvimentos() {
   }));
 }
 
+function colherObservacoes() {
+  return [...folha.querySelectorAll("#lista-observacoes .obs-item")].map((el) => ({
+    id: Number(el.dataset.id) || undefined,
+    texto: el.querySelector(".obs-campo").value,
+  }));
+}
+
 function colherLinks(k) {
   return [...folha.querySelectorAll(`#lista-${k} .link-item`)].map((el) => ({
     id: (card[k][Number(el.dataset.i)] || {}).id,
     url: el.querySelector(".url").value,
-    nota: el.querySelector(".nota").value,
+    nota: el.querySelector(".link-nota").value,
   }));
 }
 
@@ -397,6 +441,7 @@ function coletar() {
     tela_ativa: $("#ed-tela-on").checked,
     fechamento: $("#ed-fech").value,
     desenvolvimentos: colherDesenvolvimentos(),
+    observacoes: colherObservacoes(),
   };
   for (const k of Object.keys(LISTAS)) saida[k] = colherLinks(k);
   return saida;
@@ -406,6 +451,7 @@ function opcoesMd() {
   return {
     incluirTipoFormato: $("#op-meta").checked,
     marcarLacunas: $("#op-lacunas").checked,
+    incluirObservacoes: $("#op-obs").checked,
     incluirLinks: $("#op-links").checked,
   };
 }
@@ -414,6 +460,7 @@ let timerExport = null;
 function guardarExport() {
   exp = {
     incluir_tipo_formato: $("#op-meta").checked,
+    incluir_observacoes: $("#op-obs").checked,
     incluir_links: $("#op-links").checked,
     marcar_lacunas: $("#op-lacunas").checked,
   };
@@ -446,6 +493,7 @@ async function salvarAgora() {
       tipo: dados.tipo,
       formato: dados.formato,
       desenvolvimentos: dados.desenvolvimentos,
+      observacoes: dados.observacoes,
       referencias: dados.referencias,
       reacoes: dados.reacoes,
     });
@@ -457,7 +505,15 @@ async function salvarAgora() {
       salvo[k].forEach((item, i) => { if (card[k][i]) card[k][i].id = item.id; });
       if (salvo[k].length !== card[k].length) card[k] = salvo[k];
     }
+    // As observações em branco não voltam do servidor, então o pareamento é
+    // por posição das que TÊM texto, e o id vai direto pro DOM — que é de onde
+    // a próxima coleta vai lê-lo.
+    const comTexto = [...folha.querySelectorAll("#lista-observacoes .obs-item")]
+      .filter((el) => el.querySelector(".obs-campo").value.trim());
+    salvo.observacoes.forEach((item, i) => { if (comTexto[i]) comTexto[i].dataset.id = item.id; });
+    card.observacoes = colherObservacoes();
     card = { ...salvo, desenvolvimentos: card.desenvolvimentos,
+             observacoes: card.observacoes,
              referencias: card.referencias, reacoes: card.reacoes };
     if (statusMudou) {
       const el = folha?.querySelector("#ed-status");

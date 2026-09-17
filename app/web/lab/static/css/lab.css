@@ -399,8 +399,8 @@
 .ponto.producao { background: var(--regua-amarelo); }
 .ponto.publicado { background: var(--acao); }
 
-/* Referências e Reação ficam no próprio card, no fim da rolagem: são material
-   de apoio do roteiro, não um assunto à parte. */
+/* Observações, Referências e Reação ficam no próprio card, no fim da rolagem:
+   sustentam o roteiro, não são um assunto à parte. */
 .ed-secao {
   display: flex; flex-direction: column; gap: 8px;
   margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--linha);
@@ -475,14 +475,36 @@
 .ed-export .ed-rot { margin-top: 0; }
 .ed-export .bt { margin-top: 3px; }
 
-/* Listas de links: Referências e Reação */
-.link-item {
+/* Listas de apoio: Observações, Referências e Reação. Mesma caixa, porque são
+   a mesma coisa pro olho: material que fica embaixo do roteiro. */
+.link-item, .obs-item {
   display: grid; gap: 7px; padding: 11px;
   background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio);
 }
+/* Os itens ficam dentro de um contêiner só, então o respiro entre eles não vem
+   do gap da seção: tem que ser aqui. */
+.link-item + .link-item, .obs-item + .obs-item { margin-top: 8px; }
+/* O campo da observação não tem caixa própria: a caixa já é o item. Sem isso
+   ficaria uma borda dentro da outra.
+
+   A fonte fica nos 16px herdados de propósito: abaixo disso o Safari do iOS
+   amplia a página ao focar, e é um campo de texto longo — seria o pior lugar
+   pra isso acontecer. A densidade vem do padding. */
+.obs-item .obs-campo {
+  background: transparent; border: 0; padding: 0 2px 2px; line-height: 1.55;
+}
+.obs-item .obs-campo:focus { background: transparent; }
+/* O ✕ fica sozinho na linha de cima (não há "abrir" como nos links), então ela
+   é encolhida: sem isso a observação começa um dedo abaixo da borda. */
+.obs-item .link-topo { margin: -3px 0 -8px; }
+.obs-item .desen-bt { width: 30px; height: 30px; }
 .link-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .link-item input { padding: 9px 12px; }
 .link-item input.url { color: var(--acao-txt); }
+/* A nota do link herda os 16px: era `.nota`, de 12px, e o Safari do iOS
+   ampliava a página toda ao focar nela. O que separa a nota da URL é a cor,
+   não o tamanho. */
+.link-item input.link-nota { color: var(--texto3); }
 .link-abrir {
   font-size: 12px; color: var(--texto2); text-decoration: none;
   border: 1px solid var(--linha); border-radius: var(--raio-p); padding: 5px 11px; white-space: nowrap;

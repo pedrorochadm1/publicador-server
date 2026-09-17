@@ -76,11 +76,23 @@ viraram a segunda aba dele.
 `sessoes.py` (sessão em SQLite — antes vivia em RAM e todo redeploy deslogava).
 
 **O card é uma rolagem só:** título, tipo e formato, hook, texto na tela,
-desenvolvimentos, fechamento e, no fim, Referências (o embasamento) e Reação
-(vídeos que o Pedro vai reagir dentro do vídeo dele). As duas listas de link
-ficam em `lab_links`, separadas pela coluna `lista`, e **não entram na derivação
-do status** — colar um link não move o card pra produção, porque link é material
-de apoio, não roteiro.
+desenvolvimentos, fechamento e, no fim, o que sustenta o roteiro: Observações
+(o Pedro discorrendo sobre a própria ideia), Referências (o embasamento) e
+Reação (vídeos que o Pedro vai reagir dentro do vídeo dele). As duas listas de
+link ficam em `lab_links`, separadas pela coluna `lista`; as observações ficam em
+`lab_observacoes`. Nenhuma das três **entra na derivação do status** — escrever
+observação ou colar link não move o card pra produção, porque nem o material de
+apoio nem o pensamento solto são roteiro.
+
+**Observação é o rascunho antes da estrutura.** Serve pra despejar a ideia
+inteira sem encaixá-la em hook/desenvolvimento/fechamento, então é texto
+corrido: sem rótulo numerado, sem setas de ordem, e gravada com os parágrafos
+exatamente como foram escritos (as outras listas recortam as pontas; aqui
+recortar mexeria no que está sendo digitado). Em branco não é gravada, e por isso
+o id de cada uma vive no DOM (`data-id`) e não no índice da lista — a lista que
+volta do servidor pode ser menor que a da tela. No markdown ela sai depois do
+roteiro e antes dos links, com chave própria no bloco Exportar: é o que uma IA
+precisa ler pra escrever o resto.
 
 **Cada coluna se ordena pela pergunta que ela responde.** *Ideia* é caixa de
 entrada: a última capturada em cima. Inverter faria a ideia recém escrita nascer
@@ -90,7 +102,7 @@ pilha de trabalho: em cima o que foi editado por último, porque é nele que o
 Pedro volta a mexer. *Publicado* é histórico: mais recente em cima.
 
 Como Produção depende de `atualizado_em`, **mexer só nos filhos** (um
-desenvolvimento, um link) também bumpa esse campo. Sem isso, o card em que ele
+desenvolvimento, uma observação, um link) também bumpa esse campo. Sem isso, o card em que ele
 acabou de trabalhar ficaria parado no meio da pilha.
 
 O **texto na tela** tem uma chave própria (`tela_ativa`). Desligada, a seção nem

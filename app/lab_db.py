@@ -77,6 +77,21 @@ def _init():
         """
     )
     c.execute("CREATE INDEX IF NOT EXISTS ix_lab_desen_card ON lab_desenvolvimentos (card_id, ordem)")
+    # Observações: o pensamento solto sobre a ideia, ANTES de virar roteiro.
+    # Tabela própria (e não uma coluna de texto) porque cada observação é uma
+    # volta ao card em outro dia. Como os links, NÃO derivam status: escrever o
+    # que passou pela cabeça não é começar a produzir.
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lab_observacoes (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            card_id INTEGER NOT NULL,
+            ordem   INTEGER NOT NULL DEFAULT 0,
+            texto   TEXT    NOT NULL DEFAULT ''
+        )
+        """
+    )
+    c.execute("CREATE INDEX IF NOT EXISTS ix_lab_obs_card ON lab_observacoes (card_id, ordem)")
     # Links do card, em duas listas:
     #   'referencia' = o embasamento (estudo, post, matéria)
     #   'reacao'     = vídeos que o Pedro vai reagir DENTRO do vídeo dele
@@ -153,10 +168,12 @@ def _linha(r, filhos=True) -> dict:
     d["tela_ativa"] = bool(d.get("tela_ativa"))
     if filhos:
         d["desenvolvimentos"] = _desen_do_card(d["id"])
+        d["observacoes"] = _obs_do_card(d["id"])
         for campo, lista in LISTAS_LINK.items():
             d[campo] = _links_do_card(d["id"], lista)
     else:
         d["desenvolvimentos"] = []
+        d["observacoes"] = []
         for campo in LISTAS_LINK:
             d[campo] = []
     return d
@@ -165,6 +182,14 @@ def _linha(r, filhos=True) -> dict:
 def _desen_do_card(card_id: int) -> list[dict]:
     rows = conn().execute(
         "SELECT id, ordem, texto FROM lab_desenvolvimentos WHERE card_id = ? ORDER BY ordem, id",
+        (card_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _obs_do_card(card_id: int) -> list[dict]:
+    rows = conn().execute(
+        "SELECT id, ordem, texto FROM lab_observacoes WHERE card_id = ? ORDER BY ordem, id",
         (card_id,),
     ).fetchall()
     return [dict(r) for r in rows]
@@ -185,7 +210,7 @@ def get_card(card_id: int) -> dict | None:
 
 
 def listar_cards(publicados_desde: str | None = None) -> list[dict]:
-    """Todos os cards com seus filhos, em três queries (sem N+1)."""
+    """Todos os cards com seus filhos, em quatro queries (sem N+1)."""
     _init()
     c = conn()
     # A coluna `arquivado` continua no schema, mas nada a liga: excluir agora
@@ -202,7 +227,7 @@ def listar_cards(publicados_desde: str | None = None) -> list[dict]:
     cards = [_linha(r, filhos=False) for r in c.execute(sql, params).fetchall()]
     if not cards:
         return []
-    # Os filhos vêm em duas queries, não uma por card (evita N+1 no board).
+    # Os filhos vêm em três queries, não uma por card (evita N+1 no board).
     por_id = {c_["id"]: c_ for c_ in cards}
     for r in c.execute(
         "SELECT id, card_id, ordem, texto FROM lab_desenvolvimentos ORDER BY ordem, id"
@@ -210,6 +235,12 @@ def listar_cards(publicados_desde: str | None = None) -> list[dict]:
         alvo = por_id.get(r["card_id"])
         if alvo is not None:
             alvo["desenvolvimentos"].append({"id": r["id"], "ordem": r["ordem"], "texto": r["texto"]})
+    for r in c.execute(
+        "SELECT id, card_id, ordem, texto FROM lab_observacoes ORDER BY ordem, id"
+    ).fetchall():
+        alvo = por_id.get(r["card_id"])
+        if alvo is not None:
+            alvo["observacoes"].append({"id": r["id"], "ordem": r["ordem"], "texto": r["texto"]})
     invertido = {v: k for k, v in LISTAS_LINK.items()}
     for r in c.execute(
         "SELECT id, card_id, lista, ordem, url, nota FROM lab_links ORDER BY ordem, id"
@@ -287,6 +318,21 @@ def _sincronizar_desenvolvimentos(c, card_id: int, itens: list) -> None:
     )
 
 
+def _sincronizar_observacoes(c, card_id: int, itens: list) -> None:
+    normalizados = [{"texto": i} if isinstance(i, str) else i for i in itens]
+    # Observação em branco é linha esquecida na tela, não pensamento: não grava.
+    # (Diferente do desenvolvimento, que é estrutura do roteiro e pode ficar
+    # vazio esperando ser preenchido.)
+    normalizados = [i for i in normalizados if str(i.get("texto") or "").strip()]
+    # O texto é gravado como veio: observação tem parágrafo, e recortar as
+    # pontas mexeria no que o Pedro está escrevendo no meio da digitação.
+    _sincronizar(
+        c, "lab_observacoes", card_id, "", [], normalizados,
+        ["ordem", "texto"],
+        lambda item, i: (i, str(item.get("texto") or "")),
+    )
+
+
 def _sincronizar_links(c, card_id: int, lista: str, itens: list) -> None:
     normalizados = [{"url": i} if isinstance(i, str) else i for i in itens]
     # Link sem URL nenhuma é linha vazia esquecida na tela: não vale gravar.
@@ -347,6 +393,9 @@ def atualizar_card(card_id: int, dados: dict) -> dict | None:
     mexeu_em_filho = False
     if "desenvolvimentos" in dados:
         _sincronizar_desenvolvimentos(c, card_id, dados["desenvolvimentos"] or [])
+        mexeu_em_filho = True
+    if "observacoes" in dados:
+        _sincronizar_observacoes(c, card_id, dados["observacoes"] or [])
         mexeu_em_filho = True
     for campo, lista in LISTAS_LINK.items():
         if campo in dados:
@@ -427,6 +476,7 @@ def duplicar_card(card_id: int) -> dict | None:
         "fechamento": orig["fechamento"],
         "tags": orig["tags"],
         "desenvolvimentos": [{"texto": d["texto"]} for d in orig["desenvolvimentos"]],
+        "observacoes": [{"texto": o["texto"]} for o in orig["observacoes"]],
     }
     for campo in LISTAS_LINK:
         dados[campo] = [{"url": l["url"], "nota": l["nota"]} for l in orig[campo]]
@@ -445,6 +495,7 @@ def remover_card(card_id: int) -> bool:
         return False
     c = conn()
     c.execute("DELETE FROM lab_desenvolvimentos WHERE card_id = ?", (card_id,))
+    c.execute("DELETE FROM lab_observacoes WHERE card_id = ?", (card_id,))
     c.execute("DELETE FROM lab_links WHERE card_id = ?", (card_id,))
     c.execute("DELETE FROM lab_publicacoes WHERE card_id = ?", (card_id,))
     c.execute("DELETE FROM lab_cards WHERE id = ?", (card_id,))
@@ -531,7 +582,8 @@ PADRAO_CONFIG = {
     "autofoco": True,
     "meta_semanal": lc.META_SEMANAL_PADRAO,
     "filtros": {"tipo": [], "formato": []},
-    "export": {"incluir_tipo_formato": True, "incluir_links": True, "marcar_lacunas": False},
+    "export": {"incluir_tipo_formato": True, "incluir_observacoes": True,
+               "incluir_links": True, "marcar_lacunas": False},
     # Formatos são editáveis pelo Pedro nos Ajustes. Valem pra conteúdo e pra
     # anúncio. O TIPO não entra aqui: a régua depende dele e é fixo.
     "formatos": [

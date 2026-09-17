@@ -227,4 +227,48 @@ teste("só uma das listas preenchida traz só a seção dela", () => {
   assert.ok(md.includes("*REAGIR A*"));
 });
 
+/* ─── Observações ─── */
+
+const comObs = {
+  ...card,
+  observacoes: [
+    { texto: "Vi na consulta de ontem: o cara conta pelo rótulo e ignora a porção." },
+    { texto: "Talvez virasse dois vídeos, um só sobre rótulo." },
+  ],
+};
+
+teste("observações saem depois do roteiro e antes dos links", () => {
+  const md = cardParaMarkdown({ ...comObs, referencias: [{ url: "https://a.com" }] });
+  assert.ok(md.indexOf("*FECHAMENTO*") < md.indexOf("*OBSERVAÇÕES*"));
+  assert.ok(md.indexOf("*OBSERVAÇÕES*") < md.indexOf("*REFERÊNCIAS*"));
+});
+
+teste("cada observação é um parágrafo, sem bullet", () => {
+  const md = cardParaMarkdown(comObs);
+  assert.ok(md.includes("ignora a porção.\n\nTalvez virasse dois vídeos"),
+            "observações consecutivas ficam separadas por linha em branco");
+  assert.ok(!md.includes("- Vi na consulta"), "observação não é lista");
+});
+
+teste("dá pra exportar sem as observações", () => {
+  const md = cardParaMarkdown(comObs, { incluirObservacoes: false });
+  assert.ok(!md.includes("OBSERVAÇÕES"));
+  assert.ok(!md.includes("consulta de ontem"));
+  assert.ok(md.includes("*HOOK*"), "o roteiro continua inteiro");
+});
+
+teste("observação em branco não gera seção", () => {
+  const md = cardParaMarkdown({ ...card, observacoes: [{ texto: "   " }] });
+  assert.ok(!md.includes("OBSERVAÇÕES"));
+});
+
+teste("card só com observação vira markdown sem roteiro", () => {
+  const md = cardParaMarkdown(
+    { titulo: "ideia crua", observacoes: [{ texto: "ainda não sei o ângulo" }] },
+    { incluirTipoFormato: false });
+  assert.ok(md.includes("*OBSERVAÇÕES*"));
+  assert.ok(md.includes("ainda não sei o ângulo"));
+  assert.ok(!md.includes("*HOOK*"));
+});
+
 console.log(`${passou} testes de markdown passaram`);

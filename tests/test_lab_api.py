@@ -417,6 +417,99 @@ def test_mexer_so_nos_filhos_marca_o_card_como_editado(cliente):
         "referencias": [{"url": "https://a.com"}]}).json()
     assert so_link["atualizado_em"] > depois["atualizado_em"]
 
+    so_obs = cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "observacoes": [{"texto": "pensei nisso hoje"}]}).json()
+    assert so_obs["atualizado_em"] > so_link["atualizado_em"]
+
+
+# ─────────────────────────── Observações ───────────────────────────
+
+def test_card_nasce_sem_observacao(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    assert card["observacoes"] == []
+
+
+def test_observacoes_salvam_e_voltam_na_ordem(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={"observacoes": [
+        {"texto": "primeira"}, {"texto": "segunda"},
+    ]}).json()
+    assert [o["texto"] for o in r["observacoes"]] == ["primeira", "segunda"]
+
+
+def test_observacao_sozinha_nao_move_o_card_pra_producao(cliente):
+    """Discorrer sobre a ideia não é escrever roteiro. O card continua ideia."""
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={
+        "observacoes": [{"texto": "ainda não sei o ângulo, mas o caso da consulta serve"}],
+    }).json()
+    assert r["status"] == "ideia"
+
+
+def test_observacao_em_branco_nao_e_gravada(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    r = cliente.patch(f"/lab/api/cards/{card['id']}", json={"observacoes": [
+        {"texto": "vale"}, {"texto": ""}, {"texto": "   "},
+    ]}).json()
+    assert len(r["observacoes"]) == 1
+
+
+def test_observacao_guarda_os_paragrafos_como_foram_escritos(cliente):
+    """Observação é texto corrido: recortar as pontas mexeria no que o Pedro
+    está escrevendo no meio da digitação."""
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    texto = "primeiro parágrafo\n\nsegundo parágrafo\n"
+    r = cliente.patch(f"/lab/api/cards/{card['id']}",
+                      json={"observacoes": [{"texto": texto}]}).json()
+    assert r["observacoes"][0]["texto"] == texto
+
+
+def test_mexer_nas_observacoes_nao_apaga_os_links(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cid = card["id"]
+    cliente.patch(f"/lab/api/cards/{cid}", json={
+        "referencias": [{"url": "https://a.com"}],
+        "desenvolvimentos": [{"texto": "um ponto"}]})
+    r = cliente.patch(f"/lab/api/cards/{cid}", json={"observacoes": [{"texto": "x"}]}).json()
+    assert len(r["referencias"]) == 1
+    assert len(r["desenvolvimentos"]) == 1
+
+
+def test_ids_das_observacoes_sao_estaveis_entre_salvamentos(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cid = card["id"]
+    r1 = cliente.patch(f"/lab/api/cards/{cid}",
+                       json={"observacoes": [{"texto": "rascunho"}]}).json()
+    oid = r1["observacoes"][0]["id"]
+    r2 = cliente.patch(f"/lab/api/cards/{cid}", json={
+        "observacoes": [{"id": oid, "texto": "rascunho maior"}]}).json()
+    assert r2["observacoes"][0]["id"] == oid
+    assert r2["observacoes"][0]["texto"] == "rascunho maior"
+
+
+def test_duplicar_leva_as_observacoes(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cliente.patch(f"/lab/api/cards/{card['id']}",
+                  json={"observacoes": [{"texto": "o caso da consulta"}]})
+    copia = cliente.post(f"/lab/api/cards/{card['id']}/duplicar").json()
+    assert copia["observacoes"][0]["texto"] == "o caso da consulta"
+    assert copia["status"] == "ideia", "copiar observação não começa produção"
+
+
+def test_observacoes_vem_na_listagem_do_board(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cliente.patch(f"/lab/api/cards/{card['id']}", json={"observacoes": [{"texto": "x"}]})
+    lista = cliente.get("/lab/api/estado").json()["cards"]
+    assert len(lista[0]["observacoes"]) == 1, "o board mostra a marca de observação"
+
+
+def test_excluir_card_leva_as_observacoes_junto(cliente):
+    card = cliente.post("/lab/api/cards", json={"titulo": "a"}).json()
+    cliente.patch(f"/lab/api/cards/{card['id']}", json={"observacoes": [{"texto": "x"}]})
+    assert cliente.delete(f"/lab/api/cards/{card['id']}").status_code == 200
+    novo = cliente.post("/lab/api/cards", json={"titulo": "b"}).json()
+    assert novo["observacoes"] == [], "observação órfã não pode reaparecer em outro card"
+
 
 # ─────────────────────────── Régua e onboarding ───────────────────────────
 

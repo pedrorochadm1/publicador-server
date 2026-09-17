@@ -146,7 +146,7 @@ async function capturar(campo, bloco) {
   const provisorio = {
     id: "tmp-" + item.client_uuid, client_uuid: item.client_uuid, titulo,
     status: "ideia", tipo, formato, hook: "", titulo_tela: "", tela_ativa: false, fechamento: "",
-    desenvolvimentos: [], referencias: [], reacoes: [], tags: [],
+    desenvolvimentos: [], observacoes: [], referencias: [], reacoes: [], tags: [],
     provisorio: true, criado_em: item.em,
   };
   cards = [provisorio, ...cards];
@@ -237,6 +237,7 @@ function passaNoFiltro(c) {
     const alvo = [
       c.titulo, c.hook, c.tela_ativa ? c.titulo_tela : "", c.fechamento,
       ...(c.desenvolvimentos || []).map((d) => d.texto),
+      ...(c.observacoes || []).map((o) => o.texto),
       ...(c.referencias || []).map((l) => `${l.url} ${l.nota}`),
       ...(c.reacoes || []).map((l) => `${l.url} ${l.nota}`),
       ...(c.tags || []),
@@ -407,11 +408,15 @@ function barraProgresso(c) {
   const temFech = !!(c.fechamento || "").trim();
   const n = (c.desenvolvimentos || []).filter((d) => (d.texto || "").trim()).length;
   const links = (c.referencias || []).length + (c.reacoes || []).length;
-  if (!temHook && !temFech && !n && !links) return "";
+  // A observação aparece com marca própria: um card que só tem observação está
+  // pensado, não anexado, e é isso que o Pedro precisa ver na coluna Ideia.
+  const obs = (c.observacoes || []).filter((o) => (o.texto || "").trim()).length;
+  if (!temHook && !temFech && !n && !links && !obs) return "";
   return `<div class="prog">
       <span class="${temHook ? "ok" : ""}">hook</span>
       <span class="${n ? "ok" : ""}">${n} desenv.</span>
       <span class="${temFech ? "ok" : ""}">fecho</span>
+      ${obs ? `<span class="anexos">📝 ${obs}</span>` : ""}
       ${links ? `<span class="anexos">🔗 ${links}</span>` : ""}
     </div>`;
 }
@@ -486,6 +491,7 @@ async function excluirSelecionados() {
 function opcoesExport() {
   return {
     incluirTipoFormato: config.export?.incluir_tipo_formato !== false,
+    incluirObservacoes: config.export?.incluir_observacoes !== false,
     incluirLinks: config.export?.incluir_links !== false,
     marcarLacunas: !!config.export?.marcar_lacunas,
   };
