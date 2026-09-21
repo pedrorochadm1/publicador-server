@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "25"
+LAB_VERSAO = "27"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")
@@ -314,3 +314,7 @@ def api_config(insta_sess: str | None = Cookie(default=None)):
 def api_config_salvar(dados: dict = Body(...), insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
     return lab_db.set_config(dados)
+
+
+from .lab_hook import router as hook_router
+router.include_router(hook_router)

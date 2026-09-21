@@ -608,3 +608,11 @@
 .sw-p input[type=checkbox] { width: 36px; height: 21px; }
 .sw-p input[type=checkbox]::after { width: 17px; height: 17px; }
 .sw-p input[type=checkbox]:checked::after { left: 17px; }
+
+
+.ed-ia { margin: 12px 0 24px; }
+.ed-ia-sugestao { margin-top: 12px; padding: 16px; border: 1px solid #dce4f0; border-radius: 12px; background: #f5f8ff; overflow-wrap: anywhere; }
+.ed-ia-sugestao h3 { margin: 12px 0 6px; font-size: 12px; letter-spacing: .06em; color: #51637c; }
+.ed-ia-sugestao h3:first-child { margin-top: 0; }
+.ed-ia-sugestao p { margin: 0 0 16px; font-size: 17px; line-height: 1.45; white-space: pre-wrap; }
+.ed-ia-sugestao small { color: #65758b; line-height: 1.4; }

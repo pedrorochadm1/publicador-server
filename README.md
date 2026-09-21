@@ -183,3 +183,18 @@ O motor da régua é a parte com mais chance de erro sutil (cinco zonas, limites
 inclusivos, arredondamento). A tabela dourada em `tests/test_lab_calculo.py`
 cobre cada fronteira — inclusive o caso do `round()` do Python, que faz
 bankers' rounding e devolveria 22 para 22.5.
+
+## Sugestão de abertura com IA
+
+No editor de cada card, **Sugerir hook e texto na tela** envia o markdown completo
+da edição atual (incluindo observações, formato e referências) e apresenta apenas
+um hook falado e um texto curto de tela. Não salva nem altera os campos do card.
+Links são contexto textual; o sistema não assiste vídeos externos.
+
+A rota autenticada é `POST /lab/api/cards/{id}/sugerir-abertura`, com
+`{"markdown": "..."}`. Usa `OPENAI_API_KEY` já existente e, opcionalmente,
+`LAB_HOOK_MODEL` (padrão `gpt-5.4`). A chamada é sob demanda, sem coleta do
+Instagram ou banco de memória. Saída estruturada pela Responses API com `store=False`.
+Documentação: https://developers.openai.com/api/docs/guides/structured-outputs
+
+Verificação: `python -m pytest -q tests/test_lab_hook.py tests/test_lab_api.py tests/test_lab_calculo.py`.

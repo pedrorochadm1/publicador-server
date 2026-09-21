@@ -91,6 +91,10 @@ function desenhar() {
     </div>
 
     <div class="ed-prog" id="ed-prog"></div>
+    <section class="ed-ia">
+      <button class="bt sec" id="ed-ia-botao" type="button">Sugerir hook e texto na tela</button>
+      <div id="ed-ia-resposta" role="status" aria-live="polite"></div>
+    </section>
 
     ${rotulo("ed-hook", "HOOK")}
     <textarea id="ed-hook" class="ed-campo" rows="1" placeholder="os primeiros segundos">${esc(card.hook)}</textarea>
@@ -222,6 +226,7 @@ function ligar() {
   const publicar = $("#ed-publicar");
   if (publicar) publicar.onclick = aoPublicar;
 
+  $("#ed-ia-botao").onclick = aoSugerirAbertura;
   $("#ed-md").onclick = aoCopiarMarkdown;
   for (const id of ["#op-meta", "#op-obs", "#op-links", "#op-lacunas"]) {
     $(id).addEventListener("change", guardarExport);
@@ -630,4 +635,35 @@ async function aoExcluir() {
     fecharPainel();
     aviso("Excluído.");
   } catch (e) { aviso("Não deu pra excluir."); }
+}
+
+
+async function aoSugerirAbertura() {
+  const atual = coletar();
+  const bt = $("#ed-ia-botao");
+  const resposta = $("#ed-ia-resposta");
+  if (!atual.titulo.trim()) { resposta.textContent = "Escreva a ideia central primeiro."; return; }
+  // Usa a edição atual da tela, inclusive o que ainda aguarda autosave.
+  const markdown = cardParaMarkdown(atual, {
+    incluirTipoFormato: true, marcarLacunas: true,
+    incluirObservacoes: true, incluirLinks: true,
+  });
+  bt.disabled = true;
+  bt.textContent = "Pensando na abertura…";
+  resposta.textContent = "";
+  try {
+    const r = await post(`/lab/api/cards/${atual.id}/sugerir-abertura`, { markdown });
+    if (!resposta.isConnected) return;
+    resposta.innerHTML = `<div class="ed-ia-sugestao">
+      <h3>HOOK FALADO</h3><p>${esc(r.hook)}</p>
+      <h3>TEXTO NA TELA</h3><p>${esc(r.texto_tela)}</p>
+      <small>Sugestão baseada no markdown enviado. Seu roteiro continua como estava.</small></div>`;
+  } catch(e) {
+    if (resposta.isConnected) resposta.textContent = e instanceof SemRede
+      ? "Sem conexão. Tente novamente quando a rede voltar."
+      : (typeof e.corpo === "string" ? e.corpo : "Não consegui gerar agora. Tente novamente.");
+  } finally {
+    bt.disabled = false;
+    bt.textContent = "Sugerir hook e texto na tela";
+  }
 }
