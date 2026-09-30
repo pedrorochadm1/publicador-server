@@ -35,6 +35,7 @@ Todo mundo erra a contagem de carboidrato
 *HOOK*
 Você conta carboidrato errado e nem sabe.
 
+*DESENVOLVIMENTO*
 A conta de olho erra por 30% pra mais ou pra menos.
 
 Quem pesa a comida por duas semanas calibra o olho.
@@ -53,15 +54,22 @@ teste("negrito é sempre um asterisco só", () => {
   assert.ok(!md.includes("#"), "cabeçalho de markdown apareceria cru no WhatsApp");
 });
 
-teste("desenvolvimentos não têm rótulo nem numeração", () => {
+teste("desenvolvimentos têm um rótulo só, sem numeração", () => {
   const md = cardParaMarkdown(card);
-  assert.ok(!md.includes("DESENVOLVIMENTO"), "não pode rotular desenvolvimento");
+  assert.equal((md.match(/DESENVOLVIMENTO/g) || []).length, 1, "um rótulo pra todos");
+  assert.ok(!/DESENVOLVIMENTO\s*\d/.test(md), "não pode numerar desenvolvimento");
   assert.ok(!/^\s*\d\./m.test(md), "não pode numerar desenvolvimento");
 });
 
-teste("hook e fechamento são rotulados", () => {
+teste("sem desenvolvimento, o rótulo não aparece", () => {
+  const md = cardParaMarkdown({ ...card, desenvolvimentos: [{ texto: "  " }] });
+  assert.ok(!md.includes("DESENVOLVIMENTO"));
+});
+
+teste("hook, desenvolvimento e fechamento são rotulados", () => {
   const md = cardParaMarkdown(card);
   assert.ok(md.includes("*HOOK*"));
+  assert.ok(md.includes("*DESENVOLVIMENTO*\nA conta de olho"));
   assert.ok(md.includes("*FECHAMENTO*"));
 });
 

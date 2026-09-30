@@ -6,10 +6,10 @@
    o título não usa cabeçalho de markdown: um "#" apareceria cru na conversa.
 
    Duas regras que definem o formato:
-   - Hook e fechamento SÃO rotulados: são os dois momentos que o estrategista
-     avalia isoladamente.
-   - Os desenvolvimentos NÃO têm rótulo nem numeração. Saem como parágrafos
-     consecutivos, na ordem do card. É como o roteiro soa quando falado.
+   - Toda seção do roteiro é rotulada (hook, texto na tela, desenvolvimento,
+     fechamento), pra quem lê saber onde cada parte começa.
+   - Os desenvolvimentos ganham UM rótulo só, sem numeração. Cada um sai como
+     um parágrafo, na ordem do card. É como o roteiro soa quando falado.
 
    Roda no cliente porque precisa funcionar offline, e porque a escrita no
    clipboard tem que acontecer de forma síncrona dentro do gesto do usuário. */
@@ -68,9 +68,9 @@ export function cardParaMarkdown(card, opcoes = {}) {
     .map((d) => (typeof d === "string" ? d : d.texto || "").trim())
     .filter(Boolean);
   if (desen.length) {
-    for (const d of desen) linhas.push("", d);
+    linhas.push("", "*DESENVOLVIMENTO*", ...desen.flatMap((d, i) => (i ? ["", d] : [d])));
   } else if (marcarLacunas) {
-    linhas.push("", LACUNA.desenvolvimento);
+    linhas.push("", "*DESENVOLVIMENTO*", LACUNA.desenvolvimento);
   }
 
   const fechamento = (card.fechamento || "").trim();
