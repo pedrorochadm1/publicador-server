@@ -131,13 +131,20 @@ devolve a estratégia (playbook, TOFU/BOFU, categoria de hook), a intenção de 
 slide e duas capas alternativas — tudo isso vive na coluna `ia` e aparece no
 editor, onde trocar a capa devolve a antiga para a lista.
 
-Onde o playbook brigou com as regras do repositório de conteúdo, **as regras do
-Pedro ganharam**: o guia manda de 5 a 10 hashtags e aqui vai zero, porque
-`tom-de-voz.md` marca hashtag como proibida; a legenda continua sendo uma linha
-com uma pergunta, e o CTA mora no último slide. Hashtag tem rede dupla: o prompt
+Onde o playbook briga com as regras do repositório de conteúdo, **o guia ganha na
+estrutura e o Pedro ganha na voz** (foi a escolha dele, em 2026-10-06). Por isso a
+capa tem de 3 a 7 palavras e o último slide pede UMA ação só, que são regras do
+guia; e por isso a legenda continua sendo uma linha com uma pergunta e **sem
+hashtag nenhuma**, que são regras dele e valem mesmo contra o guia, que manda
+usar de 5 a 10. Hashtag tem rede dupla: o prompt
 proíbe e `_sem_hashtag()` remove o que escapar, porque esse é o erro mais
 provável de um modelo que leu aquele guia. Os dois contratos têm teste próprio —
 um para as regras de voz, outro para as peças de estrutura.
+
+E o editor peneira de novo antes de publicar: `avisosVoz()` aponta capa acima de
+7 palavras, último slide pedindo duas ações, legenda acima de 12 palavras,
+travessão, hashtag e "Arrasta". Ela existe porque o prompt pede, mas não garante;
+o aviso aparece no modal de publicação, onde ainda dá pra consertar.
 
 Publicar cai no mesmo caminho de qualquer post: `db.criar_post` com a legenda
 idêntica no Instagram e no TikTok (modo foto, via Buffer). Acima de

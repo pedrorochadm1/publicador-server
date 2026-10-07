@@ -729,6 +729,9 @@ function acaoSlide(acao) {
 
 /* Avisos das regras de voz que dá pra checar sem IA. Não bloqueiam: o Pedro
    decide. Mas aparecem antes de publicar, que é quando ainda dá pra mexer. */
+/** Palavras de verdade, pra contar capa e legenda sem contar pontuação solta. */
+const palavras = (t) => (t.trim().match(/[^\s]+/g) || []).length;
+
 export function avisosVoz(d) {
   const out = [];
   d.slides.forEach((s, i) => {
@@ -737,12 +740,29 @@ export function avisosVoz(d) {
     if (/#\w/.test(t)) out.push(`Slide ${i + 1} tem hashtag.`);
     if (/\barrast[ae]\b/i.test(t)) out.push(`Slide ${i + 1} tem "Arrasta". Antecipe o próximo slide em vez disso.`);
   });
+
+  // A capa é lida em tamanho de miniatura: passando de 7 palavras, ninguém lê
+  // antes de rolar. O guia trata isso como a regra que mais custa caro.
+  const capa = (d.slides[0]?.texto || "").trim();
+  if (capa && palavras(capa) > 7) {
+    out.push(`Capa com ${palavras(capa)} palavras. O ideal são 3 a 7: o resto vai pro slide 2.`);
+  }
+
+  // UMA ação no último slide. Pedir salvar E comentar divide a pessoa.
+  const fim = (d.slides[d.slides.length - 1]?.texto || "").toLowerCase();
+  const acoes = ["salva", "comenta", "marca alguém", "compartilha"]
+    .filter((a) => fim.includes(a));
+  if (acoes.length > 1) {
+    out.push(`O último slide pede ${acoes.length} ações. Peça só uma.`);
+  }
+
   const leg = d.legenda.trim();
   if (!leg) out.push("Falta a legenda.");
   else {
     if (/#\w/.test(leg)) out.push("Legenda com hashtag.");
     if (leg.includes("—")) out.push("Legenda com travessão.");
     if (leg.includes("\n")) out.push("Legenda com mais de uma linha.");
+    if (palavras(leg) > 12) out.push(`Legenda com ${palavras(leg)} palavras. Corte pra até 12.`);
     const q = (leg.match(/\?/g) || []).length;
     if (q === 0) out.push("Legenda sem pergunta.");
     if (q > 1) out.push("Legenda com mais de uma pergunta.");

@@ -91,9 +91,14 @@ Escolha a categoria do hook: Desafio, Erro, Lista, História, Gatilho de
 Curiosidade ou Autoridade. Prefira "Como eu" a "Como fazer" sempre que a fonte
 der credibilidade pra isso.
 
-SLIDE 1, A CAPA. De 3 a 7 palavras. Um foco só, sem chance de entender errado.
-Fala com uma dor, um desejo ou uma identidade. Escreva três capas possíveis,
-use a mais forte no slide 1 e devolva as outras duas em capas_alternativas.
+SLIDE 1, A CAPA. De 3 a 7 PALAVRAS, e nada mais. Uma linha só: sem segundo
+parágrafo, sem explicação, sem negrito, sem pergunta. É o texto que precisa ser
+lido em um segundo no tamanho de miniatura, então conte as palavras antes de
+responder e corte até caber. Um foco só, sem chance de entender errado, falando
+com uma dor, um desejo ou uma identidade. O que sobrou de explicação vai pro
+slide 2, que é onde ela deve estar. Escreva três capas possíveis, use a mais
+forte no slide 1 e devolva as outras duas, também de 3 a 7 palavras, em
+capas_alternativas.
 
 SLIDE 2, A SEGUNDA CHANCE. O Instagram remostra o slide 2 pra quem pulou o 1,
 então ele precisa se sustentar sozinho e ainda puxar o próximo swipe. Não repita
@@ -106,21 +111,24 @@ aqui o conteúdo mais denso. Não guarde o melhor pro fim.
 
 SLIDES DO MEIO. Uma ideia por slide, sem acumular. Cada um precisa passar no
 teste do print: faz sentido sem contexto, entrega valor sozinho, e alguém
-compartilharia só ele no story. Se não passa, divida em dois.
+compartilharia só ele no story. Se não passa, divida em dois. Pode fechar um
+slide do meio com uma deixa curta que antecipa o próximo ("o sinal da madrugada
+→"), nunca com um "Arrasta →" genérico.
 
 PENÚLTIMO SLIDE, O PAYOFF. O momento em que a pessoa pensa "caraca". É ele que
 gera compartilhamento.
 
-ÚLTIMO SLIDE, O CTA. Uma ação só, específica, e uma linha de recompensa pra quem
-chegou até o fim. Pode pedir pra salvar, comentar, marcar alguém. Nunca mande
-ninguém para os stories.
+ÚLTIMO SLIDE, O CTA. UMA ação só, nunca duas. Escolha entre salvar, comentar ou
+marcar alguém, e peça só aquela. Pedir salvar E comentar divide a pessoa e ela
+não faz nenhuma das duas. Junto, uma linha de recompensa pra quem chegou até o
+fim. Nunca mande ninguém para os stories.
 
 ════════ VOZ ════════
 
 Isto não é negociável e vale mais que qualquer regra de estrutura acima.
 
 - Cada frase é um parágrafo próprio, com linha em branco entre todas. Nunca
-  agrupe frases no mesmo parágrafo.
+  agrupe frases no mesmo parágrafo. A capa é a exceção: ela é uma linha só.
 - A primeira linha de cada slide é um fato ou uma provocação direta, sem
   introdução. Pode ter duas ou três palavras.
 - Negrito com **asteriscos**, só na frase central do argumento. No máximo dois
@@ -134,8 +142,10 @@ Isto não é negociável e vale mais que qualquer regra de estrutura acima.
 - Especificidade gera confiança: nomeie o aparelho, a insulina, o exame, o prazo,
   quando a fonte trouxer. Nunca invente nenhum deles.
 
-LEGENDA: uma linha só, uma pergunta direta que convide comentário. Não repete
-nenhuma frase dos slides. SEM HASHTAG, em nenhuma hipótese.
+LEGENDA: uma linha só, uma pergunta direta que convide comentário, no máximo 12
+palavras. Curta vence: "Já aconteceu com você?" é melhor que a mesma pergunta com
+três condições dentro. Não repete nenhuma frase nem nenhuma ideia dos slides, o
+slide já fez esse trabalho. SEM HASHTAG, em nenhuma hipótese.
 
 TÍTULO: três a seis palavras, só pra ele achar o carrossel na lista. Não aparece
 no post.
