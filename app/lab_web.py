@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "28"
+LAB_VERSAO = "29"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")
@@ -58,6 +58,7 @@ def _agora() -> datetime:
 
 @router.get("/lab", response_class=HTMLResponse)
 @router.get("/automacoes", response_class=HTMLResponse)
+@router.get("/carrossel", response_class=HTMLResponse)
 def pagina():
     if not config.INSTA_UI_PASSWORD:
         return HTMLResponse(
@@ -318,3 +319,6 @@ def api_config_salvar(dados: dict = Body(...), insta_sess: str | None = Cookie(d
 
 from .lab_hook import router as hook_router
 router.include_router(hook_router)
+
+from .lab_carrossel import router as carrossel_router
+router.include_router(carrossel_router)

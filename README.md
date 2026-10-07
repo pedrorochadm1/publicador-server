@@ -58,13 +58,13 @@ Todas as rotas (menos `/health`) exigem o header `X-API-Key: <PUBLICADOR_API_KEY
 O mesmo container também serve o **Laboratório DM1**: onde a ideia de conteúdo é
 capturada em dois segundos e amadurece numa estrutura fixa (HOOK →
 Desenvolvimentos → Fechamento), com uma régua no topo dizendo se a proporção de
-**5 conteúdos para 1 anúncio** está saudável. As automações de comentário→direct
-viraram a segunda aba dele.
+**5 conteúdos para 1 anúncio** está saudável. O **Carrossel** (onde o slide é
+desenhado e publicado) e as automações de comentário→direct são as outras abas.
 
 | Rota | O que é |
 |---|---|
 | `GET /` com `Host: insta.*` | O Laboratório (os outros domínios continuam vendo `home.html`) |
-| `GET /lab` · `GET /automacoes` | As duas abas. Mesmo shell; o JS lê o pathname |
+| `GET /lab` · `GET /carrossel` · `GET /automacoes` | As três abas. Mesmo shell; o JS lê o pathname |
 | `GET /insta` | 307 → `/automacoes` (endereço antigo continua funcionando) |
 | `GET /insta/classico` | **Escotilha**: o painel antigo, intocado. Se a aba nova quebrar, essa URL devolve o que funciona, sem deploy |
 | `GET /manifest.webmanifest` · `GET /sw.js` | PWA. Gerados em Python com a versão injetada |
@@ -73,7 +73,32 @@ viraram a segunda aba dele.
 
 **Módulos:** `lab_calculo.py` (motor da régua, puro e testável), `lab_db.py`
 (tabelas `lab_*` no mesmo `/data/agenda.db`), `lab_web.py` (rotas),
-`sessoes.py` (sessão em SQLite — antes vivia em RAM e todo redeploy deslogava).
+`lab_carrossel.py` (a aba Carrossel), `sessoes.py` (sessão em SQLite — antes
+vivia em RAM e todo redeploy deslogava).
+
+### A aba Carrossel
+
+O slide é desenhado **no navegador**. `carrossel_render.js` tem uma função só que
+pinta o canvas de 1080×1350, e é ela que gera tanto o preview quanto o JPEG que
+sobe pro Instagram: duas implementações divergiriam, e o Pedro publicaria algo
+diferente do que viu. O servidor recebe os JPEGs prontos e só enfileira.
+
+O carrossel é **um documento**: os slides vivem numa coluna JSON de
+`lab_carrosseis` e o editor manda o documento inteiro a cada autosave, porque um
+slide não tem vida fora do carrossel (ordem, texto e recorte só fazem sentido
+juntos). Daí não haver tabela filha.
+
+As imagens que o Pedro sobe ficam em **`/data/carrossel`, não em `/data/img`**.
+A segunda é hospedagem temporária — o scheduler apaga a mídia depois de publicar
+— e a foto recortada precisa sobreviver pra ele duplicar ou reeditar o carrossel.
+O nome do arquivo é um uuid e o conteúdo é checado pelo cabeçalho, não pela
+extensão.
+
+Publicar cai no mesmo caminho de qualquer post: `db.criar_post` com a legenda
+idêntica no Instagram e no TikTok (modo foto, via Buffer). Acima de
+`BUFFER_TIKTOK_MAX_FOTOS` (4 por padrão) o TikTok fica de fora em vez de sair
+cortado, e o modal avisa antes. Republicar um carrossel agendado cancela o
+agendamento anterior; publicado não republica, duplica.
 
 **O card é uma rolagem só:** título, tipo e formato, hook, texto na tela,
 desenvolvimentos, fechamento e, no fim, o que sustenta o roteiro: Observações

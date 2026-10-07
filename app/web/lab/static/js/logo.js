@@ -37,6 +37,13 @@ export const ICONE_AUTO = `
   <circle cx="16" cy="11.5" r="1.1" fill="currentColor"/>
 </svg>`;
 
+export const ICONE_CARROSSEL = `
+<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <rect x="6.5" y="4" width="11" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/>
+  <path d="M3.5 6.5v9M20.5 6.5v9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M10 20.5h1M13 20.5h1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+</svg>`;
+
 export const ICONE_AJUSTES = `
 <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
   <circle cx="12" cy="12" r="3.1" stroke="currentColor" stroke-width="1.8"/>

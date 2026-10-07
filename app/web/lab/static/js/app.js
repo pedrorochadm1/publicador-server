@@ -1,13 +1,14 @@
-/* Bootstrap do Lab DM1: login, navegação entre as duas abas e boot do estado.
+/* Bootstrap do Lab DM1: login, navegação entre as abas e boot do estado.
 
-   A rota vem do pathname (/ e /lab abrem o Laboratório, /automacoes abre as
-   automações) e é trocada com history.pushState, sem recarregar a página —
+   A rota vem do pathname (/ e /lab abrem o Laboratório, /carrossel o editor de
+   carrossel, /automacoes as automações) e é trocada com history.pushState, sem recarregar a página —
    trocar de aba não pode custar um round-trip nem perder o estado do board. */
 
 import { get, post, aviso, quandoPerderSessao } from "./api.js";
-import { logo, ICONE_LAB, ICONE_AUTO, ICONE_AJUSTES } from "./logo.js";
+import { logo, ICONE_LAB, ICONE_AUTO, ICONE_CARROSSEL, ICONE_AJUSTES } from "./logo.js";
 import * as board from "./board.js";
 import * as automacoes from "./automacoes.js";
+import * as carrossel from "./carrossel.js";
 import * as regua from "./regua.js";
 import { precisaOnboarding, abrirOnboarding } from "./onboarding.js";
 import { fecharPainel } from "./painel.js";
@@ -50,8 +51,12 @@ function ligarLogin() {
 
 /* ─────────────────────────── Navegação ─────────────────────────── */
 
+const CAMINHOS = { lab: "/lab", carrossel: "/carrossel", automacoes: "/automacoes" };
+
 function abaDoCaminho() {
-  return location.pathname.startsWith("/automacoes") ? "automacoes" : "lab";
+  if (location.pathname.startsWith("/automacoes")) return "automacoes";
+  if (location.pathname.startsWith("/carrossel")) return "carrossel";
+  return "lab";
 }
 
 async function irPara(aba, { push = true } = {}) {
@@ -61,9 +66,11 @@ async function irPara(aba, { push = true } = {}) {
   // A aba de automações mantém dois ciclos batendo na API: desmontar é
   // obrigatório, senão eles continuam rodando com a aba fechada.
   if (abaAtual === "automacoes") automacoes.desmontar();
+  // O carrossel tem autosave pendente e polling de publicação: fecha os dois.
+  if (abaAtual === "carrossel") carrossel.desmontar();
 
   abaAtual = aba;
-  if (push) history.pushState({ aba }, "", aba === "lab" ? "/lab" : "/automacoes");
+  if (push) history.pushState({ aba }, "", CAMINHOS[aba]);
   document.querySelectorAll("[data-aba]").forEach((b) =>
     b.classList.toggle("ativa", b.dataset.aba === aba));
 
@@ -73,6 +80,11 @@ async function irPara(aba, { push = true } = {}) {
     tela.innerHTML = "";
     await board.montar(tela, estadoInicial);
     labMontado = true;
+  } else if (aba === "carrossel") {
+    regua.esconder();
+    tela.innerHTML = "";
+    try { await carrossel.montar(tela); }
+    catch (e) { tela.innerHTML = `<p class="vazio erro-aba">Não deu pra carregar o carrossel agora.</p>`; }
   } else {
     regua.esconder();
     tela.innerHTML = "";
@@ -81,12 +93,13 @@ async function irPara(aba, { push = true } = {}) {
   }
 }
 
-const ICONES = { lab: ICONE_LAB, automacoes: ICONE_AUTO };
+const ICONES = { lab: ICONE_LAB, carrossel: ICONE_CARROSSEL, automacoes: ICONE_AUTO };
 
 function ligarNavegacao() {
   $("#marca").innerHTML = logo(32);
   $("#ic-lab").innerHTML = ICONE_LAB;
   $("#ic-auto").innerHTML = ICONE_AUTO;
+  $("#ic-carrossel").innerHTML = ICONE_CARROSSEL;
   $("#ic-ajustes").innerHTML = ICONE_AJUSTES;
   document.querySelectorAll(".tabbar button").forEach((b) => {
     b.querySelector(".ic").innerHTML = b.dataset.ajustes ? ICONE_AJUSTES : ICONES[b.dataset.aba];

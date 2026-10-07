@@ -9,11 +9,17 @@ criação do post, e ainda assim a gente segura a limpeza até o status final
 Token: gerado por Pedro em https://publish.buffer.com/settings/api
 (env BUFFER_ACCESS_TOKEN + BUFFER_TIKTOK_CHANNEL_ID).
 """
+import os
 import time
 
 import requests
 
 from . import config
+
+# Teto de imagens por post de foto no TikTok via Buffer. O TikTok aceita até 35,
+# mas só os 4 já foram confirmados passando pelo Buffer; subir via env depois de
+# testar um post maior de verdade.
+MAX_FOTOS = int(os.environ.get("BUFFER_TIKTOK_MAX_FOTOS", "4"))
 
 _URL = "https://api.buffer.com"
 
@@ -114,7 +120,7 @@ def publicar_video(url: str, caption: str) -> dict:
 
 
 def publicar_fotos(urls: list[str], caption: str) -> dict:
-    """Foto/carrossel (1-4 imagens) → TikTok via Buffer."""
-    if len(urls) > 4:
-        urls = urls[:4]  # limite de imagens por post no TikTok via Buffer
+    """Foto/carrossel (até MAX_FOTOS imagens) → TikTok via Buffer."""
+    if len(urls) > MAX_FOTOS:
+        urls = urls[:MAX_FOTOS]  # limite de imagens por post no TikTok via Buffer
     return _publicar([{"image": {"url": u}} for u in urls], caption)

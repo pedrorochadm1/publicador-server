@@ -8,7 +8,7 @@
    - /lab/static/**  → cache-first. São imutáveis dentro de uma versão (a URL
      carrega ?v=VERSAO), então servir do cache é sempre correto e instantâneo.
 
-   - shell (/, /lab, /automacoes) → network-first com cache de reserva. NUNCA
+   - shell (/, /lab, /carrossel, /automacoes) → network-first com cache de reserva. NUNCA
      cache-first: shell velho conversando com API nova é a receita clássica de
      app quebrado depois do deploy.
 
@@ -19,15 +19,16 @@
 const VERSAO = "__V__";
 const CACHE = "lab-" + VERSAO;
 
-const SHELL = ["/lab", "/automacoes"];
+const SHELL = ["/lab", "/carrossel", "/automacoes"];
 
 // Todos os módulos precisam entrar: app.js importa os outros, e um import que
 // falta derruba o app inteiro offline.
 const ESTATICOS = [
-  "css/base.css", "css/lab.css", "css/automacoes.css",
+  "css/base.css", "css/lab.css", "css/automacoes.css", "css/carrossel.css",
   "js/app.js", "js/api.js", "js/board.js", "js/editor.js", "js/regua.js",
   "js/painel.js", "js/markdown.js", "js/fila.js", "js/onboarding.js",
   "js/logo.js", "js/automacoes.js", "js/opcoes.js", "js/ajustes.js",
+  "js/carrossel.js", "js/carrossel_render.js", "fonts/Inter.ttf", "img/header-slide.png",
   "icone-192.png", "apple-touch-180.png", "favicon.svg", "favicon-64.png",
 ].map((p) => `/lab/static/${p}`);
 
@@ -57,7 +58,8 @@ self.addEventListener("activate", (e) => {
 });
 
 const ehShell = (url) =>
-  url.pathname === "/" || url.pathname === "/lab" || url.pathname === "/automacoes";
+  url.pathname === "/" || url.pathname === "/lab" || url.pathname === "/carrossel"
+  || url.pathname === "/automacoes";
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;

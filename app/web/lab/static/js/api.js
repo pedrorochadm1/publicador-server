@@ -22,8 +22,11 @@ export class SemRede extends Error {}
 async function pedir(rota, opts = {}) {
   let r;
   try {
+    // FormData (upload de imagem, slides prontos) leva o próprio boundary no
+    // Content-Type; forçar JSON ali quebraria o multipart.
+    const json = !(opts.body instanceof FormData);
     r = await fetch(rota, {
-      headers: { "Content-Type": "application/json" },
+      headers: json ? { "Content-Type": "application/json" } : {},
       credentials: "same-origin",
       ...opts,
     });
@@ -51,6 +54,7 @@ export const patch = (rota, corpo) =>
 export const put = (rota, corpo) =>
   pedir(rota, { method: "PUT", body: JSON.stringify(corpo ?? {}) });
 export const del = (rota) => pedir(rota, { method: "DELETE" });
+export const postForm = (rota, form) => pedir(rota, { method: "POST", body: form });
 
 /* ─────────────────────────── Helpers de UI ─────────────────────────── */
 
