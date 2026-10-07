@@ -332,6 +332,7 @@ function abrirEditor(d) {
           <div class="car-tira"></div>
         </section>
         <section class="car-campos">
+          <p class="car-estrategia" hidden></p>
           <div class="car-slide-topo">
             <strong class="car-slide-n"></strong>
             <span class="car-slide-acoes">
@@ -342,12 +343,16 @@ function abrirEditor(d) {
             </span>
           </div>
 
+          <p class="car-intencao" hidden></p>
+
           <div class="car-bloco">
             <div class="car-rotulo"><span>Texto</span>
               <button type="button" class="car-negrito" data-alvo="texto" title="Negrito">B</button></div>
             <textarea class="car-txt" data-campo="texto" rows="5"
               placeholder="Linha em branco separa parágrafo. **assim** fica em negrito."></textarea>
           </div>
+
+          <div class="car-bloco car-capas" hidden></div>
 
           <div class="car-bloco car-img"></div>
 
@@ -456,7 +461,53 @@ function preencherCampos() {
   $(".car-slide-n").textContent = `Slide ${idx + 1} de ${doc.slides.length}`;
   tela.querySelectorAll(".car-txt").forEach((t) => { t.value = s[t.dataset.campo] || ""; });
   $(".car-header").checked = s.header !== false;
+  pintarEstrategia();
+  pintarIntencao();
+  pintarCapas();
   pintarImagem();
+}
+
+/* A estratégia que a IA escolheu, numa linha. Fica à vista porque é ela que
+   explica por que o carrossel tem o tamanho e a ordem que tem. */
+function pintarEstrategia() {
+  const el = $(".car-estrategia");
+  const ia = doc.ia || {};
+  const partes = [ia.playbook, ia.camada, ia.categoria_hook].filter((p) => (p || "").trim());
+  el.textContent = partes.join(" · ");
+  el.hidden = !partes.length;
+}
+
+/* A intenção vem da geração e diz o que o slide faz pelo post (prender, entrega
+   forte, payoff, CTA). Fica à vista pra ele saber o que perde ao cortar um. */
+function pintarIntencao() {
+  const el = $(".car-intencao");
+  const txt = (slideAtual().intencao || "").trim();
+  el.textContent = txt;
+  el.hidden = !txt;
+}
+
+/* As duas capas que a IA considerou e não usou. Só no slide 1, e só enquanto
+   existirem: trocar consome uma, porque a capa trocada vira a atual. */
+function pintarCapas() {
+  const box = $(".car-capas");
+  const alt = (doc.ia?.capas_alternativas || []).filter((c) => (c || "").trim());
+  if (idx !== 0 || !alt.length) { box.hidden = true; box.innerHTML = ""; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="car-rotulo"><span>Outras capas que a IA escreveu</span></div>` +
+    alt.map((c, i) => `<button type="button" class="car-capa" data-i="${i}">${esc(c)}</button>`).join("");
+  box.querySelectorAll(".car-capa").forEach((b) => {
+    b.onclick = () => {
+      const i = Number(b.dataset.i);
+      const atual = doc.slides[0].texto;
+      doc.slides[0].texto = alt[i];
+      // A capa que estava em uso volta pra lista: a troca é reversível.
+      doc.ia.capas_alternativas = alt.map((c, j) => (j === i ? atual : c));
+      preencherCampos();
+      pintarPreview();
+      pintarTira();
+      mudou(0);
+    };
+  });
 }
 
 function pintarImagem() {
@@ -723,6 +774,8 @@ async function salvarAgora() {
   try {
     const r = await patch(`/lab/api/carrosseis/${alvo.id}`, {
       titulo: alvo.titulo, legenda: alvo.legenda, slides: alvo.slides,
+      // `ia` vai junto porque trocar a capa mexe nas alternativas guardadas.
+      ...(alvo.ia ? { ia: alvo.ia } : {}),
     });
     // Só o estado vem do servidor; os campos ficam como estão pra não pular o cursor.
     if (doc === alvo) { doc.status = r.status; doc.publicacao = r.publicacao; }

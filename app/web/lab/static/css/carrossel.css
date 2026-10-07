@@ -129,6 +129,23 @@
 .car-pub-quando .car-quando-data { width: auto; flex: 1; min-width: 200px; }
 .car-pub-quando .car-quando-data[hidden] { display: none; }
 
+/* ───────────── O que veio da geração (estratégia, intenção, capas) ───────────── */
+
+.car-estrategia {
+  font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--acao-txt); margin-bottom: -4px;
+}
+.car-estrategia[hidden], .car-intencao[hidden], .car-capas[hidden] { display: none; }
+.car-intencao { font-size: 12.5px; color: var(--texto3); margin: -4px 0 2px; }
+
+.car-capas { display: grid; gap: 6px; }
+.car-capa {
+  text-align: left; padding: 10px 12px; font-size: 14px; line-height: 1.4;
+  border: 1px dashed var(--linha); border-radius: var(--raio); color: var(--texto2);
+  background: var(--superficie);
+}
+.car-capa:active { border-style: solid; border-color: var(--acao); color: var(--acao-txt); }
+
 /* ─────────────────────────── Gerar com IA ─────────────────────────── */
 
 .car-lista-bts { display: flex; gap: 8px; flex: none; }

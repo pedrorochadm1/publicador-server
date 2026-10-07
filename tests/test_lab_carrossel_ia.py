@@ -14,9 +14,19 @@ FAKE = {
     "titulo": "Pseudo-hipoglicemia",
     "legenda": "Já sentiu isso com a glicose normal?",
     "slides": [
-        {"texto": "Glicose em 100 e você tremendo.\n\n**Não é frescura.**\n\nEntenda 👉"},
-        {"texto": "Seu corpo se acostumou com a glicose alta.\n\nJá aconteceu com você?"},
+        {"texto": "Hipo com a glicose normal", "intencao": "prender"},
+        {"texto": "Acontece justamente quando o controle melhora.", "intencao": "segunda chance"},
+        {"texto": "O corpo se acostumou a rodar na alta.", "intencao": "entrega forte"},
+        {"texto": "Os sintomas são reais.", "intencao": "salvamento"},
+        {"texto": "Passa em algumas semanas.", "intencao": "payoff"},
+        {"texto": "Salva pra quando acontecer.\n\nJá aconteceu com você?", "intencao": "CTA"},
     ],
+    "estrategia": {
+        "playbook": "Dica",
+        "camada": "TOFU",
+        "categoria_hook": "Gatilho de Curiosidade",
+        "capas_alternativas": ["Tremor com glicose em 100", "Seu corpo mente pra você"],
+    },
 }
 
 
@@ -30,7 +40,8 @@ def ia(monkeypatch):
 
     def _gerar(fonte):
         chamadas.append(fonte)
-        return {k: (v if k != "slides" else [dict(s) for s in v]) for k, v in FAKE.items()}
+        import copy as _copy
+        return _copy.deepcopy(FAKE)
 
     monkeypatch.setattr(mod, "gerar", _gerar)
     monkeypatch.setattr(mod, "transcrever_reel", lambda mid: f"transcricao do {mid}")
@@ -76,13 +87,38 @@ def test_de_uma_ideia_nasce_rascunho_editavel(cliente, ia):
     assert ia.chamadas[-1] == ideia
 
 
+def test_carrossel_agora_e_fundo_nao_dois_slides(cliente, ia):
+    d = cliente.post("/lab/api/carrosseis/gerar",
+                     json={"origem": "ideia", "ideia": "a" * 40}).json()
+    assert len(d["slides"]) >= 5, "o formato raso de 2 slides saiu de cena"
+    assert len(d["slides"]) <= 10, "o Instagram trava em 10"
+
+
+def test_a_estrategia_escolhida_viaja_junto(cliente, ia):
+    """Playbook, camada e capas alternativas aparecem no editor, então precisam
+    sobreviver até o documento."""
+    d = cliente.post("/lab/api/carrosseis/gerar",
+                     json={"origem": "ideia", "ideia": "a" * 40}).json()
+    assert d["ia"]["playbook"] == "Dica"
+    assert d["ia"]["camada"] == "TOFU"
+    assert d["ia"]["categoria_hook"] == "Gatilho de Curiosidade"
+    assert len(d["ia"]["capas_alternativas"]) == 2
+
+
+def test_cada_slide_guarda_a_intencao(cliente, ia):
+    d = cliente.post("/lab/api/carrosseis/gerar",
+                     json={"origem": "ideia", "ideia": "a" * 40}).json()
+    assert [s["intencao"] for s in d["slides"]][:3] == ["prender", "segunda chance", "entrega forte"]
+    assert d["slides"][-1]["intencao"] == "CTA"
+
+
 def test_de_um_reel_passa_a_transcricao_pra_ia(cliente, ia):
     d = cliente.post("/lab/api/carrosseis/gerar",
                      json={"origem": "reel", "media_id": "17900"}).json()
     assert d["origem"] == "reel" and d["media_id"] == "17900"
     assert "transcricao do 17900" in ia.chamadas[-1]
     assert "TRANSCRIÇÃO" in ia.chamadas[-1], "a IA precisa saber que é fala de vídeo"
-    assert len(d["slides"]) == 2
+    assert len(d["slides"]) == len(FAKE["slides"])
 
 
 def test_reel_sem_fala_nao_vira_carrossel_vazio(cliente, ia, monkeypatch):
@@ -138,6 +174,22 @@ def test_card_que_nao_existe(cliente, ia):
 def test_prompt_carrega_as_regras_de_voz(ia):
     """O prompt é o contrato de voz. Se alguém apagar uma regra sem querer, cai aqui."""
     p = ia.PROMPT
-    for regra in ["hashtag", "travessão", "coach", "endocrinologista",
-                  "Entenda 👉", "parágrafo próprio", "**asteriscos**", "uma pergunta"]:
+    for regra in ["Hashtag", "Travessão", "coach", "endocrinologista",
+                  "parágrafo próprio", "**asteriscos**", "uma pergunta"]:
         assert regra in p, f"o prompt perdeu a regra: {regra}"
+
+
+def test_prompt_carrega_a_estrutura_do_playbook(ia):
+    """A estrutura veio do guia de carrosséis. Cada peça tem um motivo e some fácil."""
+    p = ia.PROMPT
+    for peca in ["8 slides", "SEGUNDA CHANCE", "PRIMEIRA ENTREGA FORTE",
+                 "teste do print", "PAYOFF", "CTA", "TOFU", "BOFU", "3 a 7 palavras"]:
+        assert peca in p, f"o prompt perdeu a peça de estrutura: {peca}"
+
+
+def test_hashtag_e_removida_mesmo_se_o_modelo_insistir(ia):
+    """O guia que inspirou a estrutura manda usar de 5 a 10 hashtags, e a regra do
+    Pedro proíbe. Essa é a rede embaixo do prompt."""
+    assert ia._sem_hashtag("Já aconteceu? #diabetestipo1 #dm1") == "Já aconteceu?"
+    assert ia._sem_hashtag("Salva isso.\n\n#cgm") == "Salva isso."
+    assert ia._sem_hashtag("Sem nenhuma aqui") == "Sem nenhuma aqui"

@@ -121,8 +121,23 @@ sugestão de abertura dos cards, que já roda assim há semanas; fila com pollin
 seria mais infraestrutura do que o problema pede. O vídeo baixado vive num
 arquivo temporário e é apagado: ali ele é matéria-prima de leitura, não mídia a
 publicar. Uma geração por vez (trava no módulo), porque clicar duas vezes seria
-pagar duas chamadas. O prompt é o contrato de voz e tem teste próprio: se alguém
-apagar "sem hashtag" ou "Entenda 👉" sem querer, a suíte reclama.
+pagar duas chamadas.
+
+**A estrutura segue o playbook de carrossel, a voz segue o Pedro.** O prompt pede
+8 slides por padrão (5 a 10 conforme o tema), capa de 3 a 7 palavras, slide 2 que
+se sustenta sozinho porque o Instagram o remostra a quem pulou o 1, a entrega
+mais densa no slide 3, payoff no penúltimo e CTA no último. A IA também escolhe e
+devolve a estratégia (playbook, TOFU/BOFU, categoria de hook), a intenção de cada
+slide e duas capas alternativas — tudo isso vive na coluna `ia` e aparece no
+editor, onde trocar a capa devolve a antiga para a lista.
+
+Onde o playbook brigou com as regras do repositório de conteúdo, **as regras do
+Pedro ganharam**: o guia manda de 5 a 10 hashtags e aqui vai zero, porque
+`tom-de-voz.md` marca hashtag como proibida; a legenda continua sendo uma linha
+com uma pergunta, e o CTA mora no último slide. Hashtag tem rede dupla: o prompt
+proíbe e `_sem_hashtag()` remove o que escapar, porque esse é o erro mais
+provável de um modelo que leu aquele guia. Os dois contratos têm teste próprio —
+um para as regras de voz, outro para as peças de estrutura.
 
 Publicar cai no mesmo caminho de qualquer post: `db.criar_post` com a legenda
 idêntica no Instagram e no TikTok (modo foto, via Buffer). Acima de
