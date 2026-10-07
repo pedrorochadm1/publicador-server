@@ -129,10 +129,53 @@
 .car-pub-quando .car-quando-data { width: auto; flex: 1; min-width: 200px; }
 .car-pub-quando .car-quando-data[hidden] { display: none; }
 
+/* ─────────────────────────── Gerar com IA ─────────────────────────── */
+
+.car-lista-bts { display: flex; gap: 8px; flex: none; }
+
+/* align-content: start porque o painel é alto e, sem isso, as linhas do grid
+   esticam — as abas, cada reel e o botão viram blocos gigantes. */
+.car-gen { display: grid; gap: 14px; align-content: start; }
+.car-gen-abas { display: flex; gap: 6px; }
+.car-gen-abas button {
+  flex: 1; padding: 10px; font-size: 13.5px; border-radius: var(--raio);
+  border: 1px solid var(--linha); color: var(--texto2); background: var(--superficie);
+}
+.car-gen-abas button.ativa { border-color: var(--acao); color: var(--acao-txt); font-weight: 700; }
+.car-gen section { display: grid; gap: 8px; }
+/* `display` em regra própria vence o [hidden] do navegador: sem isto as duas
+   fontes aparecem ao mesmo tempo quando se troca de aba. */
+.car-gen section[hidden] { display: none; }
+/* Sem font-size: são os 16px herdados que impedem o Safari do iOS de ampliar a
+   página ao focar. A caixa é alta porque é onde ele despeja a ideia inteira. */
+.car-gen-ideia { line-height: 1.55; resize: vertical; }
+
+.car-gen-reels { display: grid; gap: 8px; align-content: start; max-height: 46vh; overflow-y: auto; }
+.car-reel {
+  display: flex; align-items: center; gap: 10px; text-align: left; width: 100%;
+  padding: 8px; border: 1px solid var(--linha); border-radius: var(--raio);
+  background: var(--superficie);
+}
+.car-reel.on { border-color: var(--acao); background: var(--fundo); }
+.car-reel img, .car-reel-sem {
+  width: 46px; height: 58px; flex: none; object-fit: cover;
+  border-radius: var(--raio-p); background: var(--linha);
+}
+.car-reel-info { display: grid; gap: 2px; min-width: 0; }
+.car-reel-info strong {
+  font-size: 13.5px; font-weight: 600; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.car-gen-espera { color: var(--texto2); }
+
 /* ─────────────────────────── Celular ─────────────────────────── */
 
 @media (max-width: 860px) {
   .car-lista { padding: calc(14px + var(--safe-t)) 14px 20px; }
+  /* Os dois botões não cabem ao lado do título num iPhone: descem inteiros. */
+  .car-lista-topo { flex-wrap: wrap; }
+  .car-lista-bts { width: 100%; }
+  .car-lista-bts .bt { flex: 1; }
   .car-corpo { grid-template-columns: minmax(0, 1fr); padding: 14px; gap: 18px; }
   .car-palco { position: static; }
   .car-preview { max-width: 100%; }

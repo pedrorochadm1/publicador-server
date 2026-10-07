@@ -111,6 +111,19 @@ A segunda é hospedagem temporária — o scheduler apaga a mídia depois de pub
 O nome do arquivo é um uuid e o conteúdo é checado pelo cabeçalho, não pela
 extensão.
 
+**Gerar com IA** (`lab_carrossel_ia.py`) preenche o rascunho a partir de duas
+fontes: um reel já publicado (baixa, transcreve com Whisper e escreve) ou uma
+ideia digitada na hora — que pode vir de um card do Lab, e aí entra com o roteiro
+*e* as observações, que é onde mora o raciocínio solto dele. O resultado é um
+carrossel comum em rascunho: mesmo editor, mesmo botão de publicar, nada vai pro
+ar sozinho. É síncrono (30-50s) de propósito, na mesma ordem de grandeza da
+sugestão de abertura dos cards, que já roda assim há semanas; fila com polling
+seria mais infraestrutura do que o problema pede. O vídeo baixado vive num
+arquivo temporário e é apagado: ali ele é matéria-prima de leitura, não mídia a
+publicar. Uma geração por vez (trava no módulo), porque clicar duas vezes seria
+pagar duas chamadas. O prompt é o contrato de voz e tem teste próprio: se alguém
+apagar "sem hashtag" ou "Entenda 👉" sem querer, a suíte reclama.
+
 Publicar cai no mesmo caminho de qualquer post: `db.criar_post` com a legenda
 idêntica no Instagram e no TikTok (modo foto, via Buffer). Acima de
 `BUFFER_TIKTOK_MAX_FOTOS` (4 por padrão) o TikTok fica de fora em vez de sair

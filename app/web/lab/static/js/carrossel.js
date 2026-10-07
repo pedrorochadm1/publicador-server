@@ -140,7 +140,10 @@ async function abrirLista() {
     <div class="car-lista">
       <header class="car-lista-topo">
         <h1>Carrossel</h1>
-        <button class="bt car-novo" type="button">Novo carrossel</button>
+        <span class="car-lista-bts">
+          <button class="bt sec car-gerar" type="button">Gerar com IA</button>
+          <button class="bt car-novo" type="button">Novo carrossel</button>
+        </span>
       </header>
       <div class="car-grade">
         ${lista.length ? "" : `<p class="vazio">Nenhum carrossel ainda. Comece um novo.</p>`}
@@ -169,9 +172,138 @@ async function abrirLista() {
       abrirEditor(d);
     } catch (e) { aviso("Não deu pra criar agora."); }
   };
+  tela.querySelector(".car-gerar").onclick = abrirGerar;
   tela.querySelectorAll(".car-item").forEach((b) => {
     b.onclick = () => abrirEditor(lista.find((d) => d.id === Number(b.dataset.id)));
   });
+}
+
+/* ─────────────────────────── Gerar com IA ───────────────────────────
+
+   Duas fontes: um reel já publicado (o servidor baixa, transcreve e escreve) ou
+   uma ideia digitada aqui. O resultado é um rascunho comum — abre no mesmo
+   editor, e nada vai pro ar sem o Pedro clicar em Publicar.
+
+   A geração leva uns 30-50s e é uma requisição só, então o botão vira estado de
+   espera e o painel não pode ser fechado no meio: fechar perderia o resultado
+   de uma chamada que já custou. */
+
+let gerando = false;
+
+function abrirGerar() {
+  const folha = abrirPainel(`
+    <header class="painel-topo"><h2>Gerar carrossel</h2>
+      <button class="fechar" type="button" aria-label="Fechar">✕</button></header>
+    <div class="painel-corpo car-gen">
+      <div class="car-gen-abas">
+        <button type="button" data-fonte="ideia" class="ativa">De uma ideia</button>
+        <button type="button" data-fonte="reel">De um reel publicado</button>
+      </div>
+
+      <section data-painel="ideia">
+        <textarea class="car-gen-ideia" rows="6"
+          placeholder="Escreve a ideia do jeito que ela veio na sua cabeça. Pode ser bagunçado."></textarea>
+        <p class="nota">A IA corta em slides no seu tom. Você edita tudo depois.</p>
+      </section>
+
+      <section data-painel="reel" hidden>
+        <div class="car-gen-reels"><p class="vazio">carregando reels…</p></div>
+      </section>
+
+      <button class="bt car-gen-ok" type="button" disabled>Gerar carrossel</button>
+      <p class="nota car-gen-espera" hidden>
+        Baixando o reel, ouvindo e escrevendo. Leva até um minuto. Não feche.</p>
+    </div>`, { classe: "painel-gerar", aoFechar: () => { gerando = false; } });
+
+  const $$ = (s) => folha.querySelector(s);
+  let fonte = "ideia";
+  let reelEscolhido = null;
+  let reelsCarregados = false;
+
+  const atualizarBotao = () => {
+    const pronto = fonte === "ideia"
+      ? $$(".car-gen-ideia").value.trim().length >= 15
+      : !!reelEscolhido;
+    $$(".car-gen-ok").disabled = !pronto || gerando;
+  };
+
+  $$(".fechar").onclick = () => { if (!gerando) fecharPainel(); };
+  $$(".car-gen-ideia").addEventListener("input", atualizarBotao);
+
+  folha.querySelectorAll("[data-fonte]").forEach((b) => {
+    b.onclick = () => {
+      if (gerando) return;
+      fonte = b.dataset.fonte;
+      folha.querySelectorAll("[data-fonte]").forEach((o) => o.classList.toggle("ativa", o === b));
+      folha.querySelectorAll("[data-painel]").forEach((s) => { s.hidden = s.dataset.painel !== fonte; });
+      if (fonte === "reel" && !reelsCarregados) carregarReels();
+      atualizarBotao();
+    };
+  });
+
+  async function carregarReels() {
+    reelsCarregados = true;
+    const alvo = $$(".car-gen-reels");
+    let reels;
+    try {
+      reels = (await get("/lab/api/carrossel/reels")).reels;
+    } catch (e) {
+      reelsCarregados = false;
+      alvo.innerHTML = `<p class="vazio">Não deu pra listar seus reels agora.</p>`;
+      return;
+    }
+    if (!reels.length) {
+      alvo.innerHTML = `<p class="vazio">Nenhum reel publicado ainda.</p>`;
+      return;
+    }
+    alvo.innerHTML = reels.map((r) => `
+      <button class="car-reel" type="button" data-media="${esc(r.media_id)}">
+        ${r.capa ? `<img src="${esc(r.capa)}" alt="" loading="lazy">` : `<span class="car-reel-sem"></span>`}
+        <span class="car-reel-info">
+          <strong>${esc(r.legenda.split("\n")[0].slice(0, 70) || "Sem legenda")}</strong>
+          <span class="car-item-meta">${data(r.quando)}</span>
+        </span>
+      </button>`).join("");
+    alvo.querySelectorAll(".car-reel").forEach((b) => {
+      b.onclick = () => {
+        if (gerando) return;
+        reelEscolhido = b.dataset.media;
+        alvo.querySelectorAll(".car-reel").forEach((o) => o.classList.toggle("on", o === b));
+        atualizarBotao();
+      };
+    });
+  }
+
+  $$(".car-gen-ok").onclick = async () => {
+    if (gerando) return;
+    gerando = true;
+    const bt = $$(".car-gen-ok");
+    const espera = $$(".car-gen-espera");
+    bt.disabled = true;
+    bt.textContent = "Montando…";
+    if (fonte === "reel") espera.hidden = false;
+    const corpo = fonte === "reel"
+      ? { origem: "reel", media_id: reelEscolhido }
+      : { origem: "ideia", ideia: $$(".car-gen-ideia").value };
+    try {
+      const d = await post("/lab/api/carrosseis/gerar", corpo);
+      gerando = false;
+      fecharPainel();
+      // A chamada já custou: mesmo que o painel tenha sido fechado no meio da
+      // espera (Esc, toque fora), o rascunho abre em vez de se perder. Só não
+      // abre se ele tiver trocado de aba, porque aí não há mais onde desenhar.
+      if (tela) abrirEditor(d);
+      aviso("Rascunho pronto. Ajuste o que quiser antes de publicar.");
+    } catch (e) {
+      gerando = false;
+      if (bt.isConnected) {
+        bt.textContent = "Gerar carrossel";
+        bt.disabled = false;
+        espera.hidden = true;
+      }
+      aviso(e instanceof SemRede ? "Sem rede." : (e.corpo || "Não deu pra gerar agora."));
+    }
+  };
 }
 
 /* ─────────────────────────── Editor ─────────────────────────── */

@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "30"
+LAB_VERSAO = "31"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")
@@ -322,3 +322,6 @@ router.include_router(hook_router)
 
 from .lab_carrossel import router as carrossel_router
 router.include_router(carrossel_router)
+
+from .lab_carrossel_ia import router as carrossel_ia_router
+router.include_router(carrossel_ia_router)
