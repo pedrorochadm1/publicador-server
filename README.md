@@ -34,6 +34,23 @@ As imagens são servidas por este mesmo serviço em `/img/<arquivo>` com HTTPS
    - `TZ=America/Sao_Paulo`
 6. Deploy. Teste: `GET https://SEU_DOMINIO/health` deve responder `{"ok": true}`.
 
+### Push na `main` deploya sozinho
+
+**Apontar o App pro repositório não basta** — o EasyPanel não fica vigiando o
+Git. Quem dispara é o *deploy hook* do App (aba Deploy, no painel), cadastrado
+como webhook de `push` no GitHub:
+
+```bash
+gh api repos/pedrorochadm1/publicador-server/hooks -X POST \
+  -f name=web -f "config[url]=$PUBLICADOR_DEPLOY_HOOK" \
+  -f "config[content_type]=json" -F active=true -f "events[]=push"
+```
+
+Sem isso, o push entra no GitHub e **o servidor continua rodando a versão
+antiga**, sem nenhum erro em lugar nenhum — o sintoma é a feature nova
+simplesmente não existir no ar. Pra conferir se um deploy chegou:
+`GET /lab/api/sessao` devolve a `versao` que está rodando.
+
 ## API
 
 Todas as rotas (menos `/health`) exigem o header `X-API-Key: <PUBLICADOR_API_KEY>`.
