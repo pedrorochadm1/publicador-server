@@ -27,7 +27,7 @@ import requests
 from fastapi import APIRouter, Body, Cookie, HTTPException
 from pydantic import BaseModel, Field
 
-from . import config, copy_ia, lab_carrossel, lab_db, sessoes
+from . import config, copy_ia, lab_carrossel, lab_db, lab_prompts, sessoes
 from .token_store import get_token
 
 router = APIRouter()
@@ -94,9 +94,10 @@ der credibilidade pra isso.
 SLIDE 1, A CAPA. De 3 a 7 PALAVRAS, e nada mais. Uma linha só: sem segundo
 parágrafo, sem explicação, sem negrito, sem pergunta. É o texto que precisa ser
 lido em um segundo no tamanho de miniatura, então conte as palavras antes de
-responder e corte até caber. Um foco só, sem chance de entender errado, falando
-com uma dor, um desejo ou uma identidade. O que sobrou de explicação vai pro
-slide 2, que é onde ela deve estar. Escreva três capas possíveis, use a mais
+responder e corte até caber. Curta não quer dizer enigmática: em 3 a 7 palavras a
+pessoa já tem que saber do que o carrossel trata. Um foco só, sem chance de
+entender errado, falando com uma dor, um desejo ou uma identidade. O que sobrou
+de explicação vai pro slide 2, que é onde ela deve estar. Escreva três capas possíveis, use a mais
 forte no slide 1 e devolva as outras duas, também de 3 a 7 palavras, em
 capas_alternativas.
 
@@ -127,18 +128,29 @@ fim. Nunca mande ninguém para os stories.
 
 Isto não é negociável e vale mais que qualquer regra de estrutura acima.
 
-- Cada frase é um parágrafo próprio, com linha em branco entre todas. Nunca
-  agrupe frases no mesmo parágrafo. A capa é a exceção: ela é uma linha só.
-- A primeira linha de cada slide é um fato ou uma provocação direta, sem
-  introdução. Pode ter duas ou três palavras.
+O CARROSSEL DESENVOLVE UMA IDEIA DO COMEÇO AO FIM. Não é um post solto nem um
+desabafo: é um raciocínio em etapas, e cada slide é uma etapa. Quem lê tem que
+conseguir seguir sem adivinhar nada e sem voltar pra entender o anterior.
+
+- Escreva FRASE INTEIRA, nunca fragmento. Nunca quebre uma frase em dois
+  parágrafos. Cada parágrafo começa e termina um pensamento.
+- Cada frase é um parágrafo próprio, com linha em branco entre todas. A capa é a
+  exceção: ela é uma linha só.
+- PALAVRA CLARA VENCE PALAVRA ESPERTA. "Basal demais causa hipoglicemia" é melhor
+  que "basal demais também derruba". Diga o que acontece, com o nome que a coisa
+  tem. Nada de duplo sentido, de frase enigmática nem de efeito literário.
+- Nada de subentendido: se a frase depende de um pulo de raciocínio, escreva o
+  pulo. Se um termo técnico precisa aparecer, explique em meia linha ali mesmo.
+- Explique o suficiente pra pessoa entender sem o vídeo e sem a legenda. Sem
+  encher linguiça, mas também sem economizar a ponto de ficar críptico. Um slide
+  de duas frases claras é melhor que um de quatro pedaços soltos.
 - Negrito com **asteriscos**, só na frase central do argumento. No máximo dois
   trechos por slide. Palavra solta, transição e pergunta final não levam negrito.
-- Slide curto. Escreva o que parece necessário e corte quase metade. Nenhum
-  slide passa de 350 caracteres.
+- Nenhum slide passa de 350 caracteres.
 - Rótulo em CAIXA ALTA no começo do slide é permitido quando organiza de verdade
-  (O PROBLEMA, O QUE FAZER). Não use em todo slide.
+  (O PROBLEMA, SINAL 1, O QUE FAZER). Não use em todo slide.
 - Tom: conversa de consultório entre dois DM1, não médico ensinando paciente.
-  Curto, cru, parece desabafo. Baseado em evidência, mas acessível.
+  Direto e sem rodeio, mas explicando de verdade. Baseado em evidência, acessível.
 - Especificidade gera confiança: nomeie o aparelho, a insulina, o exame, o prazo,
   quando a fonte trouxer. Nunca invente nenhum deles.
 
@@ -190,7 +202,9 @@ def gerar(fonte: str) -> dict:
     client = OpenAI(api_key=config.OPENAI_API_KEY, timeout=180, max_retries=0)
     r = client.responses.parse(
         model=_modelo(), store=False,
-        input=[{"role": "system", "content": PROMPT},
+        # O prompt vem do registro: se o Pedro editou pela tela, é o dele que
+        # vale; senão, o PROMPT daqui de cima.
+        input=[{"role": "system", "content": lab_prompts.texto("carrossel")},
                {"role": "user", "content": fonte}],
         text_format=CarrosselGerado,
     )

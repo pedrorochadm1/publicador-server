@@ -26,7 +26,7 @@ router = APIRouter()
 
 # Fonte ÚNICA da versão do front. Bumpar aqui invalida o cache do service worker
 # e o cache-bust de todo CSS/JS de uma vez. É o único lugar a mexer num deploy.
-LAB_VERSAO = "33"
+LAB_VERSAO = "34"
 
 _WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
 _LAB_DIR = os.path.join(_WEB_DIR, "lab")
@@ -325,3 +325,26 @@ router.include_router(carrossel_router)
 
 from .lab_carrossel_ia import router as carrossel_ia_router
 router.include_router(carrossel_ia_router)
+
+
+# ─────────────────────────── Instruções de copy ───────────────────────────
+# Ficam aqui, e não dentro de cada módulo de IA, porque a tela mostra as quatro
+# juntas: é o lugar onde o Pedro vê tudo que manda na voz dos textos.
+
+@router.get("/lab/api/copy")
+def api_copy(insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    from . import lab_prompts
+    return {"instrucoes": lab_prompts.listar()}
+
+
+@router.put("/lab/api/copy/{chave}")
+def api_copy_salvar(chave: str, dados: dict = Body(...),
+                    insta_sess: str | None = Cookie(default=None)):
+    """Texto vazio apaga a edição e volta a valer o padrão do código."""
+    _exige(insta_sess)
+    from . import lab_prompts
+    try:
+        return lab_prompts.definir(chave, str(dados.get("texto") or ""))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))

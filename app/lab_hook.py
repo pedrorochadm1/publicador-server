@@ -5,7 +5,7 @@ import threading
 from fastapi import APIRouter, Cookie, HTTPException
 from pydantic import BaseModel, Field
 
-from . import config, lab_db, sessoes
+from . import config, lab_db, lab_prompts, sessoes
 
 router = APIRouter()
 _em_uso = threading.Lock()
@@ -58,7 +58,7 @@ def sugerir(markdown: str) -> dict:
     client = OpenAI(api_key=config.OPENAI_API_KEY, timeout=90, max_retries=0)
     r = client.responses.parse(
         model=os.getenv("LAB_HOOK_MODEL", "gpt-5.4"), store=False,
-        input=[{"role": "system", "content": PROMPT}, {"role": "user", "content": markdown}],
+        input=[{"role": "system", "content": lab_prompts.texto("abertura")}, {"role": "user", "content": markdown}],
         text_format=Abertura,
     )
     if r.output_parsed is None:

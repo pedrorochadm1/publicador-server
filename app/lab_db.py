@@ -584,6 +584,9 @@ PADRAO_CONFIG = {
     "filtros": {"tipo": [], "formato": []},
     "export": {"incluir_tipo_formato": True, "incluir_observacoes": True,
                "incluir_links": True, "marcar_lacunas": False},
+    # Instruções de copy que o Pedro editou pela tela. Vazio = vale o padrão
+    # que mora no código. Ver lab_prompts.py.
+    "prompts": {},
     # Formatos são editáveis pelo Pedro nos Ajustes. Valem pra conteúdo e pra
     # anúncio. O TIPO não entra aqui: a régua depende dele e é fixo.
     "formatos": [

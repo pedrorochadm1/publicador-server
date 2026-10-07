@@ -5,7 +5,7 @@
    No celular não existe trilho lateral, então este painel é também o único
    lugar onde dá pra sair da conta. */
 
-import { put, post, esc, aviso } from "./api.js";
+import { get, put, post, esc, aviso } from "./api.js";
 import { abrirPainel, fecharPainel, confirmar } from "./painel.js";
 import { formatos, configurarFormatos, corFormato, FORMATOS_PADRAO } from "./opcoes.js";
 
@@ -45,11 +45,19 @@ export function abrirAjustes(config, aoSalvar) {
       </div>
 
       <div class="aj-bloco">
+        <span class="ed-rot">Instruções de copy</span>
+        <p class="nota">Tudo que manda na voz dos textos que a IA escreve, num
+           lugar só. Dá pra editar e voltar ao padrão quando quiser.</p>
+        <button class="bt sec" id="aj-copy" type="button">Ver e editar</button>
+      </div>
+
+      <div class="aj-bloco">
         <button class="bt sec" id="aj-sair" type="button">Sair da conta</button>
       </div>
     </div>`, { classe: "painel-ajustes" });
 
   folha.querySelector(".fechar").onclick = fecharPainel;
+  folha.querySelector("#aj-copy").onclick = abrirInstrucoes;
 
   /* ─────────────────────────── Formatos ─────────────────────────── */
 
@@ -156,4 +164,94 @@ export function abrirAjustes(config, aoSalvar) {
     try { await post("/lab/api/sair"); } catch (e) { /* segue */ }
     location.href = "/lab";
   };
+}
+
+/* ─────────────────────────── Instruções de copy ───────────────────────────
+
+   As quatro instruções que a IA recebe, do jeito que ela recebe. Ficam aqui, e
+   não num arquivo do repositório, porque quem decide a voz é o Pedro e ele não
+   abre código: era preciso um lugar onde ver e ajustar o tom sem deploy.
+
+   Editar grava por cima do padrão; apagar tudo (ou o botão) volta ao que está no
+   código. O padrão nunca é copiado pro banco, então melhorias futuras do código
+   chegam sozinhas em tudo que ele não personalizou. */
+
+export async function abrirInstrucoes() {
+  const folha = abrirPainel(`
+    <header class="painel-topo">
+      <h2>Instruções de copy</h2>
+      <button class="fechar" type="button" aria-label="Fechar">✕</button>
+    </header>
+    <div class="painel-corpo cp">
+      <p class="vazio">carregando…</p>
+    </div>`, { classe: "painel-copy" });
+
+  folha.querySelector(".fechar").onclick = fecharPainel;
+  const corpo = folha.querySelector(".cp");
+
+  let lista;
+  try {
+    lista = (await get("/lab/api/copy")).instrucoes;
+  } catch (e) {
+    corpo.innerHTML = `<p class="vazio">Não deu pra carregar agora.</p>`;
+    return;
+  }
+
+  corpo.innerHTML = lista.map((i) => `
+    <section class="cp-item" data-chave="${esc(i.chave)}">
+      <div class="cp-topo">
+        <strong>${esc(i.nome)}</strong>
+        <span class="chip ${i.personalizado ? "on" : ""}">${i.personalizado ? "editado" : "padrão"}</span>
+      </div>
+      <p class="nota">${esc(i.onde)}</p>
+      <textarea class="cp-texto" rows="10" spellcheck="false">${esc(i.texto)}</textarea>
+      <div class="cp-acoes">
+        <span class="cp-estado"></span>
+        <button class="bt sec cp-padrao" type="button" ${i.personalizado ? "" : "hidden"}>Voltar ao padrão</button>
+      </div>
+    </section>`).join("");
+
+  corpo.querySelectorAll(".cp-item").forEach((el) => {
+    const chave = el.dataset.chave;
+    const campo = el.querySelector(".cp-texto");
+    const estado = el.querySelector(".cp-estado");
+    const bt = el.querySelector(".cp-padrao");
+    const padrao = lista.find((i) => i.chave === chave).padrao;
+    let timer = null;
+
+    async function gravar(texto) {
+      estado.textContent = "salvando…";
+      try {
+        const r = await put(`/lab/api/copy/${chave}`, { texto });
+        estado.textContent = "salvo";
+        el.querySelector(".chip").textContent = r.personalizado ? "editado" : "padrão";
+        el.querySelector(".chip").classList.toggle("on", r.personalizado);
+        bt.hidden = !r.personalizado;
+        setTimeout(() => { estado.textContent = ""; }, 1600);
+      } catch (e) {
+        estado.textContent = "não salvou";
+      }
+    }
+
+    // Debounce longo: é texto comprido, e não faz sentido gravar a cada letra.
+    campo.addEventListener("input", () => {
+      estado.textContent = "";
+      clearTimeout(timer);
+      timer = setTimeout(() => gravar(campo.value), 900);
+    });
+
+    bt.onclick = async () => {
+      const ok = await confirmar({
+        titulo: "Voltar ao padrão?",
+        texto: `<p>Isso apaga o que você escreveu nesta instrução e volta a valer
+                   a versão que vem no sistema.</p>`,
+        ok: "Voltar ao padrão",
+        perigo: true,
+      });
+      if (!ok) return;
+      campo.value = padrao;
+      clearTimeout(timer);
+      gravar("");
+    };
+  });
 }

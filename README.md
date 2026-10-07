@@ -90,8 +90,23 @@ desenhado e publicado) e as automações de comentário→direct são as outras 
 
 **Módulos:** `lab_calculo.py` (motor da régua, puro e testável), `lab_db.py`
 (tabelas `lab_*` no mesmo `/data/agenda.db`), `lab_web.py` (rotas),
-`lab_carrossel.py` (a aba Carrossel), `sessoes.py` (sessão em SQLite — antes
-vivia em RAM e todo redeploy deslogava).
+`lab_carrossel.py` (a aba Carrossel), `lab_prompts.py` (registro das instruções
+de copy), `sessoes.py` (sessão em SQLite — antes vivia em RAM e todo redeploy
+deslogava).
+
+### Instruções de copy num lugar só
+
+Os prompts nasceram espalhados, cada um colado ao código que o usa. Isso serve
+quem lê o repositório e não serve o Pedro, que decide a voz e não abre código.
+`lab_prompts.py` junta os quatro (carrossel, abertura do reel, legenda do reel,
+SEO do YouTube) e os serve em **Ajustes → Instruções de copy**, onde ele lê e
+edita sem deploy.
+
+O padrão **continua no código**, junto de quem usa: o registro importa cada
+`PROMPT` de onde ele vive, em vez de copiar o texto. O que o Pedro escreve mora
+no `lab_config` e vence o padrão; apagar devolve o padrão. Escrever exatamente o
+texto padrão também conta como "não personalizado" — senão ele ficaria preso numa
+cópia do prompt de hoje e as melhorias seguintes do código nunca chegariam nele.
 
 ### A aba Carrossel
 
