@@ -23,7 +23,7 @@ from . import lab_calculo as lc
 from .db import conn
 
 TIPOS = ("conteudo", "anuncio")
-FORMATOS = ("lofi", "slide", "vlog", "documentario")   # só o padrão inicial
+FORMATOS = ("lofi", "slide", "vlog", "documentario", "basico")   # só o padrão inicial
 _SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
 STATUS = ("ideia", "producao", "publicado")
 
@@ -594,6 +594,7 @@ PADRAO_CONFIG = {
         {"id": "slide", "nome": "Slide"},
         {"id": "vlog", "nome": "Vlog"},
         {"id": "documentario", "nome": "Documentário"},
+        {"id": "basico", "nome": "Básico"},
     ],
 }
 

@@ -143,7 +143,7 @@ def test_formato_aceita_qualquer_slug_mas_nao_lixo(cliente):
 
 def test_formatos_configuraveis(cliente):
     cfg = cliente.get("/lab/api/config").json()
-    assert [f["id"] for f in cfg["formatos"]] == ["lofi", "slide", "vlog", "documentario"]
+    assert [f["id"] for f in cfg["formatos"]] == ["lofi", "slide", "vlog", "documentario", "basico"]
     nova = cliente.put("/lab/api/config", json={"formatos": [
         {"id": "lofi", "nome": "Lo-fi"}, {"id": "carrossel", "nome": "Carrossel"}]}).json()
     assert [f["id"] for f in nova["formatos"]] == ["lofi", "carrossel"]

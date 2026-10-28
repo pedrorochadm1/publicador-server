@@ -18,6 +18,7 @@ export const FORMATOS_PADRAO = [
   { id: "slide", nome: "Slide" },
   { id: "vlog", nome: "Vlog" },
   { id: "documentario", nome: "Documentário" },
+  { id: "basico", nome: "Básico" },
 ];
 
 /* Cores dos formatos. Escuras o bastante pra sustentar texto branco quando o

@@ -8,11 +8,10 @@
 
 import { get, esc, data } from "./api.js";
 import { abrirPainel, fecharPainel } from "./painel.js";
+import { nomeFormato } from "./opcoes.js";
 
 let atual = null;
 let aoAbrirDetalhe = null;
-
-const NOME_FORMATO = { lofi: "Lo-fi", slide: "Slide", vlog: "Vlog", documentario: "Documentário" };
 
 /** Converte x em [-1,1] para a posição percentual do ponteiro na faixa. */
 const paraPercentual = (x) => (x + 1) * 50;
@@ -110,7 +109,7 @@ async function abrirDetalhe() {
       <td>${p.sintetico ? '<span class="chip">histórico informado</span>'
                         : esc((p.titulo || "").slice(0, 44) || "—")}</td>
       <td><span class="tag-tipo ${p.tipo}">${p.tipo === "anuncio" ? "anúncio" : "conteúdo"}</span></td>
-      <td>${p.formato ? esc(NOME_FORMATO[p.formato] || p.formato) : "—"}</td>
+      <td>${p.formato ? esc(nomeFormato(p.formato)) : "—"}</td>
       <td class="peso">×${p.peso}</td>
     </tr>`).join("");
 
