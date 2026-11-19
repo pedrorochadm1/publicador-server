@@ -10,7 +10,9 @@ import hashlib
 import hmac
 import json
 import os
+import queue
 import secrets
+import threading
 
 from fastapi import APIRouter, Body, Cookie, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -282,10 +284,34 @@ async def webhook_receber(request: Request):
         payload = json.loads(corpo or b"{}")
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="JSON inválido.")
+    # Processa FORA do loop de eventos, numa thread só (fila serial). Antes isso rodava
+    # aqui dentro: tratar_webhook faz banco e Graph síncronos, e numa rajada de
+    # comentários o servidor inteiro parava de responder (2026-11-19).
     try:
-        tratados = automacoes.tratar_webhook(payload)
-    except Exception as e:  # noqa: BLE001
-        print(f"[webhook] falhou: {e}")
-        tratados = 0
-    # sempre 200: a Meta reenvia (e desativa a inscrição) se o endpoint devolver erro
-    return JSONResponse({"ok": True, "tratados": tratados})
+        _fila_webhook.put_nowait(payload)
+    except queue.Full:
+        pass                     # a varredura de 60s pega o que ficar de fora
+    _garantir_worker()
+    # sempre 200 e na hora: a Meta reenvia (e desativa a inscrição) se demorar ou errar
+    return JSONResponse({"ok": True, "na_fila": _fila_webhook.qsize()})
+
+
+_fila_webhook: "queue.Queue[dict]" = queue.Queue(maxsize=5000)
+_worker: dict = {"t": None}
+
+
+def _processar_webhooks():
+    while True:
+        payload = _fila_webhook.get()
+        try:
+            automacoes.tratar_webhook(payload)
+        except Exception as e:  # noqa: BLE001
+            print(f"[webhook] falhou: {e}")
+
+
+def _garantir_worker():
+    t = _worker["t"]
+    if t is None or not t.is_alive():
+        t = threading.Thread(target=_processar_webhooks, name="webhook-ig", daemon=True)
+        t.start()
+        _worker["t"] = t
