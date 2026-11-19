@@ -97,6 +97,13 @@ def _init():
         c.execute("ALTER TABLE automacoes ADD COLUMN facebook INTEGER NOT NULL DEFAULT 1")
     if "esperando_desde" not in cols:
         c.execute("ALTER TABLE automacoes ADD COLUMN esperando_desde TEXT")
+    # perna do TikTok (app/tiktok_comentarios.py): só resposta pública mandando pra bio
+    if "tiktok" not in cols:
+        c.execute("ALTER TABLE automacoes ADD COLUMN tiktok INTEGER NOT NULL DEFAULT 0")
+    if "respostas_tiktok" not in cols:
+        c.execute("ALTER TABLE automacoes ADD COLUMN respostas_tiktok TEXT NOT NULL DEFAULT '[]'")
+    if "tiktok_desde" not in cols:
+        c.execute("ALTER TABLE automacoes ADD COLUMN tiktok_desde TEXT")
     ev = {r[1] for r in c.execute("PRAGMA table_info(automacao_eventos)").fetchall()}
     if "plataforma" not in ev:
         c.execute("ALTER TABLE automacao_eventos ADD COLUMN plataforma TEXT NOT NULL DEFAULT 'ig'")
@@ -108,8 +115,10 @@ def _row(r) -> dict:
     d["palavras"] = json.loads(d["palavras"])
     d["respostas"] = json.loads(d["respostas"])
     d["respostas_sem_dm"] = json.loads(d.get("respostas_sem_dm") or "[]")
+    d["respostas_tiktok"] = json.loads(d.get("respostas_tiktok") or "[]")
     for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa", "facebook"):
         d[b] = bool(d.get(b, 1))
+    d["tiktok"] = bool(d.get("tiktok", 0))
     return d
 
 
@@ -131,19 +140,19 @@ def get(aid: int) -> dict | None:
 _CAMPOS = (
     "nome", "ativa", "palavras", "modo", "escopo", "midia_id", "respostas", "respostas_sem_dm",
     "dm_texto", "botao_texto", "botao_url", "responder_publico", "enviar_dm", "uma_vez_por_pessoa",
-    "facebook", "engatada_em", "esperando_desde",
+    "facebook", "engatada_em", "esperando_desde", "tiktok", "respostas_tiktok", "tiktok_desde",
 )
 
 
 def _serializar(dados: dict) -> dict:
     v = {k: dados[k] for k in _CAMPOS if k in dados}
-    for lista in ("palavras", "respostas", "respostas_sem_dm"):
+    for lista in ("palavras", "respostas", "respostas_sem_dm", "respostas_tiktok"):
         if lista in v:
             itens = v[lista]
             if isinstance(itens, str):
                 itens = [x.strip() for x in itens.splitlines()]
             v[lista] = json.dumps([x for x in itens if str(x).strip()])
-    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa", "facebook"):
+    for b in ("ativa", "responder_publico", "enviar_dm", "uma_vez_por_pessoa", "facebook", "tiktok"):
         if b in v:
             v[b] = 1 if v[b] else 0
     if v.get("escopo") != "midia" and "escopo" in v:
@@ -157,6 +166,8 @@ def criar(dados: dict) -> dict:
     v.setdefault("criada_em", datetime.now(timezone.utc).isoformat())
     if v.get("escopo") == "proximo":
         v.setdefault("esperando_desde", v["criada_em"])
+    if v.get("tiktok"):
+        v.setdefault("tiktok_desde", v["criada_em"])
     colunas = ", ".join(v)
     marcas = ", ".join("?" for _ in v)
     c = db.conn()
@@ -167,7 +178,7 @@ def criar(dados: dict) -> dict:
 
 # Quem escolhe o post alvo e os marcos é o servidor, nunca o painel: a tela pode estar
 # com uma cópia velha e desfazer o engate que acabou de acontecer.
-CAMPOS_DO_SERVIDOR = ("engatada_em", "esperando_desde")
+CAMPOS_DO_SERVIDOR = ("engatada_em", "esperando_desde", "tiktok_desde")
 
 
 def atualizar(aid: int, dados: dict, interno: bool = False) -> dict | None:
@@ -185,6 +196,10 @@ def atualizar(aid: int, dados: dict, interno: bool = False) -> dict | None:
         v["engatada_em"] = None
         v["esperando_desde"] = datetime.now(timezone.utc).isoformat()
         print(f"[automacoes] #{aid} rearmada: esperando a próxima publicação.")
+    # Ligar o TikTok marca a hora: comentário anterior a isso nunca recebe resposta
+    # (senão ligar a chave respondia de uma vez os comentários antigos dos últimos dias).
+    if v.get("tiktok") and not antes.get("tiktok"):
+        v["tiktok_desde"] = datetime.now(timezone.utc).isoformat()
     if v:
         sets = ", ".join(f"{k} = ?" for k in v)
         c = db.conn()
@@ -204,7 +219,7 @@ def duplicar(aid: int) -> dict | None:
     base = get(aid)
     if not base:
         return None
-    copia = {k: base[k] for k in _CAMPOS if k not in ("engatada_em", "esperando_desde")}
+    copia = {k: base[k] for k in _CAMPOS if k not in CAMPOS_DO_SERVIDOR}
     copia["nome"] = f"{base['nome']} (cópia)".strip()
     copia["ativa"] = False
     copia["escopo"] = "proximo"
