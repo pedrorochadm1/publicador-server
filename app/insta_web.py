@@ -15,9 +15,10 @@ import secrets
 import threading
 
 from fastapi import APIRouter, Body, Cookie, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from . import automacoes, config, sessoes
+from . import automacoes, config, sessoes, tiktok_comentarios
 from .token_store import status as token_status
 
 router = APIRouter()
@@ -158,7 +159,61 @@ def api_remover(aid: int, insta_sess: str | None = Cookie(default=None)):
 @router.get("/insta/api/eventos")
 def api_eventos(automacao_id: int | None = None, insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
-    return automacoes.eventos(automacao_id)
+    ig = automacoes.eventos(automacao_id)
+    # o TikTok mora em tabela própria; aqui só entra no mesmo histórico, no mesmo formato
+    tt = [{
+        "quando": e["quando"], "usuario": e["usuario"] or (e["autor_id"] or "")[-8:],
+        "texto": e["texto"], "resposta": e["resposta"], "plataforma": "tt",
+        "dm_status": {"ok": "ok · só pública", "na-fila": "na-fila"}.get(e["status"], e["status"]),
+        "erro": e["erro"],
+    } for e in tiktok_comentarios.eventos(automacao_id)]
+    return sorted(ig + tt, key=lambda e: e["quando"] or "", reverse=True)[:150]
+
+
+# ─────────────────────────── TikTok (via Zernio) ───────────────────────────
+
+@router.get("/insta/api/tiktok/status")
+def api_tt_status(insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    return tiktok_comentarios.status()
+
+
+@router.post("/insta/api/tiktok/chave")
+def api_tt_chave(dados: dict = Body(...), insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    try:
+        tiktok_comentarios.gravar_chave(dados.get("chave", ""))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Chave não funcionou: {e}")
+    return tiktok_comentarios.status()
+
+
+@router.post("/insta/api/tiktok/conectar")
+def api_tt_conectar(request: Request, insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "insta.pedrorochadm1.com"
+    try:
+        url = tiktok_comentarios.url_conectar(f"https://{host}/automacoes?tiktok=conectado")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"Zernio não respondeu: {e}")
+    return {"url": url}
+
+
+@router.post("/insta/api/tiktok/ativar")
+def api_tt_ativar(insta_sess: str | None = Cookie(default=None)):
+    """Depois de conectar: cadastra o webhook (tempo real) e faz a primeira varredura."""
+    _exige(insta_sess)
+    try:
+        wh = tiktok_comentarios.garantir_webhook()
+    except Exception as e:  # noqa: BLE001
+        wh = {"ok": False, "erro": str(e)[:300]}
+    return {"webhook": wh, "acionados": tiktok_comentarios.rodar(), "status": tiktok_comentarios.status()}
+
+
+@router.post("/insta/api/tiktok/rodar")
+def api_tt_rodar(insta_sess: str | None = Cookie(default=None)):
+    _exige(insta_sess)
+    return {"acionados": tiktok_comentarios.rodar(), "status": tiktok_comentarios.status()}
 
 
 @router.get("/insta/api/midias")
@@ -315,3 +370,22 @@ def _garantir_worker():
         t = threading.Thread(target=_processar_webhooks, name="webhook-ig", daemon=True)
         t.start()
         _worker["t"] = t
+
+
+# ─────────────────────────── Webhook do Zernio (comentário do TikTok) ───────────────────────────
+
+@router.post("/webhook/zernio")
+async def webhook_zernio(request: Request):
+    corpo = await request.body()
+    assinatura = request.headers.get("x-zernio-signature") or request.headers.get("x-late-signature") or ""
+    if not await run_in_threadpool(tiktok_comentarios.assinatura_ok, corpo, assinatura):
+        raise HTTPException(status_code=403, detail="Assinatura inválida.")
+    try:
+        payload = json.loads(corpo or b"{}")
+        # fora do loop de eventos: tratar_webhook faz banco e HTTP síncronos
+        tratados = await run_in_threadpool(tiktok_comentarios.tratar_webhook, payload)
+    except Exception as e:  # noqa: BLE001
+        print(f"[webhook zernio] falhou: {e}")
+        tratados = 0
+    # responde rápido e sempre 2xx: o Zernio exige resposta em 5s e reenvia em erro
+    return JSONResponse({"ok": True, "tratados": tratados})
