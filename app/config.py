@@ -58,11 +58,6 @@ AUTOMACOES_FACEBOOK = os.environ.get("AUTOMACOES_FACEBOOK", "true").lower() in (
 AUTOMACOES_ATIVAS = os.environ.get("AUTOMACOES_ATIVAS", "true").lower() in ("1", "true", "sim", "yes")
 AUTOMACOES_POLL_SEGUNDOS = int(os.environ.get("AUTOMACOES_POLL_SEGUNDOS", "60"))
 
-# ─── Comentários do TikTok via Zernio (app Business auditado deles; plano gratuito) ───
-# A chave também pode ser colada no Lab (fica na tabela meta); a env tem prioridade.
-ZERNIO_API_KEY = os.environ.get("ZERNIO_API_KEY", "")
-TIKTOK_COMENTARIOS_POLL_SEGUNDOS = int(os.environ.get("TIKTOK_COMENTARIOS_POLL_SEGUNDOS", "120"))
-
 GRAPH_BASE = "https://graph.facebook.com"
 # v22+ é necessário pro trial_params (Trial Reels); v19 é anterior ao recurso.
 GRAPH = f"{GRAPH_BASE}/v25.0"

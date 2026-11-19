@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from . import automacoes, buffer_api, config, db, publisher, token_store, youtube, tiktok, repost
-from . import tiktok_comentarios
 
 _sched = BackgroundScheduler(timezone="UTC")
 _MAX_TENTATIVAS = 3
@@ -149,15 +148,6 @@ def iniciar():
             id="automacoes_janela", max_instances=1, coalesce=True,
         )
         print(f"[scheduler] Automações de comentário ligadas (a cada {config.AUTOMACOES_POLL_SEGUNDOS}s).")
-        # perna do TikTok: varredura dos vídeos + envio de uma resposta por vez, com folga
-        _sched.add_job(
-            tiktok_comentarios.rodar, "interval", seconds=config.TIKTOK_COMENTARIOS_POLL_SEGUNDOS,
-            id="tiktok_comentarios", max_instances=1, coalesce=True,
-        )
-        _sched.add_job(
-            tiktok_comentarios.enviar_fila, "interval", seconds=10,
-            id="tiktok_comentarios_envio", max_instances=1, coalesce=True,
-        )
     _sched.start()
     token_store.renovar_se_necessario()
     print("[scheduler] Iniciado.")

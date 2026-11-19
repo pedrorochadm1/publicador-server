@@ -18,7 +18,6 @@ let raiz = null;
 let automacoes = [], midias = [], atual = null;
 let timerSalvar = null, salvando = false;
 let intervalos = [];
-let tt = null;          // status da perna do TikTok (Zernio)
 
 const $ = (s) => raiz.querySelector(s);
 
@@ -26,7 +25,6 @@ const VAZIA = {
   nome: "", ativa: true, palavras: [], modo: "contem", escopo: "proximo", midia_id: null,
   respostas: [], respostas_sem_dm: [], dm_texto: "", botao_texto: "Participar", botao_url: "",
   responder_publico: true, enviar_dm: true, uma_vez_por_pessoa: true,
-  tiktok: false, respostas_tiktok: [],
 };
 
 // Tetos da Meta. dmComBotao é o texto do template de botão; sem botão a private
@@ -52,7 +50,6 @@ export async function montar(alvo) {
         <h1>Automações</h1>
         <span id="status" class="chip">carregando…</span>
       </div>
-      <div class="card" id="tt"></div>
       <div class="auto-grade">
         <div class="col lista">
           <button class="bt" id="nova" type="button">+ Nova automação</button>
@@ -172,13 +169,6 @@ function pintarEditor() {
       <div id="aviso_fb" class="meta"></div>
     </div>
 
-    <div class="bloco">
-      <label class="sw"><input type="checkbox" id="f_tt" ${a.tiktok ? "checked" : ""}>Valer também no TikTok <span class="dica">todos os vídeos, só comentário novo</span></label>
-      <label>Respostas no TikTok <span class="dica">uma por linha; o TikTok não deixa mandar direct, então a resposta manda pra bio. Nunca link.</span></label>
-      <textarea id="f_resp_tt">${esc(((a.respostas_tiktok && a.respostas_tiktok.length) ? a.respostas_tiktok : ((tt && tt.respostas_padrao) || [])).join("\n"))}</textarea>
-      <div class="conta" id="c_resp_tt"></div>
-    </div>
-
     <div class="acoes">
       ${a.id ? `<span class="chip" id="estado">salvo</span>
                 <button class="bt sec" id="duplicar" type="button">Duplicar</button>
@@ -199,8 +189,8 @@ function pintarEditor() {
 
   // tudo que o Pedro mexe salva sozinho: texto com folga pra ele terminar de digitar,
   // liga/desliga na hora. Não existe botão de salvar em automação já criada.
-  const campos = ["f_nome", "f_palavras", "f_modo", "f_escopo", "f_respostas", "f_dm_texto", "f_botao", "f_url", "f_resp_tt"];
-  const chaves = ["f_ativa", "f_pub", "f_dm", "f_uma", "f_fb", "f_tt"];
+  const campos = ["f_nome", "f_palavras", "f_modo", "f_escopo", "f_respostas", "f_dm_texto", "f_botao", "f_url"];
+  const chaves = ["f_ativa", "f_pub", "f_dm", "f_uma", "f_fb"];
   campos.forEach((id) => { const el = $("#" + id); if (el) el.addEventListener("input", () => { revisar(); agendar(700); }); });
   chaves.forEach((id) => { const el = $("#" + id); if (el) el.addEventListener("change", () => { revisar(); agendar(0); }); });
   ["f_modo", "f_escopo"].forEach((id) => $("#" + id).addEventListener("change", () => agendar(0)));
@@ -229,7 +219,7 @@ async function salvarAuto() {
   if (!dados.palavras.length) return estado("falta a palavra-chave", "erro");
   if (dados.escopo === "midia" && !dados.midia_id) return estado("escolha o post", "erro");
   if (!revisar()) return estado("campo passando do limite", "erro");
-  if ([...dados.respostas, ...dados.respostas_tiktok].some((r) => /https?:\/\/|www\./i.test(r)))
+  if (dados.respostas.some((r) => /https?:\/\//i.test(r)))
     return estado("link não vai no comentário", "erro");
   salvando = true; estado("salvando…");
   try {
@@ -278,7 +268,6 @@ function revisar() {
     contarLinhas("f_respostas", "c_respostas", LIM.comentario),
     contar("f_dm_texto", "c_dm_texto", limDm, temBotao() ? "(com botão)" : "(sem botão)"),
     contar("f_botao", "c_botao", LIM.botao),
-    contarLinhas("f_resp_tt", "c_resp_tt", 150),
   ].every(Boolean);
   const url = $("#f_url").value.trim();
   const urlOk = !url || /^https?:\/\/.+/i.test(url);
@@ -388,8 +377,6 @@ function coletar() {
     enviar_dm: $("#f_dm").checked,
     uma_vez_por_pessoa: $("#f_uma").checked,
     facebook: $("#f_fb").checked,
-    tiktok: $("#f_tt").checked,
-    respostas_tiktok: $("#f_resp_tt").value.split("\n").map((s) => s.trim()).filter(Boolean),
   };
 }
 
@@ -398,7 +385,7 @@ async function salvar() {
   if (!dados.palavras.length) return aviso("Falta a palavra-chave.");
   if (dados.escopo === "midia" && !dados.midia_id) return aviso("Escolha o post.");
   if (!revisar()) return aviso("Tem campo passando do limite. Corrija o que está em vermelho.");
-  if ([...dados.respostas, ...dados.respostas_tiktok].some((r) => /https?:\/\/|www\./i.test(r)))
+  if (dados.respostas.some((r) => /https?:\/\//i.test(r)))
     return aviso("Link em resposta de comentário não é permitido. Link só vai no direct.");
   const salva = atual.id
     ? await api("/insta/api/automacoes/" + atual.id, { method: "PUT", body: JSON.stringify(dados) })
@@ -443,7 +430,7 @@ async function pintarHistorico() {
       <td>@${esc(e.usuario)}</td>
       <td>${esc((e.texto || "").slice(0, 60))}</td>
       <td>${esc((e.resposta || "").slice(0, 60)) || "—"}</td>
-      <td><span class="badge">${e.plataforma === "fb" ? "Facebook" : e.plataforma === "tt" ? "TikTok" : "Instagram"}</span></td>
+      <td><span class="badge">${e.plataforma === "fb" ? "Facebook" : "Instagram"}</span></td>
       <td><span class="badge ${e.dm_status && e.dm_status.startsWith("ok") ? "ok" : (e.dm_status ? "erro" : "")}"
           title="${esc(e.erro || "")}">${esc(e.dm_status || "—")}</span></td>
     </tr>`).join("")}</table>` : "Nada ainda.";
@@ -471,63 +458,7 @@ async function realinhar() {
   } catch (e) { /* rede instável: tenta de novo no próximo ciclo */ }
 }
 
-/* ─────────────────────────── TikTok (via Zernio) ─────────────────────────── */
-
-async function carregarTT() {
-  try { tt = await api("/insta/api/tiktok/status"); } catch (e) { tt = null; }
-  pintarTT();
-}
-
-function pintarTT() {
-  const el = $("#tt");
-  if (!el) return;
-  if (!tt) { el.innerHTML = `<p class="meta">TikTok: não consegui ler o status.</p>`; return; }
-  if (!tt.chave) {
-    el.innerHTML = `
-      <h2>TikTok</h2>
-      <p class="meta">1. Crie uma conta grátis em <a href="https://zernio.com/signup" target="_blank" rel="noopener">zernio.com</a> (dá pra entrar com Google).<br>
-      2. Abra <a href="https://zernio.com/dashboard/api-keys" target="_blank" rel="noopener">Chaves de API</a>, toque em <b>Create API key</b> e cole aqui:</p>
-      <div class="linha"><input type="text" id="tt_chave" placeholder="sk_..."><button class="bt" id="tt_salvar" type="button" style="flex:none">Salvar</button></div>`;
-    $("#tt_salvar").onclick = async () => {
-      try { tt = await api("/insta/api/tiktok/chave", { method: "POST", body: JSON.stringify({ chave: $("#tt_chave").value }) }); pintarTT(); aviso("Chave salva."); }
-      catch (e) { aviso("Essa chave não funcionou. Confere se copiou inteira."); }
-    };
-    return;
-  }
-  if (!tt.conectado) {
-    el.innerHTML = `
-      <h2>TikTok</h2>
-      <p class="meta">Falta só entrar na sua conta do TikTok.${tt.erro ? `<br><span class="estourou">${esc(tt.erro)}</span>` : ""}</p>
-      <button class="bt" id="tt_conectar" type="button">Conectar TikTok</button>`;
-    $("#tt_conectar").onclick = async () => {
-      const r = await api("/insta/api/tiktok/conectar", { method: "POST" });
-      if (r.url) location.href = r.url; else aviso("O Zernio não devolveu o link.");
-    };
-    return;
-  }
-  el.innerHTML = `
-    <div class="linha" style="align-items:center">
-      <span><span class="ponto on"></span><b>TikTok @${esc(tt.usuario)}</b> conectado ·
-        ${tt.automacoes} automação(ões) valendo · ${tt.na_fila} na fila · ${tt.respondidos_hora} respondidas na última hora
-        ${tt.webhook ? "· tempo real" : "· varrendo a cada 2 min"}</span>
-      <button class="bt sec" id="tt_rodar" type="button" style="flex:none">Verificar TikTok</button>
-    </div>${tt.erro ? `<p class="meta estourou">${esc(tt.erro)}</p>` : ""}`;
-  $("#tt_rodar").onclick = async () => {
-    aviso("Verificando o TikTok…");
-    const r = await api("/insta/api/tiktok/rodar", { method: "POST" });
-    tt = r.status; pintarTT(); await pintarHistorico();
-    aviso(`${r.acionados} comentário(s) novo(s) na fila.`);
-  };
-}
-
 async function inicio() {
-  // voltando do login do TikTok: liga o webhook e faz a primeira varredura
-  if (new URLSearchParams(location.search).get("tiktok") === "conectado") {
-    history.replaceState(null, "", location.pathname);
-    try { const r = await api("/insta/api/tiktok/ativar", { method: "POST" }); tt = r.status; aviso("TikTok conectado."); }
-    catch (e) { aviso("Conectou, mas a ativação falhou. Toque em Verificar TikTok."); }
-  }
-  await carregarTT();
   const st = await api("/insta/api/status");
   // o que importa saber de relance: chega na hora ou depende da varredura?
   const partes = [];
@@ -552,6 +483,6 @@ async function inicio() {
   // Os dois ciclos ficam guardados pra serem limpos no desmontar.
   intervalos.push(setInterval(realinhar, 20000));
   intervalos.push(setInterval(async () => {
-    if (!document.hidden && raiz) { await carregar(); await pintarHistorico(); await carregarTT(); }
+    if (!document.hidden && raiz) { await carregar(); await pintarHistorico(); }
   }, 60000));
 }
