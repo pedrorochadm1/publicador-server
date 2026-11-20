@@ -460,7 +460,10 @@ def status() -> dict:
               "SELECT COUNT(*) FROM tiktok_eventos WHERE status IN ('na-fila', 'erro') AND tentativas < ?",
               (MAX_TENTATIVAS,)).fetchone()[0],
           "respondidos_hora": _enviados_desde(timedelta(hours=1)),
-          "erro": _ultimo_erro["rodada"] or _ultimo_erro["envio"], "respostas_padrao": RESPOSTAS_PADRAO}
+          "erro": _ultimo_erro["rodada"] or _ultimo_erro["envio"], "respostas_padrao": RESPOSTAS_PADRAO,
+          "lista": [{"id": a["id"], "nome": a["nome"], "palavras": a["palavras"]} for a in _ativas()],
+          "ultimos": [{k: e[k] for k in ("quando", "usuario", "autor_id", "texto", "resposta", "status", "erro")}
+                      for e in eventos(limite=8)]}
     if st["chave"]:
         try:
             c = conta()

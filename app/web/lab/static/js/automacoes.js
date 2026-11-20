@@ -98,7 +98,7 @@ function pintarLista() {
   $("#cards").innerHTML = automacoes.map((a) => `
     <div class="card ${atual && atual.id === a.id ? "sel" : ""}" data-id="${a.id}">
       <h3><span class="ponto ${a.ativa ? "on" : ""}"></span>${esc(a.nome) || "Sem nome"}</h3>
-      <div>${a.palavras.map((p) => `<span class="kw">${esc(p)}</span>`).join("")}</div>
+      <div>${a.palavras.map((p) => `<span class="kw">${esc(p)}</span>`).join("")}${a.tiktok ? `<span class="kw tt">TikTok</span>` : ""}</div>
       <div class="meta">${rotuloEscopo(a)}<br>
         ${a.contadores.acionamentos} acionamentos · ${a.contadores.dms} directs
         ${a.contadores.ultimo ? " · último em " + data(a.contadores.ultimo) : ""}</div>
@@ -474,7 +474,12 @@ async function realinhar() {
 /* ─────────────────────────── TikTok (via Zernio) ─────────────────────────── */
 
 async function carregarTT() {
-  try { tt = await api("/insta/api/tiktok/status"); } catch (e) { tt = null; }
+  let novo;
+  try { novo = await api("/insta/api/tiktok/status"); } catch (e) { if (tt) return; novo = null; }
+  tt = novo;
+  // não repinta debaixo do dedo do Pedro (ex.: colando a chave)
+  const el = $("#tt");
+  if (el && el.contains(document.activeElement) && document.activeElement.tagName === "INPUT") return;
   pintarTT();
 }
 
@@ -505,13 +510,34 @@ function pintarTT() {
     };
     return;
   }
+  const rotulo = { ok: "respondido", "na-fila": "na fila", erro: "tentando de novo", desistiu: "TikTok recusou", velho: "antigo demais" };
   el.innerHTML = `
     <div class="linha" style="align-items:center">
       <span><span class="ponto on"></span><b>TikTok @${esc(tt.usuario)}</b> conectado ·
-        ${tt.automacoes} automação(ões) valendo · ${tt.na_fila} na fila · ${tt.respondidos_hora} respondidas na última hora
+        ${tt.na_fila} na fila · ${tt.respondidos_hora} respondidas na última hora
         ${tt.webhook ? "· tempo real" : "· varrendo a cada 2 min"}</span>
       <button class="bt sec" id="tt_rodar" type="button" style="flex:none">Verificar TikTok</button>
-    </div>${tt.erro ? `<p class="meta estourou">${esc(tt.erro)}</p>` : ""}`;
+    </div>${tt.erro ? `<p class="meta estourou">${esc(tt.erro)}</p>` : ""}
+    <div class="tt-grade">
+      <div>
+        <h4>Automações valendo no TikTok</h4>
+        ${(tt.lista || []).map((a) => `<button class="tt-auto ${atual && atual.id === a.id ? "sel" : ""}" data-id="${a.id}" type="button">
+            ${a.palavras.map((p) => `<span class="kw">${esc(p)}</span>`).join("")} ${esc(a.nome)} <span class="dica">editar ›</span></button>`).join("")
+          || `<p class="meta">Nenhuma. Abra uma automação e ligue "Valer também no TikTok".</p>`}
+      </div>
+      <div>
+        <h4>Ao vivo <span class="dica">atualiza a cada 15s</span></h4>
+        ${(tt.ultimos || []).map((e) => `<div class="tt-ev">
+            <span class="badge ${e.status === "ok" ? "ok" : (e.status === "na-fila" ? "" : "erro")}" title="${esc(e.erro || "")}">${rotulo[e.status] || esc(e.status)}</span>
+            <b>@${esc(e.usuario || (e.autor_id || "").slice(-8))}</b> ${esc((e.texto || "").slice(0, 40))}
+            ${e.resposta ? `<div class="meta">↳ ${esc(e.resposta)}</div>` : ""}
+            <div class="meta">${data(e.quando)}</div></div>`).join("") || `<p class="meta">Nenhum comentário com a palavra ainda.</p>`}
+      </div>
+    </div>`;
+  el.querySelectorAll(".tt-auto").forEach((b) => (b.onclick = () => {
+    const a = automacoes.find((x) => x.id == b.dataset.id);
+    if (a) { selecionar(a); pintarTT(); $("#editor").scrollIntoView({ behavior: "smooth", block: "start" }); }
+  }));
   $("#tt_rodar").onclick = async () => {
     aviso("Verificando o TikTok…");
     const r = await api("/insta/api/tiktok/rodar", { method: "POST" });
@@ -551,7 +577,8 @@ async function inicio() {
 
   // Os dois ciclos ficam guardados pra serem limpos no desmontar.
   intervalos.push(setInterval(realinhar, 20000));
+  intervalos.push(setInterval(() => { if (!document.hidden && raiz) carregarTT(); }, 15000));
   intervalos.push(setInterval(async () => {
-    if (!document.hidden && raiz) { await carregar(); await pintarHistorico(); await carregarTT(); }
+    if (!document.hidden && raiz) { await carregar(); await pintarHistorico(); }
   }, 60000));
 }

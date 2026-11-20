@@ -179,3 +179,15 @@
   .auto table { min-width: 560px; }
   .auto .previa { display: grid; gap: 13px; }
 }
+
+/* ── TikTok ── */
+.kw.tt { background: #111; color: #fff; }
+.tt-grade { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; margin-top: 12px; }
+.tt-grade h4 { margin: 0 0 8px; }
+.tt-auto { display: block; width: 100%; text-align: left; padding: 10px 12px; margin-bottom: 8px;
+  border: 1px solid rgba(127,127,127,.25); border-radius: 10px; background: transparent; color: inherit;
+  font: inherit; cursor: pointer; }
+.tt-auto.sel, .tt-auto:hover { border-color: currentColor; }
+.tt-ev { padding: 8px 0; border-bottom: 1px solid rgba(127,127,127,.15); font-size: 14px; }
+.tt-ev:last-child { border-bottom: 0; }
+@media (max-width: 760px) { .tt-grade { grid-template-columns: 1fr; } }
