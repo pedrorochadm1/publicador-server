@@ -136,7 +136,7 @@ def upload(u: Upload):
 
 
 @app.post("/upload-arquivo", dependencies=[Depends(auth)])
-async def upload_arquivo(arquivo: UploadFile = File(...), ext: str = Form("")):
+def upload_arquivo(arquivo: UploadFile = File(...), ext: str = Form("")):
     """Hospeda imagem ou vídeo via multipart (streaming, sem base64). Para arquivos grandes."""
     if not config.PUBLIC_BASE_URL:
         raise HTTPException(status_code=500, detail="PUBLIC_BASE_URL não configurado.")
@@ -146,7 +146,7 @@ async def upload_arquivo(arquivo: UploadFile = File(...), ext: str = Form("")):
     nome = f"{uuid.uuid4().hex}.{extensao}"
     destino = os.path.join(config.IMG_DIR, nome)
     with open(destino, "wb") as f:
-        while chunk := await arquivo.read(1024 * 1024):
+        while chunk := arquivo.file.read(1024 * 1024):
             f.write(chunk)
     return {"url": f"{config.PUBLIC_BASE_URL}/img/{nome}", "arquivo": nome}
 

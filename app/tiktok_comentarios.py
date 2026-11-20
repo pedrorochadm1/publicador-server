@@ -62,20 +62,10 @@ RESPOSTAS_PADRAO = [
 ]
 
 _conta_cache: dict = {}
-_local = threading.local()
 
 
 def _c() -> sqlite3.Connection:
-    """Conexão PRÓPRIA por thread. A conexão compartilhada do db.py, usada ao mesmo
-    tempo pelos jobs daqui, pelo marca-passo e pelas rotas, deu 'bad parameter or
-    other API misuse' e travou o servidor inteiro no primeiro deploy (2026-11-19)."""
-    c = getattr(_local, "c", None)
-    if c is None:
-        c = sqlite3.connect(config.DB_PATH, timeout=10)
-        c.row_factory = sqlite3.Row
-        c.execute("PRAGMA busy_timeout=10000")
-        _local.c = c
-    return c
+    return db.conn()        # já é uma conexão por thread (db.py)
 
 
 def _meta(chave: str) -> str:

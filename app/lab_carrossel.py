@@ -312,7 +312,7 @@ def _tipo_real(dados: bytes) -> str | None:
 
 
 @router.post("/lab/api/carrossel/imagens")
-async def api_subir_imagem(arquivo: UploadFile = File(...),
+def api_subir_imagem(arquivo: UploadFile = File(...),
                            insta_sess: str | None = Cookie(default=None)):
     _exige(insta_sess)
     ext = (arquivo.filename or "").rsplit(".", 1)[-1].lower()
@@ -320,7 +320,7 @@ async def api_subir_imagem(arquivo: UploadFile = File(...),
                                 "image/webp": "webp"}.get(arquivo.content_type or "")
     if not ext:
         raise HTTPException(status_code=400, detail="Use uma imagem JPG, PNG ou WEBP.")
-    dados = await arquivo.read(_MAX_BYTES + 1)
+    dados = arquivo.file.read(_MAX_BYTES + 1)
     if len(dados) > _MAX_BYTES:
         raise HTTPException(status_code=413, detail="Imagem acima de 15MB.")
     # A extensão pode mentir; o cabeçalho do arquivo não. É ele que decide.
@@ -361,7 +361,7 @@ def _quando(agendar_para: str) -> datetime:
 
 
 @router.post("/lab/api/carrosseis/{cid}/publicar")
-async def api_publicar(cid: int,
+def api_publicar(cid: int,
                        slides: list[UploadFile] = File(...),
                        agendar_para: str = Form(""),
                        tiktok: str = Form("1"),
@@ -385,7 +385,7 @@ async def api_publicar(cid: int,
 
     nomes = []
     for up in slides:
-        raw = await up.read(_MAX_BYTES + 1)
+        raw = up.file.read(_MAX_BYTES + 1)
         # O Graph API só aceita JPEG em image_url; o front já exporta assim.
         if not raw.startswith(b"\xff\xd8") or len(raw) > _MAX_BYTES:
             raise HTTPException(status_code=400, detail="Os slides precisam ser JPEG de até 15MB.")

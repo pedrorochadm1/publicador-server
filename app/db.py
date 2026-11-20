@@ -1,22 +1,41 @@
 import json
 import sqlite3
+import threading
 from datetime import datetime, timezone
 
 from . import config
 
-_conn = None
+_local = threading.local()
+_schema_lock = threading.Lock()
+_schema_pronto = False
 
 
 def conn():
-    global _conn
-    if _conn is None:
-        _conn = sqlite3.connect(config.DB_PATH, check_same_thread=False)
-        _conn.row_factory = sqlite3.Row
-        # WAL: leitor não bloqueia escritor. Importante porque o scheduler, o
-        # marca-passo do direct e agora o autosave do Lab dividem esta conexão.
+    """Uma conexão SQLite POR THREAD.
+
+    Antes era uma conexão só, dividida entre o scheduler, o marca-passo do direct, os
+    webhooks e as rotas. O sqlite3 do Python não serializa isso direito: dava
+    'bad parameter or other API misuse' e transação de uma thread vazando pra outra.
+    Com WAL, conexões separadas leem em paralelo e só a escrita espera a vez."""
+    global _schema_pronto
+    c = getattr(_local, "c", None)
+    if c is not None:
+        return c
+    # isolation_level=None = autocommit: escrita nunca fica segurando o lock esperando
+    # um commit() esquecido (com conexão por thread, isso travaria as outras threads).
+    c = sqlite3.connect(config.DB_PATH, timeout=10, check_same_thread=False, isolation_level=None)
+    c.row_factory = sqlite3.Row
+    c.execute("PRAGMA busy_timeout=10000")
+    c.execute("PRAGMA synchronous=NORMAL")      # seguro com WAL e bem mais rápido no commit
+    _local.c = c
+    if _schema_pronto:
+        return c
+    with _schema_lock:
+        if _schema_pronto:
+            return c
+        _conn = c
+        # WAL: leitor não bloqueia escritor (vale pro arquivo, uma vez basta).
         _conn.execute("PRAGMA journal_mode=WAL")
-        # Em vez de estourar 'database is locked' na hora, espera até 5s pelo lock.
-        _conn.execute("PRAGMA busy_timeout=5000")
         _conn.execute(
             """
             CREATE TABLE IF NOT EXISTS posts (
@@ -65,7 +84,8 @@ def conn():
             "CREATE TABLE IF NOT EXISTS meta (chave TEXT PRIMARY KEY, valor TEXT NOT NULL)"
         )
         _conn.commit()
-    return _conn
+        _schema_pronto = True
+    return c
 
 
 def _row(r):

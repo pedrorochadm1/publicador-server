@@ -90,15 +90,15 @@ def apagar_cookie(resp):
 @router.post("/insta/login")
 async def login(request: Request):
     ip = ip_do_pedido(request)
-    if _bloqueado(ip):
+    if await run_in_threadpool(_bloqueado, ip):
         return HTMLResponse(_html("insta_login.html").replace(
             "<!--ERRO-->", '<p class="erro">Muitas tentativas. Espere alguns minutos.</p>'), 429)
     form = await request.form()
     if not senha_confere(str(form.get("senha", ""))):
-        sessoes.registrar_falha(ip)
+        await run_in_threadpool(sessoes.registrar_falha, ip)
         return HTMLResponse(_html("insta_login.html").replace(
             "<!--ERRO-->", '<p class="erro">Senha incorreta.</p>'), 401)
-    token = sessoes.criar(request.headers.get("user-agent", ""))
+    token = await run_in_threadpool(sessoes.criar, request.headers.get("user-agent", ""))
     resp = RedirectResponse("/insta", status_code=303)
     gravar_cookie(resp, token)
     return resp

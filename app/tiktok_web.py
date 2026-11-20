@@ -234,7 +234,7 @@ def _upload_bg(upload_url: str, caminho: str, file_size: int):
 
 
 @router.post("/tiktok/publish")
-async def publish(
+def publish(
     request: Request,
     background: BackgroundTasks,
     video: UploadFile = File(...),
@@ -280,7 +280,7 @@ async def publish(
     # 2. salva o upload num arquivo temporário
     caminho = os.path.join(_TMP_DIR, f"{secrets.token_hex(8)}.mp4")
     with open(caminho, "wb") as f:
-        while chunk := await video.read(1024 * 1024):
+        while chunk := video.file.read(1024 * 1024):
             f.write(chunk)
     file_size = os.path.getsize(caminho)
 
